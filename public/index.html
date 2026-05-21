@@ -3,7 +3,10 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Forum</title>
+    <title>Forum — Local AI Council</title>
+    <meta name="description" content="Forum: a multi-actor local AI discussion app powered by LM Studio.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
@@ -23,103 +26,165 @@
         </button>
       </header>
 
+      <!-- ═══════════════════════════════════════════════════════════════
+           SETUP TAB
+      ════════════════════════════════════════════════════════════════ -->
       <section class="tab-panel setup-tab" id="setupTab" role="tabpanel" aria-labelledby="setupTabButton" data-tab-panel="setup">
         <div class="setup-grid">
           <div class="panel-stack">
-            <section class="panel-section">
+
+            <!-- Connection -->
+            <section class="panel-section section--connection">
               <div class="section-title">
-                <h2>LM Studio</h2>
-                <button class="soft-button" id="loadModelsButton" type="button">Models</button>
+                <h2>Connection</h2>
+                <span class="status-pill" id="connectionStatus" title="Auto-checks every 12s">Not connected</span>
               </div>
               <label>
                 Server URL
-                <input id="baseUrlInput" autocomplete="off" spellcheck="false">
+                <input id="baseUrlInput" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:1234">
               </label>
               <div class="two-column">
                 <label>
                   Model
-                  <input id="modelInput" list="modelOptions" autocomplete="off" spellcheck="false">
+                  <input id="modelInput" list="modelOptions" autocomplete="off" spellcheck="false" placeholder="Select a model…">
                   <datalist id="modelOptions"></datalist>
                 </label>
-                <label>
-                  Temp
-                  <input id="temperatureInput" type="number" min="0" max="2" step="0.1">
-                </label>
+                <button class="soft-button" id="loadModelsButton" type="button" style="align-self:end">Refresh</button>
               </div>
+              <label>
+                Temperature
+                <div class="slider-row">
+                  <input id="temperatureInput" type="range" min="0" max="2" step="0.05">
+                  <span class="slider-value" id="temperatureDisplay">0.8</span>
+                </div>
+              </label>
               <label>
                 API key
-                <input id="apiKeyInput" autocomplete="off" spellcheck="false">
+                <input id="apiKeyInput" autocomplete="off" spellcheck="false" placeholder="lm-studio">
               </label>
-              <label class="toggle-row compact">
-                <input id="toolsEnabledInput" type="checkbox">
-                <span>Enable web tools (search &amp; read pages)</span>
-              </label>
-              <p class="status-line" id="connectionStatus">Not connected</p>
             </section>
 
-            <section class="panel-section quick-start-section">
-              <div class="section-title">
-                <h2>AI Quick Start</h2>
-                <button class="soft-button" id="generateQuickStartButton" type="button">Generate Setup</button>
-              </div>
-              <label>
-                Prompt
-                <textarea id="quickStartPromptInput" rows="4" placeholder="Describe the forum you want..."></textarea>
-              </label>
-              <div class="quick-start-actions">
-                <button class="primary-button" id="applyQuickStartButton" type="button">Apply Setup</button>
-                <button class="secondary-button" id="discardQuickStartButton" type="button">Discard</button>
-              </div>
-              <div class="quick-start-preview" id="quickStartPreview" aria-live="polite"></div>
-              <p class="status-line" id="quickStartStatus">No generated setup yet.</p>
+            <!-- Quick Setup (collapsible) -->
+            <section class="panel-section section--connection">
+              <details class="quick-start-details" id="quickStartDetails">
+                <summary>
+                  <h2 style="margin:0">Quick Setup</h2>
+                  <span class="chevron">▶</span>
+                </summary>
+                <div class="quick-start-body">
+                  <label>
+                    Prompt
+                    <textarea id="quickStartPromptInput" rows="3" placeholder="Describe the forum you want, e.g. 'Three scientists debating climate policy'…"></textarea>
+                  </label>
+                  <div class="quick-start-actions">
+                    <button class="soft-button" id="generateQuickStartButton" type="button">Generate</button>
+                    <button class="primary-button" id="applyQuickStartButton" type="button">Apply</button>
+                  </div>
+                  <button class="secondary-button" id="discardQuickStartButton" type="button" style="width:100%">Discard</button>
+                  <div class="quick-start-preview" id="quickStartPreview" aria-live="polite"></div>
+                  <p class="status-line" id="quickStartStatus">No generated setup yet.</p>
+                </div>
+              </details>
             </section>
 
-            <section class="panel-section">
+            <!-- Scenario -->
+            <section class="panel-section section--scenario">
               <div class="section-title">
                 <h2>Scenario</h2>
-                <select id="modeSelect" aria-label="Forum mode">
-                  <option value="problem">Problem</option>
-                  <option value="story">Story</option>
-                  <option value="freeform">Freeform</option>
-                </select>
+                <div class="mode-pills" role="group" aria-label="Forum mode">
+                  <button class="mode-pill" data-mode="problem" type="button">Problem</button>
+                  <button class="mode-pill" data-mode="story" type="button">Story</button>
+                  <button class="mode-pill" data-mode="freeform" type="button">Freeform</button>
+                </div>
               </div>
+              <!-- Hidden native select to keep state in sync -->
+              <select id="modeSelect" aria-label="Forum mode" class="hidden-file">
+                <option value="problem">Problem</option>
+                <option value="story">Story</option>
+                <option value="freeform">Freeform</option>
+              </select>
               <label>
                 Title
-                <input id="titleInput" maxlength="80">
+                <input id="titleInput" maxlength="80" placeholder="Untitled forum">
               </label>
               <label>
                 Premise
-                <textarea id="premiseInput" rows="4"></textarea>
+                <textarea id="premiseInput" rows="3" placeholder="What's the situation?"></textarea>
               </label>
               <label>
                 Objective
-                <textarea id="objectiveInput" rows="3"></textarea>
+                <textarea id="objectiveInput" rows="2" placeholder="What should the group achieve?"></textarea>
               </label>
             </section>
 
-            <section class="panel-section">
+            <!-- Director -->
+            <section class="panel-section section--director">
               <div class="section-title">
                 <h2>Director</h2>
                 <label class="toggle-row compact">
                   <input id="dmEnabledInput" type="checkbox">
-                  <span>DM</span>
+                  <span>DM enabled</span>
+                </label>
+              </div>
+              <div class="director-fields">
+                <div style="display:grid;gap:10px">
+                  <label>
+                    Name
+                    <input id="dmNameInput" maxlength="50" placeholder="Director">
+                  </label>
+                  <label>
+                    Style
+                    <textarea id="dmPersonaInput" rows="2" placeholder="Describe the director's moderation style…"></textarea>
+                  </label>
+                  <label class="toggle-row">
+                    <input id="dmPrivateInput" type="checkbox">
+                    <span>DM sees private thoughts</span>
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <!-- Auto-stop / Goal -->
+            <section class="panel-section section--goal">
+              <div class="section-title">
+                <h2>Goal &amp; Auto-stop</h2>
+                <label class="toggle-row compact" style="margin:0">
+                  <input id="autoStopEnabledInput" type="checkbox">
+                  <span>On</span>
                 </label>
               </div>
               <label>
-                Name
-                <input id="dmNameInput" maxlength="50">
+                Goal
+                <textarea id="autoGoalInput" rows="3" placeholder="What should the group finish or decide?"></textarea>
               </label>
-              <label>
-                Style
-                <textarea id="dmPersonaInput" rows="3"></textarea>
-              </label>
-              <label class="toggle-row">
-                <input id="dmPrivateInput" type="checkbox">
-                <span>DM sees private thoughts</span>
-              </label>
+              <div class="goal-options">
+                <label class="toggle-row">
+                  <input id="goalCheckEnabledInput" type="checkbox">
+                  <span>Judge goal after each round</span>
+                </label>
+                <label class="toggle-row">
+                  <input id="stopOnAllSkipInput" type="checkbox">
+                  <span>Stop when everyone skips</span>
+                </label>
+                <div class="split-row">
+                  <label class="toggle-row">
+                    <input id="maxRoundsEnabledInput" type="checkbox">
+                    <span>Max rounds</span>
+                  </label>
+                  <label>
+                    Rounds
+                    <input id="maxRoundsInput" type="number" min="1" max="50" step="1">
+                  </label>
+                </div>
+              </div>
+              <div class="goal-actions">
+                <button class="soft-button" id="checkGoalNowButton" type="button">Check Goal Now</button>
+              </div>
+              <p class="status-line" id="autoStopStatus">Auto-stop ready.</p>
             </section>
 
-            <section class="panel-section">
+            <!-- Session -->
+            <section class="panel-section section--session">
               <div class="section-title">
                 <h2>Session</h2>
               </div>
@@ -131,29 +196,40 @@
               </div>
               <label class="toggle-row">
                 <input id="showThoughtsInput" type="checkbox">
-                <span>Show private thoughts</span>
+                <span>Show private thoughts in transcript</span>
+              </label>
+              <label class="toggle-row">
+                <input id="toolsEnabledInput" type="checkbox">
+                <span>Enable web tools (search &amp; read pages)</span>
               </label>
               <input class="hidden-file" id="presetFileInput" type="file" accept="application/json">
             </section>
-          </div>
 
-          <section class="panel-section actors-section">
+          </div><!-- /panel-stack -->
+
+          <!-- Actors -->
+          <section class="panel-section section--actors actors-section">
             <div class="section-title">
               <h2>Actors</h2>
-              <button class="soft-button" id="addActorButton" type="button">Add</button>
+              <button class="soft-button" id="addActorButton" type="button">+ Add</button>
             </div>
             <div class="actor-list" id="actorList"></div>
           </section>
-        </div>
+        </div><!-- /setup-grid -->
       </section>
 
+      <!-- ═══════════════════════════════════════════════════════════════
+           CONVERSATION TAB
+      ════════════════════════════════════════════════════════════════ -->
       <section class="tab-panel conversation-tab" id="conversationTab" role="tabpanel" aria-labelledby="conversationTabButton" data-tab-panel="conversation">
         <div class="conversation-layout">
           <main class="stage-panel">
             <header class="stage-header">
-              <div>
-                <p class="eyebrow" id="modeLabel">Problem</p>
-                <h2 id="stageTitle">Untitled forum</h2>
+              <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+                <div style="min-width:0">
+                  <h2 id="stageTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Untitled forum</h2>
+                </div>
+                <span class="mode-badge" id="modeLabel">Problem</span>
               </div>
               <div class="turn-toolbar" aria-label="Conversation controls">
                 <button class="danger-button" id="clearConversationButton" type="button">Clear</button>
@@ -163,184 +239,280 @@
             <section class="transcript" id="transcript" aria-live="polite"></section>
 
             <form class="composer" id="composer">
-              <textarea id="userInput" rows="2" placeholder="Join the forum..."></textarea>
+              <textarea id="userInput" rows="2" placeholder="Join the forum…"></textarea>
+              <div class="token-gauge" id="tokenGauge" hidden title="Tokens used in last prompt vs. model context window">
+                <div class="token-gauge-bar-wrap">
+                  <div class="token-gauge-bar" id="tokenGaugeBar"></div>
+                </div>
+                <div class="token-gauge-meta">
+                  <span class="token-gauge-label" id="tokenGaugeLabel"></span>
+                  <span class="token-gauge-hint">context used</span>
+                </div>
+              </div>
               <div class="composer-actions">
-                <button class="secondary-button" id="nextTurnButton" type="button">Next AI</button>
-                <button class="secondary-button" id="roundButton" type="button">Round</button>
-                <button class="primary-button" id="autoButton" type="button">Auto</button>
+                <button class="secondary-button" id="nextTurnButton" type="button" title="Next AI turn (⌘⇧N)">Next AI</button>
+                <button class="secondary-button" id="roundButton" type="button" title="Run a full round (⌘⇧R)">Round</button>
+                <button class="secondary-button" id="autoButton" type="button">Auto</button>
                 <button class="quiet-button" id="stopButton" type="button">Stop</button>
-                <button class="primary-button" type="submit">Send</button>
+                <div class="spacer"></div>
+                <label class="composer-toggle" title="Show private thoughts">
+                  <input id="showThoughtsMirror" type="checkbox">
+                  <span>💭</span>
+                </label>
+                <label class="composer-toggle" title="Enable web tools">
+                  <input id="toolsEnabledMirror" type="checkbox">
+                  <span>🔍</span>
+                </label>
+                <button class="primary-button" type="submit" title="Send (⌘↵)">Send</button>
               </div>
             </form>
           </main>
 
-          <aside class="panel-section conversation-summary" aria-label="Conversation setup summary">
-            <div class="section-title">
-              <h2>Current Setup</h2>
-              <button class="soft-button" type="button" data-tab-jump="setup">Edit</button>
+
+          <div class="sidebar-resize-handle" id="sidebarResizeHandle" title="Drag to resize"></div>
+          <aside class="panel-section conversation-sidebar" aria-label="Sidebar">
+            <!-- Compact segmented switcher -->
+            <div class="sidebar-header">
+              <div class="sidebar-tabs">
+                <button class="sidebar-tab active" data-sidebar="setup" type="button">Setup</button>
+                <button class="sidebar-tab" data-sidebar="document" type="button">📝 Doc</button>
+              </div>
             </div>
-            <div id="conversationSummary"></div>
-            <div class="auto-stop-block">
-              <div class="section-title">
-                <h2>Auto-stop</h2>
+
+            <!-- Setup summary panel -->
+            <div class="sidebar-panel" data-sidebar-panel="setup">
+              <details class="summary-collapse" open>
+                <summary class="section-title">
+                  <h2>Current Setup</h2>
+                  <span class="summary-collapse-actions">
+                    <button class="soft-button" type="button" data-tab-jump="setup">Edit</button>
+                    <span class="collapse-chevron">▾</span>
+                  </span>
+                </summary>
+                <div id="conversationSummary"></div>
+              </details>
+            </div>
+
+            <!-- Document panel -->
+            <div class="sidebar-panel" data-sidebar-panel="document" style="display:none">
+              <div class="doc-header">
                 <label class="toggle-row compact">
-                  <input id="autoStopEnabledInput" type="checkbox">
-                  <span>On</span>
+                  <input id="documentEnabledInput" type="checkbox">
+                  <span>Active</span>
                 </label>
+                <div class="doc-view-toggle">
+                  <button class="doc-view-btn active" data-doc-view="preview" type="button">Preview</button>
+                  <button class="doc-view-btn" data-doc-view="edit" type="button">Edit</button>
+                </div>
               </div>
-              <label>
-                Goal
-                <textarea id="autoGoalInput" rows="4" placeholder="What should the group finish or decide?"></textarea>
-              </label>
-              <label class="toggle-row">
-                <input id="goalCheckEnabledInput" type="checkbox">
-                <span>Judge goal after each round</span>
-              </label>
-              <label class="toggle-row">
-                <input id="stopOnAllSkipInput" type="checkbox">
-                <span>Stop when everyone skips</span>
-              </label>
-              <div class="split-row">
-                <label class="toggle-row">
-                  <input id="maxRoundsEnabledInput" type="checkbox">
-                  <span>Max rounds</span>
-                </label>
+              <div class="document-panel-fields">
                 <label>
-                  Rounds
-                  <input id="maxRoundsInput" type="number" min="1" max="50" step="1">
+                  Title
+                  <input id="documentTitleInput" placeholder="e.g. Design Brief, Study Guide">
                 </label>
+                <!-- Edit view -->
+                <div class="doc-edit-view" style="display:none">
+                  <textarea id="documentContent" rows="20" placeholder="Start typing or let agents draft..."></textarea>
+                </div>
+                <!-- Preview view -->
+                <div class="doc-preview-view">
+                  <div id="documentPreview" class="document-rendered"></div>
+                </div>
+                <div class="document-meta">
+                  <span id="documentVersionCount" class="muted-text">0 versions</span>
+                  <div class="document-meta-actions">
+                    <button class="quiet-button" id="documentCopyButton" type="button" title="Copy document to clipboard">📋 Copy</button>
+                    <button class="quiet-button" id="documentClearButton" type="button" title="Clear document content">🗑 Clear</button>
+                  </div>
+                </div>
               </div>
-              <button class="secondary-button" id="checkGoalNowButton" type="button">Check Goal Now</button>
-              <p class="status-line" id="autoStopStatus">Auto-stop ready.</p>
             </div>
           </aside>
         </div>
       </section>
 
+      <!-- ═══════════════════════════════════════════════════════════════
+           MEMORY TAB
+      ════════════════════════════════════════════════════════════════ -->
       <section class="tab-panel memory-tab" id="memoryTab" role="tabpanel" aria-labelledby="memoryTabButton" data-tab-panel="memory">
-        <section class="panel-section memory-section">
-          <div class="section-title">
-            <h2>Memory</h2>
-            <label class="toggle-row compact">
-              <input id="memoryEnabledInput" type="checkbox">
-              <span>On</span>
+        <div class="memory-tab-grid">
+          <section class="panel-section memory-section">
+            <div class="section-title">
+              <h2>Memory</h2>
+              <label class="toggle-row compact">
+                <input id="memoryEnabledInput" type="checkbox">
+                <span>On</span>
+              </label>
+            </div>
+            <label>
+              Pinned Facts
+              <textarea id="pinnedFactsInput" rows="4"></textarea>
             </label>
-          </div>
-          <label>
-            Pinned Facts
-            <textarea id="pinnedFactsInput" rows="5"></textarea>
-          </label>
-          <label>
-            Shared Summary
-            <textarea id="sharedSummaryInput" rows="6"></textarea>
-          </label>
-          <label>
-            Open Questions
-            <textarea id="openQuestionsInput" rows="4"></textarea>
-          </label>
-          <label>
-            DM State
-            <textarea id="dmStateInput" rows="4"></textarea>
-          </label>
-          <div class="memory-actions">
-            <button class="secondary-button" id="summarizeNowButton" type="button">Summarize Now</button>
-            <button class="secondary-button" id="rebuildMemoryButton" type="button">Rebuild</button>
-            <button class="secondary-button" id="approveFactsButton" type="button">Approve Facts</button>
-            <button class="danger-button" id="clearArchiveButton" type="button">Clear Archive</button>
-          </div>
-          <div class="pending-facts" id="pendingFactsList"></div>
-          <p class="status-line" id="memoryStatus">Memory starting...</p>
-        </section>
+            <label>
+              Shared Summary
+              <textarea id="sharedSummaryInput" rows="5"></textarea>
+            </label>
+            <label>
+              Open Questions
+              <textarea id="openQuestionsInput" rows="3"></textarea>
+            </label>
+            <label>
+              DM State
+              <textarea id="dmStateInput" rows="3"></textarea>
+            </label>
+            <div class="memory-actions">
+              <button class="secondary-button" id="summarizeNowButton" type="button">Summarize Now</button>
+              <button class="secondary-button" id="rebuildMemoryButton" type="button">Rebuild from History</button>
+              <button class="secondary-button" id="approveFactsButton" type="button">Save Facts</button>
+              <button class="soft-button" id="compactFactsButton" type="button" title="Merge and deduplicate pinned facts when they get too long">Compact Facts</button>
+              <button class="danger-button" id="clearArchiveButton" type="button">Clear Archive</button>
+            </div>
+            <div class="pending-facts" id="pendingFactsList"></div>
 
-        <section class="panel-section outcomes-section">
-          <div class="section-title">
-            <h2>Outcomes</h2>
-            <button class="soft-button" id="extractOutcomesButton" type="button">Extract Outcomes</button>
-          </div>
-          <label>
-            Final Recommendation
-            <textarea id="outcomeRecommendationInput" rows="4"></textarea>
-          </label>
-          <label>
-            Decisions
-            <textarea id="outcomeDecisionsInput" rows="4"></textarea>
-          </label>
-          <label>
-            Rationale
-            <textarea id="outcomeRationaleInput" rows="4"></textarea>
-          </label>
-          <label>
-            Rejected Options
-            <textarea id="outcomeRejectedInput" rows="3"></textarea>
-          </label>
-          <label>
-            Action Items
-            <textarea id="outcomeActionsInput" rows="4"></textarea>
-          </label>
-          <label>
-            Risks
-            <textarea id="outcomeRisksInput" rows="3"></textarea>
-          </label>
-          <p class="status-line" id="outcomeStatus">No outcomes extracted yet.</p>
-        </section>
+            <!-- Recent deltas: bullet updates captured since the last full summary rewrite -->
+            <details class="notes-block memory-deltas-section" id="recentDeltasSection" style="display:none">
+              <summary>Recent updates <span class="delta-count" id="deltaCount"></span></summary>
+              <div class="deltas-list" id="recentDeltasList"></div>
+            </details>
+
+            <!-- Status row with cycle progress indicator -->
+            <div class="memory-status-row">
+              <p class="status-line" id="memoryStatus">Memory starting…</p>
+              <span class="cycle-badge" id="cycleBadge" style="display:none"></span>
+            </div>
+
+            <!-- Archive chunk browser -->
+            <details class="notes-block chunk-browser-section" id="chunkBrowserSection">
+              <summary>Archive browser <button class="soft-button" id="browseChunksButton" type="button">Load</button></summary>
+              <div class="chunk-browser" id="chunkBrowserList">
+                <p class="pending-empty">Click Load to browse archived memory chunks.</p>
+              </div>
+            </details>
+          </section>
+
+          <section class="panel-section outcomes-section">
+            <div class="section-title">
+              <h2>Outcomes</h2>
+              <button class="soft-button" id="extractOutcomesButton" type="button">Extract</button>
+            </div>
+            <label>
+              Final Recommendation
+              <textarea id="outcomeRecommendationInput" rows="3"></textarea>
+            </label>
+            <label>
+              Decisions
+              <textarea id="outcomeDecisionsInput" rows="3"></textarea>
+            </label>
+            <label>
+              Rationale
+              <textarea id="outcomeRationaleInput" rows="3"></textarea>
+            </label>
+            <label>
+              Rejected Options
+              <textarea id="outcomeRejectedInput" rows="2"></textarea>
+            </label>
+            <label>
+              Action Items
+              <textarea id="outcomeActionsInput" rows="3"></textarea>
+            </label>
+            <label>
+              Risks
+              <textarea id="outcomeRisksInput" rows="2"></textarea>
+            </label>
+            <p class="status-line" id="outcomeStatus">No outcomes extracted yet.</p>
+          </section>
+        </div>
       </section>
-    </div>
 
+    </div><!-- /app-shell -->
+
+    <!-- Mobile bottom nav -->
+    <nav class="mobile-nav" aria-label="Section navigation">
+      <div class="mobile-nav-inner">
+        <button class="mobile-nav-btn" data-tab="setup" type="button">
+          <span class="nav-icon" aria-hidden="true">⚙︎</span>
+          <span>Setup</span>
+        </button>
+        <button class="mobile-nav-btn" data-tab="conversation" type="button">
+          <span class="nav-icon" aria-hidden="true">💬</span>
+          <span>Talk</span>
+        </button>
+        <button class="mobile-nav-btn" data-tab="memory" type="button">
+          <span class="nav-icon" aria-hidden="true">🧠</span>
+          <span>Memory</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Message template -->
     <template id="messageTemplate">
       <article class="message-card">
         <div class="message-meta">
           <span class="speaker-dot"></span>
           <strong></strong>
+          <span class="actor-role-label"></span>
           <span class="message-time"></span>
         </div>
         <p class="message-content"></p>
-        <details class="thought-block">
-          <summary>Private thought</summary>
+        <div class="tool-calls" style="display:none"></div>
+        <div class="doc-edit-badge" style="display:none">📝 edited document</div>
+        <details class="thought-block" style="display:none">
+          <summary>💭 Private thought</summary>
           <p></p>
         </details>
       </article>
     </template>
 
+    <!-- Actor template -->
     <template id="actorTemplate">
       <article class="actor-card">
-        <div class="actor-card-top">
-          <label class="toggle-row compact">
+        <div class="actor-card-summary">
+          <label class="toggle-row compact" style="margin:0">
             <input class="actor-enabled" type="checkbox">
-            <span class="actor-swatch"></span>
           </label>
+          <span class="actor-swatch"></span>
+          <span class="actor-name-display"></span>
+          <span class="role-badge"></span>
+          <button class="actor-expand-toggle" type="button" aria-label="Expand actor details" title="Expand">▼</button>
           <button class="icon-button remove-actor" type="button" aria-label="Remove actor" title="Remove actor">
             <span aria-hidden="true">×</span>
           </button>
         </div>
-        <div class="two-column">
+        <div class="actor-card-body">
+          <div class="two-column">
+            <label>
+              Name
+              <input class="actor-name" maxlength="50">
+            </label>
+            <label>
+              Role
+              <input class="actor-role" maxlength="70">
+            </label>
+          </div>
           <label>
-            Name
-            <input class="actor-name" maxlength="50">
+            Persona
+            <textarea class="actor-persona" rows="3"></textarea>
           </label>
           <label>
-            Role
-            <input class="actor-role" maxlength="70">
+            Goal
+            <textarea class="actor-goal" rows="2"></textarea>
           </label>
+          <label>
+            Voice
+            <input class="actor-voice" maxlength="100">
+          </label>
+          <details class="notes-block">
+            <summary>Private memory</summary>
+            <textarea class="actor-thoughts" rows="3"></textarea>
+          </details>
+          <details class="notes-block actor-relationships-block" style="display:none">
+            <summary>Relationships</summary>
+            <ul class="actor-relationships-list"></ul>
+          </details>
         </div>
-        <label>
-          Persona
-          <textarea class="actor-persona" rows="3"></textarea>
-        </label>
-        <label>
-          Goal
-          <textarea class="actor-goal" rows="2"></textarea>
-        </label>
-        <label>
-          Voice
-          <input class="actor-voice" maxlength="100">
-        </label>
-        <details class="notes-block">
-          <summary>Private memory</summary>
-          <textarea class="actor-thoughts" rows="3"></textarea>
-        </details>
       </article>
     </template>
 
-    <script src="/app.js" type="module"></script>
+    <script src="/main.js" type="module"></script>
   </body>
 </html>

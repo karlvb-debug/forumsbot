@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
+import * as cheerio from "cheerio";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const publicDir = join(__dirname, "public");
@@ -67,23 +68,38 @@ async function proxyModels(req, res) {
     const { baseUrl, apiKey } = await readJson(req);
     const target = `${cleanBaseUrl(baseUrl)}/models`;
     const response = await fetch(target, {
-      headers: {
-        authorization: `Bearer ${apiKey || "lm-studio"}`
-      }
+      headers: { authorization: `Bearer ${apiKey || "lm-studio"}` }
     });
     const text = await response.text();
     let payload;
-    try {
-      payload = text ? JSON.parse(text) : {};
-    } catch {
-      payload = { raw: text };
-    }
-    if (!response.ok) {
-      return sendJson(res, response.status, toLmStudioError(payload?.error || payload, response.status));
-    }
+    try { payload = text ? JSON.parse(text) : {}; } catch { payload = { raw: text }; }
+    if (!response.ok) return sendJson(res, response.status, toLmStudioError(payload?.error || payload, response.status));
     return sendJson(res, 200, payload);
   } catch (error) {
     return sendJson(res, 502, toLmStudioError(error, 502));
+  }
+}
+
+// Proxy to LM Studio's extended /api/v0/models which returns max_context_length,
+// quantization, arch, capabilities etc. — not available from /v1/models.
+async function proxyModelInfo(req, res) {
+  try {
+    const { baseUrl, apiKey } = await readJson(req);
+    // Build the v0 base URL from whatever the user configured
+    const base = cleanBaseUrl(baseUrl).replace(/\/v1$/, "");
+    const target = `${base}/api/v0/models`;
+    const response = await fetch(target, {
+      headers: { authorization: `Bearer ${apiKey || "lm-studio"}` },
+      signal: AbortSignal.timeout(4000)
+    });
+    if (!response.ok) {
+      // v0 endpoint not supported (e.g. non-LM Studio server) — return empty gracefully
+      return sendJson(res, 200, { data: [] });
+    }
+    const payload = await response.json();
+    return sendJson(res, 200, payload);
+  } catch {
+    return sendJson(res, 200, { data: [] }); // fail silently — this is optional enrichment
   }
 }
 
@@ -159,16 +175,26 @@ async function toolExecute(req, res) {
         signal: AbortSignal.timeout(8000)
       });
       const html = await response.text();
-
+      const $ = cheerio.load(html);
       const results = [];
-      const resultRegex = /<a[^>]+class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
-      let match;
-      while ((match = resultRegex.exec(html)) !== null && results.length < 5) {
-        const url = decodeURIComponent(String(match[1]).replace(/.*uddg=/, "").replace(/&.*/, ""));
-        const title = String(match[2]).replace(/<[^>]*>/g, "").trim();
-        const snippet = String(match[3]).replace(/<[^>]*>/g, "").trim();
-        if (url && title) results.push({ title, snippet, url });
-      }
+
+      $(".result").each((_, el) => {
+        if (results.length >= 5) return;
+        const linkEl = $(el).find(".result__a");
+        const snippetEl = $(el).find(".result__snippet");
+        const rawUrl = linkEl.attr("href") || "";
+        const title = linkEl.text().trim();
+        const snippet = snippetEl.text().trim();
+        
+        let url = rawUrl;
+        if (rawUrl.includes("uddg=")) {
+          url = decodeURIComponent(rawUrl.split("uddg=")[1].split("&")[0]);
+        }
+        
+        if (url && title) {
+          results.push({ title, snippet, url });
+        }
+      });
 
       if (!results.length) {
         return sendJson(res, 200, { results: [{ title: "No results", snippet: `No results found for: ${query}`, url: "" }] });
@@ -176,7 +202,7 @@ async function toolExecute(req, res) {
       return sendJson(res, 200, { results });
     }
 
-    if (tool === "read_webpage") {
+    if (tool === "web_read") {
       const url = String(args?.url || "").trim();
       if (!url) return sendJson(res, 400, { error: "Missing URL." });
 
@@ -190,28 +216,11 @@ async function toolExecute(req, res) {
 
       let text;
       if (contentType.includes("text/html") || contentType.includes("xhtml")) {
-        // Extract title
-        const titleMatch = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-        const title = titleMatch ? titleMatch[1].replace(/<[^>]*>/g, "").trim() : "";
+        const $ = cheerio.load(raw);
+        $("script, style, nav, header, footer").remove();
+        const title = $("title").text().trim();
+        let cleaned = $("body").text().replace(/\s+/g, " ").trim();
 
-        // Remove script, style, nav, header, footer
-        let cleaned = raw
-          .replace(/<script[\s\S]*?<\/script>/gi, " ")
-          .replace(/<style[\s\S]*?<\/style>/gi, " ")
-          .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
-          .replace(/<header[\s\S]*?<\/header>/gi, " ")
-          .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
-          .replace(/<[^>]+>/g, " ")
-          .replace(/&nbsp;/g, " ")
-          .replace(/&amp;/g, "&")
-          .replace(/&lt;/g, "<")
-          .replace(/&gt;/g, ">")
-          .replace(/&quot;/g, '"')
-          .replace(/&#39;/g, "'")
-          .replace(/\s+/g, " ")
-          .trim();
-
-        // Truncate
         if (cleaned.length > 3000) cleaned = cleaned.slice(0, 3000) + "…[truncated]";
         text = title ? `Title: ${title}\n\n${cleaned}` : cleaned;
       } else {
@@ -258,21 +267,12 @@ async function serveStatic(req, res) {
 }
 
 const server = createServer(async (req, res) => {
-  if (req.method === "POST" && req.url === "/api/models") {
-    return proxyModels(req, res);
-  }
-  if (req.method === "POST" && req.url === "/api/chat") {
-    return proxyChat(req, res);
-  }
-  if (req.method === "POST" && req.url === "/api/embeddings") {
-    return proxyEmbeddings(req, res);
-  }
-  if (req.method === "POST" && req.url === "/api/tool-execute") {
-    return toolExecute(req, res);
-  }
-  if (req.method === "GET") {
-    return serveStatic(req, res);
-  }
+  if (req.method === "POST" && req.url === "/api/models") return proxyModels(req, res);
+  if (req.method === "POST" && req.url === "/api/model-info") return proxyModelInfo(req, res);
+  if (req.method === "POST" && req.url === "/api/chat") return proxyChat(req, res);
+  if (req.method === "POST" && req.url === "/api/embeddings") return proxyEmbeddings(req, res);
+  if (req.method === "POST" && req.url === "/api/tool-execute") return toolExecute(req, res);
+  if (req.method === "GET") return serveStatic(req, res);
   sendJson(res, 405, { error: "Method not allowed." });
 });
 
