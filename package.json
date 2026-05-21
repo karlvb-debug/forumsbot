@@ -1,0 +1,14 @@
+{
+  "name": "forum",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local multi-actor AI forum for LM Studio.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

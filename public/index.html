@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Forum</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <div class="brand-block">
+          <p class="eyebrow">Local AI council</p>
+          <h1>Forum</h1>
+        </div>
+        <nav class="tab-list" role="tablist" aria-label="Forum sections">
+          <button class="tab-button" id="setupTabButton" type="button" role="tab" data-tab="setup" aria-controls="setupTab">Setup</button>
+          <button class="tab-button" id="conversationTabButton" type="button" role="tab" data-tab="conversation" aria-controls="conversationTab">Conversation</button>
+          <button class="tab-button" id="memoryTabButton" type="button" role="tab" data-tab="memory" aria-controls="memoryTab">Memory</button>
+        </nav>
+        <button class="icon-button" id="themeToggle" type="button" aria-label="Toggle theme" title="Toggle theme">
+          <span aria-hidden="true">◐</span>
+        </button>
+      </header>
+
+      <section class="tab-panel setup-tab" id="setupTab" role="tabpanel" aria-labelledby="setupTabButton" data-tab-panel="setup">
+        <div class="setup-grid">
+          <div class="panel-stack">
+            <section class="panel-section">
+              <div class="section-title">
+                <h2>LM Studio</h2>
+                <button class="soft-button" id="loadModelsButton" type="button">Models</button>
+              </div>
+              <label>
+                Server URL
+                <input id="baseUrlInput" autocomplete="off" spellcheck="false">
+              </label>
+              <div class="two-column">
+                <label>
+                  Model
+                  <input id="modelInput" list="modelOptions" autocomplete="off" spellcheck="false">
+                  <datalist id="modelOptions"></datalist>
+                </label>
+                <label>
+                  Temp
+                  <input id="temperatureInput" type="number" min="0" max="2" step="0.1">
+                </label>
+              </div>
+              <label>
+                API key
+                <input id="apiKeyInput" autocomplete="off" spellcheck="false">
+              </label>
+              <label class="toggle-row compact">
+                <input id="toolsEnabledInput" type="checkbox">
+                <span>Enable web tools (search &amp; read pages)</span>
+              </label>
+              <p class="status-line" id="connectionStatus">Not connected</p>
+            </section>
+
+            <section class="panel-section quick-start-section">
+              <div class="section-title">
+                <h2>AI Quick Start</h2>
+                <button class="soft-button" id="generateQuickStartButton" type="button">Generate Setup</button>
+              </div>
+              <label>
+                Prompt
+                <textarea id="quickStartPromptInput" rows="4" placeholder="Describe the forum you want..."></textarea>
+              </label>
+              <div class="quick-start-actions">
+                <button class="primary-button" id="applyQuickStartButton" type="button">Apply Setup</button>
+                <button class="secondary-button" id="discardQuickStartButton" type="button">Discard</button>
+              </div>
+              <div class="quick-start-preview" id="quickStartPreview" aria-live="polite"></div>
+              <p class="status-line" id="quickStartStatus">No generated setup yet.</p>
+            </section>
+
+            <section class="panel-section">
+              <div class="section-title">
+                <h2>Scenario</h2>
+                <select id="modeSelect" aria-label="Forum mode">
+                  <option value="problem">Problem</option>
+                  <option value="story">Story</option>
+                  <option value="freeform">Freeform</option>
+                </select>
+              </div>
+              <label>
+                Title
+                <input id="titleInput" maxlength="80">
+              </label>
+              <label>
+                Premise
+                <textarea id="premiseInput" rows="4"></textarea>
+              </label>
+              <label>
+                Objective
+                <textarea id="objectiveInput" rows="3"></textarea>
+              </label>
+            </section>
+
+            <section class="panel-section">
+              <div class="section-title">
+                <h2>Director</h2>
+                <label class="toggle-row compact">
+                  <input id="dmEnabledInput" type="checkbox">
+                  <span>DM</span>
+                </label>
+              </div>
+              <label>
+                Name
+                <input id="dmNameInput" maxlength="50">
+              </label>
+              <label>
+                Style
+                <textarea id="dmPersonaInput" rows="3"></textarea>
+              </label>
+              <label class="toggle-row">
+                <input id="dmPrivateInput" type="checkbox">
+                <span>DM sees private thoughts</span>
+              </label>
+            </section>
+
+            <section class="panel-section">
+              <div class="section-title">
+                <h2>Session</h2>
+              </div>
+              <div class="session-grid">
+                <button class="secondary-button" id="savePresetButton" type="button">Save</button>
+                <button class="secondary-button" id="loadPresetButton" type="button">Load</button>
+                <button class="secondary-button" id="exportButton" type="button">Export</button>
+                <button class="danger-button" id="resetButton" type="button">Reset</button>
+              </div>
+              <label class="toggle-row">
+                <input id="showThoughtsInput" type="checkbox">
+                <span>Show private thoughts</span>
+              </label>
+              <input class="hidden-file" id="presetFileInput" type="file" accept="application/json">
+            </section>
+          </div>
+
+          <section class="panel-section actors-section">
+            <div class="section-title">
+              <h2>Actors</h2>
+              <button class="soft-button" id="addActorButton" type="button">Add</button>
+            </div>
+            <div class="actor-list" id="actorList"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="tab-panel conversation-tab" id="conversationTab" role="tabpanel" aria-labelledby="conversationTabButton" data-tab-panel="conversation">
+        <div class="conversation-layout">
+          <main class="stage-panel">
+            <header class="stage-header">
+              <div>
+                <p class="eyebrow" id="modeLabel">Problem</p>
+                <h2 id="stageTitle">Untitled forum</h2>
+              </div>
+              <div class="turn-toolbar" aria-label="Conversation controls">
+                <button class="danger-button" id="clearConversationButton" type="button">Clear</button>
+              </div>
+            </header>
+
+            <section class="transcript" id="transcript" aria-live="polite"></section>
+
+            <form class="composer" id="composer">
+              <textarea id="userInput" rows="2" placeholder="Join the forum..."></textarea>
+              <div class="composer-actions">
+                <button class="secondary-button" id="nextTurnButton" type="button">Next AI</button>
+                <button class="secondary-button" id="roundButton" type="button">Round</button>
+                <button class="primary-button" id="autoButton" type="button">Auto</button>
+                <button class="quiet-button" id="stopButton" type="button">Stop</button>
+                <button class="primary-button" type="submit">Send</button>
+              </div>
+            </form>
+          </main>
+
+          <aside class="panel-section conversation-summary" aria-label="Conversation setup summary">
+            <div class="section-title">
+              <h2>Current Setup</h2>
+              <button class="soft-button" type="button" data-tab-jump="setup">Edit</button>
+            </div>
+            <div id="conversationSummary"></div>
+            <div class="auto-stop-block">
+              <div class="section-title">
+                <h2>Auto-stop</h2>
+                <label class="toggle-row compact">
+                  <input id="autoStopEnabledInput" type="checkbox">
+                  <span>On</span>
+                </label>
+              </div>
+              <label>
+                Goal
+                <textarea id="autoGoalInput" rows="4" placeholder="What should the group finish or decide?"></textarea>
+              </label>
+              <label class="toggle-row">
+                <input id="goalCheckEnabledInput" type="checkbox">
+                <span>Judge goal after each round</span>
+              </label>
+              <label class="toggle-row">
+                <input id="stopOnAllSkipInput" type="checkbox">
+                <span>Stop when everyone skips</span>
+              </label>
+              <div class="split-row">
+                <label class="toggle-row">
+                  <input id="maxRoundsEnabledInput" type="checkbox">
+                  <span>Max rounds</span>
+                </label>
+                <label>
+                  Rounds
+                  <input id="maxRoundsInput" type="number" min="1" max="50" step="1">
+                </label>
+              </div>
+              <button class="secondary-button" id="checkGoalNowButton" type="button">Check Goal Now</button>
+              <p class="status-line" id="autoStopStatus">Auto-stop ready.</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="tab-panel memory-tab" id="memoryTab" role="tabpanel" aria-labelledby="memoryTabButton" data-tab-panel="memory">
+        <section class="panel-section memory-section">
+          <div class="section-title">
+            <h2>Memory</h2>
+            <label class="toggle-row compact">
+              <input id="memoryEnabledInput" type="checkbox">
+              <span>On</span>
+            </label>
+          </div>
+          <label>
+            Pinned Facts
+            <textarea id="pinnedFactsInput" rows="5"></textarea>
+          </label>
+          <label>
+            Shared Summary
+            <textarea id="sharedSummaryInput" rows="6"></textarea>
+          </label>
+          <label>
+            Open Questions
+            <textarea id="openQuestionsInput" rows="4"></textarea>
+          </label>
+          <label>
+            DM State
+            <textarea id="dmStateInput" rows="4"></textarea>
+          </label>
+          <div class="memory-actions">
+            <button class="secondary-button" id="summarizeNowButton" type="button">Summarize Now</button>
+            <button class="secondary-button" id="rebuildMemoryButton" type="button">Rebuild</button>
+            <button class="secondary-button" id="approveFactsButton" type="button">Approve Facts</button>
+            <button class="danger-button" id="clearArchiveButton" type="button">Clear Archive</button>
+          </div>
+          <div class="pending-facts" id="pendingFactsList"></div>
+          <p class="status-line" id="memoryStatus">Memory starting...</p>
+        </section>
+
+        <section class="panel-section outcomes-section">
+          <div class="section-title">
+            <h2>Outcomes</h2>
+            <button class="soft-button" id="extractOutcomesButton" type="button">Extract Outcomes</button>
+          </div>
+          <label>
+            Final Recommendation
+            <textarea id="outcomeRecommendationInput" rows="4"></textarea>
+          </label>
+          <label>
+            Decisions
+            <textarea id="outcomeDecisionsInput" rows="4"></textarea>
+          </label>
+          <label>
+            Rationale
+            <textarea id="outcomeRationaleInput" rows="4"></textarea>
+          </label>
+          <label>
+            Rejected Options
+            <textarea id="outcomeRejectedInput" rows="3"></textarea>
+          </label>
+          <label>
+            Action Items
+            <textarea id="outcomeActionsInput" rows="4"></textarea>
+          </label>
+          <label>
+            Risks
+            <textarea id="outcomeRisksInput" rows="3"></textarea>
+          </label>
+          <p class="status-line" id="outcomeStatus">No outcomes extracted yet.</p>
+        </section>
+      </section>
+    </div>
+
+    <template id="messageTemplate">
+      <article class="message-card">
+        <div class="message-meta">
+          <span class="speaker-dot"></span>
+          <strong></strong>
+          <span class="message-time"></span>
+        </div>
+        <p class="message-content"></p>
+        <details class="thought-block">
+          <summary>Private thought</summary>
+          <p></p>
+        </details>
+      </article>
+    </template>
+
+    <template id="actorTemplate">
+      <article class="actor-card">
+        <div class="actor-card-top">
+          <label class="toggle-row compact">
+            <input class="actor-enabled" type="checkbox">
+            <span class="actor-swatch"></span>
+          </label>
+          <button class="icon-button remove-actor" type="button" aria-label="Remove actor" title="Remove actor">
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+        <div class="two-column">
+          <label>
+            Name
+            <input class="actor-name" maxlength="50">
+          </label>
+          <label>
+            Role
+            <input class="actor-role" maxlength="70">
+          </label>
+        </div>
+        <label>
+          Persona
+          <textarea class="actor-persona" rows="3"></textarea>
+        </label>
+        <label>
+          Goal
+          <textarea class="actor-goal" rows="2"></textarea>
+        </label>
+        <label>
+          Voice
+          <input class="actor-voice" maxlength="100">
+        </label>
+        <details class="notes-block">
+          <summary>Private memory</summary>
+          <textarea class="actor-thoughts" rows="3"></textarea>
+        </details>
+      </article>
+    </template>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
