@@ -51,6 +51,7 @@ export const els = {
   round: $("#roundButton"),
   auto: $("#autoButton"),
   clearConversation: $("#clearConversationButton"),
+  copySession: $("#copySessionButton"),
   stop: $("#stopButton"),
   addActor: $("#addActorButton"),
   actorList: $("#actorList"),

@@ -46,6 +46,7 @@ import {
   savePreset,
   loadPresetFile,
   exportSession,
+  copySessionToClipboard,
   confirmAndResetSession,
   confirmAndFullReset,
   addActor,
@@ -273,6 +274,7 @@ function wireEvents() {
   els.round.addEventListener("click", () => runRound());
   els.auto.addEventListener("click", runAutoLoop);
   els.clearConversation.addEventListener("click", confirmAndResetSession);
+  els.copySession.addEventListener("click", copySessionToClipboard);
   els.stop.addEventListener("click", stopGeneration);
   els.generateQuickStart.addEventListener("click", generateQuickStart);
   els.applyQuickStart.addEventListener("click", () => applyQuickStartConfig());

@@ -52,6 +52,47 @@ export async function exportSession() {
   });
 }
 
+export async function copySessionToClipboard() {
+  const messages = await getAllMessages();
+  
+  const header = [
+    `# Forum Session Digest`,
+    `**Title:** ${state.scenario.title || 'Untitled'}`,
+    `**Mode:** ${state.scenario.mode || 'problem'}`,
+    `**Premise:** ${state.scenario.premise || 'None'}`,
+    `**Objective:** ${state.scenario.objective || 'None'}`,
+    `---`,
+    `## Memory State`,
+    `**Pinned Facts:**\n${state.memory.pinnedFacts || 'None'}`,
+    `**Shared Summary:**\n${state.memory.sharedSummary || 'None'}`,
+    `**Open Questions:**\n${state.memory.openQuestions || 'None'}`,
+    `**DM State:**\n${state.memory.dmState || 'None'}`,
+    `---`,
+    `## Transcript`
+  ].join("\n");
+
+  const formattedMessages = messages.map((msg) => {
+    const timeStr = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+    const typeLabel = msg.type || 'actor';
+    const headerStr = `### ${msg.speaker || 'Unknown'} (${typeLabel}) - ${timeStr}`;
+    
+    const thoughtStr = msg.thought ? `**Thought:**\n${msg.thought}\n` : '';
+    const contentStr = `**Message:**\n${msg.content || ''}`;
+    
+    return [headerStr, thoughtStr, contentStr].filter(Boolean).join('\n');
+  }).join("\n\n");
+
+  const fullText = [header, formattedMessages].join("\n\n");
+
+  try {
+    await navigator.clipboard.writeText(fullText);
+    setStatus("Session copied to clipboard!", "ok");
+  } catch (err) {
+    setStatus("Copy failed. Check browser permissions.", "error");
+    console.error("Clipboard copy failed:", err);
+  }
+}
+
 export function downloadJson(filename, payload) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
