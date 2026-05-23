@@ -1,9 +1,9 @@
 import { WORD_LIMITS, PROMPT_MESSAGE_LIMIT, RECALLED_CHUNK_LIMIT, PINNED_FACTS_WORD_CAP, DELTA_REWRITE_EVERY } from './constants.js';
-import { state, saveState } from './state.js';
+import { state, saveState, logTransition } from './state.js';
 import { chatCompletion, getEmbedding, setStatus } from './api.js';
-import { render, renderMemory, renderPendingFacts, renderActors, setBusy, els } from './render.js';
-import { getAllChunks, putChunk, clearChunks, countChunks } from './db.js';
-import { trimWords, stringifyList, normalizeStringArray, extractKeywords, stringifyBullets, stripCodeFence, extractBalancedObjects } from './utils.js';
+import { render, renderMemory, renderPendingFacts, renderActors, setBusy, getIsGenerating, els } from './render.js';
+import { getAllChunks, putChunk, clearChunks, countChunks, getAllMessages } from './db.js';
+import { trimWords, stringifyList, normalizeStringArray, extractKeywords, stringifyBullets, stripCodeFence, extractBalancedObjects, sanitizeJsonString } from './utils.js';
 
 // Minimum cosine similarity for a chunk to be injected into a prompt.
 // Chunks scoring below this are noise, not signal. Only applies when
@@ -29,9 +29,11 @@ export async function recallRelevantChunks(actor) {
   if (!chunks.length) return [];
 
   // Detect embedding model mismatch — vectors from different models are incompatible.
-  const currentEmbedModel = state.settings.model || "";
+  // Prefer state.settings.embeddingModel (the dedicated embedding model field) over the
+  // chat model name, which changes independently and would produce false mismatch positives.
+  const currentEmbedModel = state.settings.embeddingModel || state.settings.model || "";
   const storedModels = new Set(chunks.map(c => c.embeddingModel).filter(Boolean));
-  const modelMismatch = storedModels.size > 0 && !storedModels.has(currentEmbedModel);
+  const modelMismatch = storedModels.size > 0 && currentEmbedModel && !storedModels.has(currentEmbedModel);
   if (modelMismatch) {
     console.warn("[memory] Embedding model changed since chunks were stored. Falling back to keyword-only recall.",
       { stored: [...storedModels], current: currentEmbedModel });
@@ -39,7 +41,7 @@ export async function recallRelevantChunks(actor) {
 
   // Composite query: actor goal + role + recent messages + open questions mentioning actor.
   const actorMentions = actor?.name
-    ? state.memory.openQuestions?.split("\n").filter(q => q.toLowerCase().includes(actor.name.toLowerCase())).join(" ")
+    ? normalizeStringArray(state.memory.openQuestions).filter(q => q.toLowerCase().includes(actor.name.toLowerCase())).join(" ")
     : "";
   const queryText = [
     state.scenario.title,
@@ -126,10 +128,13 @@ function scenarioBlock() {
   ].filter(Boolean).join("\n");
 }
 
-export function messagesSinceLastSummary() {
-  if (!state.memory.lastSummaryMessageId) return state.messages.slice(-PROMPT_MESSAGE_LIMIT);
-  const index = state.messages.findIndex((message) => message.id === state.memory.lastSummaryMessageId);
-  return index >= 0 ? state.messages.slice(index + 1) : state.messages.slice(-PROMPT_MESSAGE_LIMIT);
+export async function messagesSinceLastSummary() {
+  const dbMessages = await getAllMessages();
+  const allMsgs = dbMessages.length ? dbMessages : state.messages;
+
+  if (!state.memory.lastSummaryMessageId) return allMsgs.slice(-PROMPT_MESSAGE_LIMIT);
+  const index = allMsgs.findIndex((message) => message.id === state.memory.lastSummaryMessageId);
+  return index >= 0 ? allMsgs.slice(index + 1) : allMsgs.slice(-PROMPT_MESSAGE_LIMIT);
 }
 
 export async function summarizeMemory(reason = "manual", sourceMessages = null, options = {}) {
@@ -143,7 +148,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
   }
   if (state.memory.isSummarizing) return;
 
-  const messages = sourceMessages?.length ? sourceMessages : messagesSinceLastSummary();
+  const messages = sourceMessages?.length ? sourceMessages : await messagesSinceLastSummary();
   const usableMessages = messages.length ? messages : state.messages.slice(-PROMPT_MESSAGE_LIMIT);
   if (!usableMessages.length) {
     if (reason === "manual") setStatus("No conversation to summarize yet.", "warn");
@@ -152,7 +157,8 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
 
   if (options.reset) {
     state.memory.sharedSummary = "";
-    state.memory.openQuestions = "";
+    state.memory.pinnedFacts = [];
+    state.memory.openQuestions = [];
     state.memory.dmState = "";
     state.memory.recentDeltas = [];
     state.memory.cycleCount = 0;
@@ -197,7 +203,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
       ].join("\n");
       const deltaUser = [
         scenarioBlock(),
-        `Existing pinned facts:\n${state.memory.pinnedFacts || "None."}`,
+        `Existing pinned facts:\n${normalizeStringArray(state.memory.pinnedFacts).join("\n") || "None."}`,
         `Existing summary (do NOT repeat this):\n${trimWords(state.memory.sharedSummary, 160) || "None."}`,
         `New turns to summarise:\n${formatTranscript(usableMessages, 900)}`
       ].join("\n\n");
@@ -214,7 +220,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
         }
       }
       // Still update actor memories and pinned fact suggestions from the delta
-      const keywords = normalizeStringArray(raw.keywords).map(k => k.toLowerCase()).filter(Boolean);
+      const keywords = normalizeStringArray(raw.keywords, true).map(k => k.toLowerCase()).filter(Boolean);
       const deltaUpdate = {
         ...raw,
         actorMemoryUpdates: raw.actorMemoryUpdates || {},
@@ -225,7 +231,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
       };
       applyActorMemoryUpdates(deltaUpdate.actorMemoryUpdates);
       applyActorRelationshipUpdates(deltaUpdate.actorRelationshipUpdates);
-      applyPinnedFactSuggestions(deltaUpdate.pinnedFactSuggestions);
+      await applyPinnedFactSuggestions(deltaUpdate.pinnedFactSuggestions);
       await archiveMemoryChunk(deltaUpdate, usableMessages);
 
     } else {
@@ -249,10 +255,10 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
       const user = [
         `Reason: ${reason}`,
         scenarioBlock(),
-        `Pinned facts (ground truth — anchor your summary around these):\n${state.memory.pinnedFacts || "None."}`,
+        `Pinned facts (ground truth — anchor your summary around these):\n${normalizeStringArray(state.memory.pinnedFacts).join("\n") || "None."}`,
         `Existing shared summary:\n${state.memory.sharedSummary || "None."}`,
         deltaContext,
-        `Existing open questions:\n${state.memory.openQuestions || "None."}`,
+        `Existing open questions:\n${normalizeStringArray(state.memory.openQuestions).join("\n") || "None."}`,
         `Existing DM state:\n${state.memory.dmState || "None."}`,
         `Source turns:\n${formatTranscript(usableMessages, 1600)}`
       ].filter(Boolean).join("\n\n");
@@ -261,7 +267,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
       const parsed = parseMemoryJson(content);
       console.log('[memory] Parsed keys:', Object.keys(parsed), 'sharedSummary type:', typeof parsed.sharedSummary, 'openQ type:', typeof parsed.openQuestions);
       const memoryUpdate = normalizeMemoryUpdate(parsed, usableMessages);
-      applyMemoryUpdate(memoryUpdate);
+      await applyMemoryUpdate(memoryUpdate);
       applyActorRelationshipUpdates(memoryUpdate.actorRelationshipUpdates || {});
       await archiveMemoryChunk(memoryUpdate, usableMessages);
       // Clear accumulated deltas after full rewrite
@@ -290,7 +296,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
 }
 
 export function parseMemoryJson(content) {
-  const cleaned = stripCodeFence(content);
+  const cleaned = sanitizeJsonString(stripCodeFence(content));
   // Try direct parse
   const direct = tryParseJson(cleaned);
   if (direct) return direct;
@@ -345,6 +351,10 @@ function repairTruncatedJson(text) {
   return null;
 }
 
+export function validateMemoryOutput(value) {
+  return normalizeStringArray(value).filter((item) => typeof item === "string" && item.trim().length > 1);
+}
+
 export function normalizeMemoryUpdate(update, sourceMessages) {
   const fallbackKeywords = extractKeywords(formatTranscript(sourceMessages, 1200)).slice(0, 16);
   const coerceText = (val, label) => {
@@ -357,31 +367,76 @@ export function normalizeMemoryUpdate(update, sourceMessages) {
   };
   return {
     sharedSummary: trimWords(coerceText(update.sharedSummary, "sharedSummary"), WORD_LIMITS.sharedSummary),
-    openQuestions: trimWords(coerceText(update.openQuestions, "openQuestions"), WORD_LIMITS.openQuestions),
+    openQuestions: validateMemoryOutput(update.openQuestions).slice(0, 10),
     dmState: trimWords(coerceText(update.dmState, "dmState"), WORD_LIMITS.dmState),
     actorMemoryUpdates: update.actorMemoryUpdates && typeof update.actorMemoryUpdates === "object" ? update.actorMemoryUpdates : {},
     actorRelationshipUpdates: update.actorRelationshipUpdates && typeof update.actorRelationshipUpdates === "object" ? update.actorRelationshipUpdates : {},
-    pinnedFactSuggestions: normalizeStringArray(update.pinnedFactSuggestions).slice(0, 8),
+    pinnedFactSuggestions: validateMemoryOutput(update.pinnedFactSuggestions).slice(0, 8),
     chunkSummary: trimWords(coerceText(update.chunkSummary || update.sharedSummary, "chunkSummary"), WORD_LIMITS.chunk),
-    keywords: normalizeStringArray(update.keywords).concat(fallbackKeywords).map((keyword) => keyword.toLowerCase()).filter(Boolean).slice(0, 24)
+    keywords: normalizeStringArray(update.keywords, true).concat(fallbackKeywords).map((keyword) => keyword.toLowerCase()).filter(Boolean).slice(0, 24)
   };
 }
 
-export function applyMemoryUpdate(update) {
+export async function applyMemoryUpdate(update) {
   if (typeof update.sharedSummary === "string" && update.sharedSummary) state.memory.sharedSummary = update.sharedSummary;
-  if (typeof update.openQuestions === "string") state.memory.openQuestions = update.openQuestions;
+  if (Array.isArray(update.openQuestions)) state.memory.openQuestions = update.openQuestions;
   if (state.dm.enabled && typeof update.dmState === "string") state.memory.dmState = update.dmState;
   applyActorMemoryUpdates(update.actorMemoryUpdates);
-  applyPinnedFactSuggestions(update.pinnedFactSuggestions);
+  await applyPinnedFactSuggestions(update.pinnedFactSuggestions);
 }
 
-function applyPinnedFactSuggestions(suggestions) {
-  (suggestions || []).forEach((fact) => {
-    if (!fact) return;
-    const duplicate = state.memory.pendingPinnedFacts.some((existing) => existing.toLowerCase() === fact.toLowerCase())
-      || state.memory.pinnedFacts.toLowerCase().includes(fact.toLowerCase());
-    if (!duplicate) state.memory.pendingPinnedFacts.push(trimWords(fact, 40));
-  });
+// Session-scoped vector cache for pinned/pending fact strings.
+// Keyed by lowercased fact text — avoids re-embedding the same string multiple times.
+// Cleared on page reload (in-memory only, never persisted).
+const _factVectorCache = new Map();
+
+async function getFactVector(factText) {
+  const key = factText.toLowerCase().trim();
+  if (_factVectorCache.has(key)) return _factVectorCache.get(key);
+  try {
+    const vec = await getEmbedding(factText);
+    if (Array.isArray(vec) && vec.length > 0) {
+      _factVectorCache.set(key, vec);
+      return vec;
+    }
+  } catch {
+    // Embedding unavailable — caller falls back to exact-match dedup
+  }
+  return null;
+}
+
+async function applyPinnedFactSuggestions(suggestions) {
+  const embeddingModel = state.settings.embeddingModel || state.settings.model || "";
+  for (const fact of (suggestions || [])) {
+    if (!fact) continue;
+
+    const allExisting = [...state.memory.pinnedFacts, ...state.memory.pendingPinnedFacts];
+
+    // Fast path: exact lowercase match
+    const exactDup = allExisting.some(f => f.toLowerCase() === fact.toLowerCase());
+    if (exactDup) continue;
+
+    // Semantic path: embedding cosine similarity (only when a model is configured)
+    if (embeddingModel) {
+      const factVec = await getFactVector(fact);
+      if (factVec) {
+        let maxSim = 0;
+        for (const existing of allExisting) {
+          const existingVec = await getFactVector(existing);
+          if (existingVec) {
+            const sim = cosineSimilarity(factVec, existingVec);
+            if (sim > maxSim) maxSim = sim;
+          }
+        }
+        if (maxSim > 0.88) {
+          console.debug(`[memory] Dedup: skipping near-duplicate fact (sim=${maxSim.toFixed(3)}): "${fact}"`);
+          continue;
+        }
+      }
+    }
+
+    state.memory.pendingPinnedFacts.push(trimWords(fact, 40));
+  }
 }
 
 export function applyActorMemoryUpdates(updates) {
@@ -427,14 +482,27 @@ export async function archiveMemoryChunk(update, sourceMessages) {
   const chunkText = update.chunkSummary || formatTranscript(sourceMessages, WORD_LIMITS.chunk);
 
   // Store the embedding model name so we can detect model changes later.
-  const embeddingModel = state.settings.model || "";
+  const embeddingModel = state.settings.embeddingModel || state.settings.model || "";
   let vector = null;
   let vectorDim = null;
-  try {
-    vector = await getEmbedding(chunkText);
-    if (Array.isArray(vector)) vectorDim = vector.length;
-  } catch (err) {
-    console.debug("Embedding unavailable (no model loaded), archiving chunk without vector:", err.message);
+  let embeddingStatus = "skipped";
+
+  if (embeddingModel) {
+    try {
+      vector = await getEmbedding(chunkText);
+      if (Array.isArray(vector)) {
+        vectorDim = vector.length;
+        embeddingStatus = "success";
+      } else {
+        throw new Error("Invalid embedding response format.");
+      }
+    } catch (err) {
+      embeddingStatus = "failed";
+      console.warn("[memory] Embedding generation failed for archived chunk. Falling back to keyword-only.", err);
+      setStatus("Embedding generation failed. Falling back to keyword-only recall.", "warn");
+    }
+  } else {
+    console.debug("[memory] No model configured for embedding, skipping vector generation.");
   }
 
   const chunk = {
@@ -447,11 +515,13 @@ export async function archiveMemoryChunk(update, sourceMessages) {
     title: state.scenario.title,
     messageIds: sourceMessages.map((message) => message.id),
     embeddingModel,
+    embeddingStatus,
     vectorDim,
     vector
   };
   try {
     await putChunk(chunk);
+    logTransition("chunk_created", { chunkId: chunk.id, textLength: chunk.text.length, keywordsCount: chunk.keywords.length });
   } catch (err) {
     console.error("Failed to archive memory chunk in database:", err);
   }
@@ -464,14 +534,15 @@ export function approvePinnedFacts() {
     .map((check) => state.memory.pendingPinnedFacts[Number(check.dataset.index)])
     .filter(Boolean);
   if (!approved.length) return;
-  const existing = state.memory.pinnedFacts.trim();
-  const additions = approved.map((fact) => `- ${fact}`).join("\n");
-  state.memory.pinnedFacts = [existing, additions].filter(Boolean).join("\n");
+  state.memory.pinnedFacts = [...state.memory.pinnedFacts, ...approved];
   state.memory.pendingPinnedFacts = state.memory.pendingPinnedFacts.filter((fact) => !approved.includes(fact));
+  approved.forEach(fact => {
+    logTransition("fact_promoted", { fact });
+  });
   saveState();
   renderMemory();
   // Warn if approaching the word cap
-  const wordCount = state.memory.pinnedFacts.trim().split(/\s+/).length;
+  const wordCount = state.memory.pinnedFacts.join("\n").trim().split(/\s+/).length;
   if (wordCount > PINNED_FACTS_WORD_CAP * 0.8) {
     setStatus(`Pinned facts are ${wordCount} words — approaching the ${PINNED_FACTS_WORD_CAP}‑word cap. Consider compacting.`, "warn");
   }
@@ -486,11 +557,11 @@ export async function compactPinnedFacts() {
     setStatus("Choose a model before compacting facts.", "warn");
     return;
   }
-  if (!state.memory.pinnedFacts.trim()) {
+  if (!state.memory.pinnedFacts.length) {
     setStatus("No pinned facts to compact.", "warn");
     return;
   }
-  const wordCount = state.memory.pinnedFacts.trim().split(/\s+/).length;
+  const wordCount = state.memory.pinnedFacts.join("\n").trim().split(/\s+/).length;
   if (wordCount <= PINNED_FACTS_WORD_CAP * 0.5) {
     setStatus("Pinned facts are already concise — no compaction needed.", "warn");
     return;
@@ -505,15 +576,15 @@ export async function compactPinnedFacts() {
       "Preserve all unique information. Merge facts about the same entity into one bullet. Remove exact duplicates.",
       "Return ONLY the bullet list — no JSON, no preamble."
     ].join("\n");
-    const user = `Current pinned facts:\n${state.memory.pinnedFacts}`;
+    const user = `Current pinned facts:\n${state.memory.pinnedFacts.join("\n")}`;
     const result = await chatCompletion(system, user, { temperature: 0.1, maxTokens: 600 });
     const compacted = result.trim();
     if (compacted) {
-      state.memory.pinnedFacts = trimWords(compacted, PINNED_FACTS_WORD_CAP);
-      if (els.pinnedFacts) els.pinnedFacts.value = state.memory.pinnedFacts;
+      state.memory.pinnedFacts = normalizeStringArray(trimWords(compacted, PINNED_FACTS_WORD_CAP));
+      if (els.pinnedFacts) els.pinnedFacts.value = state.memory.pinnedFacts.join("\n");
       saveState();
       renderMemory();
-      const newCount = state.memory.pinnedFacts.split(/\s+/).length;
+      const newCount = state.memory.pinnedFacts.join("\n").split(/\s+/).length;
       setStatus(`Facts compacted: ${wordCount} → ${newCount} words.`, "ok");
     }
   } catch (err) {
@@ -533,7 +604,7 @@ export async function clearArchivedMemory() {
 }
 
 export function parseOutcomeJson(content) {
-  const cleaned = stripCodeFence(content);
+  const cleaned = sanitizeJsonString(stripCodeFence(content));
   try {
     const parsed = JSON.parse(cleaned);
     if (parsed && typeof parsed === "object") return parsed;
@@ -579,6 +650,8 @@ export function setOutcomeStatus(message) {
 }
 
 export async function extractOutcomes() {
+  if (state.outcomes.isExtracting || state.outcomes.isExtractingOutcomes || state.autoRunning) return;
+
   if (!state.settings.model) {
     setOutcomeStatus("Choose or type a model before extracting outcomes.");
     return;
@@ -587,27 +660,29 @@ export async function extractOutcomes() {
   const chunks = await getAllChunks();
   const sourceMessages = state.messages.slice(-24);
   const archiveText = chunks.slice(-8).map((chunk) => `- ${chunk.text}`).join("\n");
-  const hasSource = sourceMessages.length || archiveText || state.memory.sharedSummary || state.memory.pinnedFacts;
+  const hasSource = sourceMessages.length || archiveText || state.memory.sharedSummary || (state.memory.pinnedFacts && state.memory.pinnedFacts.length);
   if (!hasSource) {
     setOutcomeStatus("No conversation content found to extract outcomes from.");
     return;
   }
 
-  const alreadyBusy = els.nextTurn.disabled;
+  state.outcomes.isExtracting = true;
+  state.outcomes.isExtractingOutcomes = true;
+  const alreadyBusy = getIsGenerating ? getIsGenerating() : els.nextTurn.disabled;
   setBusy(true);
   setOutcomeStatus("Extracting outcomes...");
 
   const system = [
     "You extract structured outcomes from a multi-actor AI forum conversation.",
-    "Be concise but complete. Use bullet points for lists.",
     "Return only valid JSON with this exact shape:",
-    "{\"finalRecommendation\":\"key takeaway or decision\",\"decisions\":[\"decision 1\"],\"rationale\":[\"reason 1\"],\"rejectedOptions\":[\"option 1\"],\"actionItems\":[\"action 1\"],\"risks\":[\"risk 1\"]}"
+    "{\"finalRecommendation\":\"one concise sentence\",\"decisions\":[\"decision A\",\"decision B\"],\"rationale\":[\"reason A\",\"reason B\"],\"rejectedOptions\":[\"option A\",\"option B\"],\"actionItems\":[\"action A\",\"action B\"],\"risks\":[\"risk A\",\"risk B\"]}",
+    "CRITICAL: Each array must contain 2–6 SHORT, SEPARATE items. Each item is a single sentence or phrase — do NOT concatenate multiple points into one item using dashes, bullets, or numbers inside a string. One idea per array entry."
   ].join("\n");
   const user = [
     scenarioBlock(),
-    `Pinned facts:\n${state.memory.pinnedFacts || "None."}`,
+    `Pinned facts:\n${(Array.isArray(state.memory.pinnedFacts) ? state.memory.pinnedFacts.join("\n") : state.memory.pinnedFacts) || "None."}`,
     `Shared memory summary:\n${state.memory.sharedSummary || "None."}`,
-    `Open questions:\n${state.memory.openQuestions || "None."}`,
+    `Open questions:\n${(Array.isArray(state.memory.openQuestions) ? state.memory.openQuestions.join("\n") : state.memory.openQuestions) || "None."}`,
     `DM state:\n${state.memory.dmState || "None."}`,
     `Recent transcript:\n${formatTranscript(sourceMessages, 2200)}`,
     `Archived chunk summaries:\n${archiveText || "None."}`,
@@ -615,22 +690,60 @@ export async function extractOutcomes() {
   ].join("\n\n");
 
   try {
-    const content = await chatCompletion(system, user, { temperature: 0.2, maxTokens: 1200 });
-    const update = normalizeOutcomeUpdate(parseOutcomeJson(content));
-    state.outcomes = {
-      ...state.outcomes,
-      ...update,
-      lastExtractedAt: new Date().toISOString(),
-      lastExtractMessageId: state.messages[state.messages.length - 1]?.id || state.outcomes.lastExtractMessageId,
-      status: "Outcomes extracted."
-    };
-    saveState();
-    // renderOutcomes is imported from render.js but that would create a circular dep
-    // Instead we re-populate from state directly
-    renderOutcomesLocal();
+    // Sprint 6: Retry-with-variation (up to 3 attempts, escalating temperature)
+    const attempts = [
+      { temperature: 0.1, maxTokens: 1200, prompt: user },
+      { temperature: 0.4, maxTokens: 1400, prompt: [
+          scenarioBlock(),
+          `Transcript:\n${formatTranscript(sourceMessages, 1800)}`,
+          `Existing outcomes:\n${formatCurrentOutcomes()}`,
+          'Return ONLY valid JSON: {"finalRecommendation":"","decisions":[],"rationale":[],"rejectedOptions":[],"actionItems":[],"risks":[]}'  
+        ].join('\n\n') },
+      { temperature: 0.7, maxTokens: 600, prompt: [
+          `Forum transcript (last 8 messages):\n${formatTranscript(sourceMessages.slice(-8), 800)}`,
+          'Return ONLY valid JSON with at least finalRecommendation: {"finalRecommendation":"..."}'
+        ].join('\n\n') }
+    ];
+
+    if (!Array.isArray(state.diagnostics.outcomeExtractionLog)) state.diagnostics.outcomeExtractionLog = [];
+
+    let update = null;
+    for (let i = 0; i < attempts.length; i++) {
+      const { temperature, maxTokens, prompt } = attempts[i];
+      try {
+        const content = await chatCompletion(system, prompt, { temperature, maxTokens });
+        const parsed = normalizeOutcomeUpdate(parseOutcomeJson(content));
+        // Success if we got at least a finalRecommendation
+        if (parsed.finalRecommendation) {
+          update = parsed;
+          state.diagnostics.outcomeExtractionLog.push({ at: new Date().toISOString(), attempt: i + 1, success: true });
+          break;
+        }
+        state.diagnostics.outcomeExtractionLog.push({ at: new Date().toISOString(), attempt: i + 1, success: false, error: 'empty result' });
+      } catch (attemptErr) {
+        state.diagnostics.outcomeExtractionLog.push({ at: new Date().toISOString(), attempt: i + 1, success: false, error: attemptErr.message });
+        if (i === attempts.length - 1) throw attemptErr;
+      }
+    }
+
+    if (update) {
+      state.outcomes = {
+        ...state.outcomes,
+        ...update,
+        lastExtractedAt: new Date().toISOString(),
+        lastExtractMessageId: state.messages[state.messages.length - 1]?.id || state.outcomes.lastExtractMessageId,
+        status: 'Outcomes extracted.'
+      };
+      saveState();
+      renderOutcomesLocal();
+    } else {
+      setOutcomeStatus('Could not extract outcomes after 3 attempts.');
+    }
   } catch (error) {
     setOutcomeStatus(error.message || "Outcome extraction failed.");
   } finally {
+    state.outcomes.isExtracting = false;
+    state.outcomes.isExtractingOutcomes = false;
     if (!alreadyBusy) setBusy(false);
   }
 }
@@ -639,10 +752,10 @@ function renderOutcomesLocal() {
   // Inline version to avoid circular dep with render.js
   const { outcomeRecommendation, outcomeDecisions, outcomeRationale, outcomeRejected, outcomeActions, outcomeRisks, outcomeStatus } = els;
   outcomeRecommendation.value = state.outcomes.finalRecommendation;
-  outcomeDecisions.value = state.outcomes.decisions;
-  outcomeRationale.value = state.outcomes.rationale;
-  outcomeRejected.value = state.outcomes.rejectedOptions;
-  outcomeActions.value = state.outcomes.actionItems;
-  outcomeRisks.value = state.outcomes.risks;
+  outcomeDecisions.value = Array.isArray(state.outcomes.decisions) ? state.outcomes.decisions.join("\n") : (state.outcomes.decisions || "");
+  outcomeRationale.value = Array.isArray(state.outcomes.rationale) ? state.outcomes.rationale.join("\n") : (state.outcomes.rationale || "");
+  outcomeRejected.value = Array.isArray(state.outcomes.rejectedOptions) ? state.outcomes.rejectedOptions.join("\n") : (state.outcomes.rejectedOptions || "");
+  outcomeActions.value = Array.isArray(state.outcomes.actionItems) ? state.outcomes.actionItems.join("\n") : (state.outcomes.actionItems || "");
+  outcomeRisks.value = Array.isArray(state.outcomes.risks) ? state.outcomes.risks.join("\n") : (state.outcomes.risks || "");
   outcomeStatus.textContent = state.outcomes.status || "No outcomes extracted yet.";
 }

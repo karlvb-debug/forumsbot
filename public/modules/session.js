@@ -12,7 +12,8 @@ import {
   cleanConfigText,
   stripCodeFence,
   extractBalancedObjects,
-  stringifyList
+  stringifyList,
+  sanitizeJsonString
 } from './utils.js';
 
 export { cleanStoredMessage };
@@ -43,13 +44,79 @@ export function savePreset() {
 export async function exportSession() {
   const messages = await getAllMessages();
   const chunks = await getAllChunks();
-  downloadJson(`forum-session-${slugDate()}.json`, {
-    version: PRESET_VERSION,
-    exportedAt: new Date().toISOString(),
-    ...state,
-    messages,
-    chunks
-  });
+
+  // Read export mode from UI (falls back to 'debug' if element absent)
+  const modeEl = document.getElementById('exportModeSelect');
+  const mode = modeEl ? modeEl.value : 'debug';
+
+  let payload;
+
+  if (mode === 'eval') {
+    // Eval mode: metrics, settings, scenario, and diagnostics only — no message content
+    const { calculateSessionMetrics } = await import('./telemetry.js');
+    payload = {
+      version: PRESET_VERSION,
+      exportedAt: new Date().toISOString(),
+      exportMode: 'eval',
+      settings: {
+        model: state.settings.model,
+        mode: state.scenario.mode,
+        temperature: state.settings.temperature
+      },
+      scenario: state.scenario,
+      autoStop: {
+        goal: state.autoStop.goal,
+        roundsRun: state.autoStop.roundsRun
+      },
+      sessionMetrics: calculateSessionMetrics(messages, state.document.lineAttribution),
+      telemetry: {
+        currentAlignmentScore: state.telemetry?.currentAlignmentScore,
+        alignmentHistory: state.telemetry?.alignmentHistory
+      },
+      diagnostics: {
+        transitions: state.diagnostics?.transitions || [],
+        warnings: state.diagnostics?.warnings || [],
+        apiCallLogs: state.diagnostics?.apiCallLogs || [],
+        parseFailures: state.diagnostics?.parseFailures || []
+      }
+    };
+  } else if (mode === 'shareable') {
+    // Shareable mode: transcript + outcomes, but strip traces, thoughts, and API logs
+    const cleanMessages = messages.map(m => {
+      const cleaned = { ...m };
+      delete cleaned.trace;        // remove full prompt snapshots
+      delete cleaned.thought;      // remove private thoughts
+      delete cleaned.feedbackTag;  // keep rating but not reason tag
+      return cleaned;
+    });
+    const cleanChunks = chunks.map(c => {
+      const cleaned = { ...c };
+      delete cleaned.vector;       // strip embedding vectors (privacy / size)
+      return cleaned;
+    });
+    const cleanState = { ...state };
+    delete cleanState.diagnostics; // strip raw API logs
+    payload = {
+      version: PRESET_VERSION,
+      exportedAt: new Date().toISOString(),
+      exportMode: 'shareable',
+      ...cleanState,
+      messages: cleanMessages,
+      chunks: cleanChunks
+    };
+  } else {
+    // Debug mode: full export with everything
+    payload = {
+      version: PRESET_VERSION,
+      exportedAt: new Date().toISOString(),
+      exportMode: 'debug',
+      ...state,
+      messages,
+      chunks
+    };
+  }
+
+  downloadJson(`forum-session-${mode}-${slugDate()}.json`, payload);
 }
 
 export async function copySessionToClipboard() {
@@ -63,9 +130,9 @@ export async function copySessionToClipboard() {
     `**Objective:** ${state.scenario.objective || 'None'}`,
     `---`,
     `## Memory State`,
-    `**Pinned Facts:**\n${state.memory.pinnedFacts || 'None'}`,
+    `**Pinned Facts:**\n${(Array.isArray(state.memory.pinnedFacts) ? state.memory.pinnedFacts.join("\n") : state.memory.pinnedFacts) || 'None'}`,
     `**Shared Summary:**\n${state.memory.sharedSummary || 'None'}`,
-    `**Open Questions:**\n${state.memory.openQuestions || 'None'}`,
+    `**Open Questions:**\n${(Array.isArray(state.memory.openQuestions) ? state.memory.openQuestions.join("\n") : state.memory.openQuestions) || 'None'}`,
     `**DM State:**\n${state.memory.dmState || 'None'}`,
     `---`,
     `## Transcript`
@@ -136,6 +203,7 @@ export async function resetSession(fullReset = false) {
 
   saveState();
   syncFormFromState();
+  render();
   switchTab(fullReset ? "setup" : "conversation");
   setStatus(fullReset ? "Everything reset to defaults." : "Conversation cleared.", "ok");
 }
@@ -180,6 +248,7 @@ export function loadPresetFile(file) {
       state.memory.archivedCount = await countChunks();
       saveState();
       syncFormFromState();
+      render();
       setStatus("Preset loaded.", "ok");
     } catch {
       setStatus("That preset file could not be read.", "error");
@@ -188,19 +257,34 @@ export function loadPresetFile(file) {
   reader.readAsText(file);
 }
 
-export function addActor() {
+export function addActor(isResearcher = false) {
   const index = state.actors.length;
-  state.actors.push({
-    id: crypto.randomUUID(),
-    name: `Actor ${index + 1}`,
-    role: "Participant",
-    persona: "",
-    goal: "",
-    voice: "",
-    thoughts: "",
-    enabled: true,
-    color: colors[index % colors.length]
-  });
+  if (isResearcher) {
+    state.actors.push({
+      id: crypto.randomUUID(),
+      name: "Researcher",
+      role: "Research Specialist",
+      persona: "You are the Specialized Research Agent. Your job is to analyze the discussion, identify open questions or unverified claims, search the web or read documents/webpages to find facts and data, and compile structured research briefs. You do not express personal opinions or argue; you only report objective facts and source URLs.",
+      goal: "Provide up-to-date objective research and answer open questions to ground the discussion.",
+      voice: "Objective, fact-driven, structured with clear source citations.",
+      thoughts: "",
+      enabled: true,
+      isResearcher: true,
+      color: "#6e4c99"
+    });
+  } else {
+    state.actors.push({
+      id: crypto.randomUUID(),
+      name: `Actor ${index + 1}`,
+      role: "Participant",
+      persona: "",
+      goal: "",
+      voice: "",
+      thoughts: "",
+      enabled: true,
+      color: colors[index % colors.length]
+    });
+  }
   saveState();
   render();
 }
@@ -221,6 +305,7 @@ export async function generateQuickStart() {
     "You create complete configurations for a local multi-actor AI forum.",
     "Return only valid JSON. Do not include markdown or commentary.",
     "Use concise but vivid actors. Keep local-model context limits in mind.",
+    "Choose creative, context-specific, and diverse names for the actors. Avoid generic name lists (like Anya, Ben, Chloe, Dave or Alice, Bob, Charlie) unless they match the scenario's theme.",
     "The JSON must have this shape:",
     "{\"scenario\":{\"mode\":\"problem|story|freeform\",\"title\":\"\",\"premise\":\"\",\"objective\":\"\"},\"dm\":{\"enabled\":true,\"name\":\"\",\"persona\":\"\",\"seesPrivateThoughts\":false},\"actors\":[{\"name\":\"\",\"role\":\"\",\"persona\":\"\",\"goal\":\"\",\"voice\":\"\",\"thoughts\":\"\",\"enabled\":true}],\"memory\":{\"pinnedFacts\":\"\",\"sharedSummary\":\"\",\"openQuestions\":\"\",\"dmState\":\"\"}}"
   ].join("\n");
@@ -231,7 +316,8 @@ export async function generateQuickStart() {
   ].join("\n\n");
 
   try {
-    const content = await chatCompletion(system, user, { temperature: 0.5, maxTokens: 1800 });
+    const temp = state.ui.quickStartTemperature ?? 0.8;
+    const content = await chatCompletion(system, user, { temperature: temp, maxTokens: 1800 });
     state.ui.quickStartDraft = normalizeQuickStartConfig(parseQuickStartConfig(content));
     state.ui.quickStartStatus = "Generated setup ready for review.";
     saveState();
@@ -246,7 +332,7 @@ export async function generateQuickStart() {
 }
 
 export function parseQuickStartConfig(content) {
-  const cleaned = stripCodeFence(content);
+  const cleaned = sanitizeJsonString(stripCodeFence(content));
   try {
     const parsed = JSON.parse(cleaned);
     if (parsed && typeof parsed === "object") return parsed;
@@ -298,6 +384,7 @@ export async function applyQuickStartConfig() {
   state.ui.quickStartStatus = "Setup applied.";
   saveState();
   syncFormFromState();
+  render();
   if (hadConversation) {
     // addMessage is in turns.js — import lazily to avoid circular dep
     const { addMessage } = await import('./turns.js');

@@ -13,11 +13,13 @@ import {
   renderChunkBrowser,
   renderTokenGauge,
   renderDocument,
+  renderTelemetry,
   switchSidebarTab,
   switchDocView,
   switchTab,
   isInitialized,
-  setInitialized
+  setInitialized,
+  validateEmbeddingModel
 } from './modules/render.js';
 import {
   loadModels,
@@ -64,6 +66,7 @@ function wireEvents() {
     els.baseUrl,
     els.apiKey,
     els.model,
+    els.embeddingModel,
     els.temperature,
     els.mode,
     els.title,
@@ -90,9 +93,9 @@ function wireEvents() {
     els.goalCheckEnabled,
     els.stopOnAllSkip,
     els.maxRoundsEnabled,
-    els.maxRounds,
     els.showThoughts,
-    els.toolsEnabled
+    els.toolsEnabled,
+    els.quickStartTemp
   ].forEach((element) => {
     const handler = () => {
       if (!isInitialized) return;
@@ -103,6 +106,13 @@ function wireEvents() {
     };
     element.addEventListener("input", handler);
     element.addEventListener("change", handler);
+  });
+
+  els.embeddingModel.addEventListener("input", () => {
+    if (isInitialized) validateEmbeddingModel(els.embeddingModel.value.trim());
+  });
+  els.embeddingModel.addEventListener("change", () => {
+    if (isInitialized) validateEmbeddingModel(els.embeddingModel.value.trim());
   });
 
   // Mirror toggles in composer bar — sync back to setup-tab checkboxes
@@ -119,9 +129,18 @@ function wireEvents() {
   if (els.showThoughtsMirror) els.showThoughtsMirror.addEventListener("change", mirrorHandler);
   if (els.toolsEnabledMirror) els.toolsEnabledMirror.addEventListener("change", mirrorHandler);
 
-  // Sidebar tabs (Setup / Document)
+  // Sidebar tabs (Setup / Telemetry / Document)
   els.sidebarTabs.forEach((tab) => {
-    tab.addEventListener("click", () => switchSidebarTab(tab.dataset.sidebar));
+    tab.addEventListener("click", () => {
+      const name = tab.dataset.sidebar;
+      switchSidebarTab(name);
+      // Start tension grid animation when telemetry tab is active
+      if (name === "telemetry") {
+        startTensionGridAnimation(els.tensionGridCanvas);
+      } else {
+        stopTensionGridAnimation();
+      }
+    });
   });
 
   // Doc view toggle (Preview / Edit)
@@ -157,6 +176,45 @@ function wireEvents() {
     });
   }
 
+  // Sidebar toggle button (collapses on desktop, opens drawer on mobile/tablet)
+  if (els.toggleSidebarButton) {
+    els.toggleSidebarButton.addEventListener("click", () => {
+      const layout = document.querySelector(".conversation-layout");
+      if (window.innerWidth <= 900) {
+        layout.classList.toggle("sidebar-open");
+        const isOpen = layout.classList.contains("sidebar-open");
+        els.toggleSidebarButton.setAttribute("aria-expanded", String(isOpen));
+      } else {
+        layout.classList.toggle("sidebar-collapsed");
+        const isCollapsed = layout.classList.contains("sidebar-collapsed");
+        els.toggleSidebarButton.setAttribute("aria-expanded", String(!isCollapsed));
+        if (isCollapsed) {
+          layout.style.gridTemplateColumns = "";
+        } else {
+          const sidebar = document.querySelector(".conversation-sidebar");
+          const width = sidebar ? sidebar.getBoundingClientRect().width : 300;
+          layout.style.gridTemplateColumns = `minmax(400px, 1fr) 6px ${width || 300}px`;
+        }
+      }
+    });
+  }
+
+  // Auto-close sidebar drawer when clicking inside the chat area (stage-panel) on mobile/tablet
+  const stage = document.querySelector(".stage-panel");
+  if (stage) {
+    stage.addEventListener("click", (ev) => {
+      const layout = document.querySelector(".conversation-layout");
+      if (layout && window.innerWidth <= 900 && layout.classList.contains("sidebar-open")) {
+        if (!ev.target.closest("#toggleSidebarButton")) {
+          layout.classList.remove("sidebar-open");
+          if (els.toggleSidebarButton) {
+            els.toggleSidebarButton.setAttribute("aria-expanded", "false");
+          }
+        }
+      }
+    });
+  }
+
   // Document panel events
   if (els.documentEnabled) {
     els.documentEnabled.addEventListener("change", () => {
@@ -180,6 +238,16 @@ function wireEvents() {
       saveState();
     });
   }
+
+  // Show Attribution toggle
+  if (els.documentShowAttributionInput) {
+    els.documentShowAttributionInput.addEventListener("change", () => {
+      if (!isInitialized) return;
+      state.document.showAttribution = els.documentShowAttributionInput.checked;
+      saveState();
+      renderDocument();
+    });
+  }
   if (els.documentCopy) {
     els.documentCopy.addEventListener("click", () => {
       navigator.clipboard.writeText(state.document.content || "").then(() => {
@@ -195,6 +263,52 @@ function wireEvents() {
       state.document.versions = [];
       saveState();
       renderDocument();
+    });
+  }
+
+  // Document history scrubbing
+  if (els.documentHistorySlider) {
+    els.documentHistorySlider.addEventListener("input", () => {
+      if (!isInitialized) return;
+      state.ui.viewingVersionIndex = Number(els.documentHistorySlider.value);
+      
+      // If editing, switch to preview view to see historical render
+      const isEditView = els.docEditView && els.docEditView.style.display !== "none";
+      if (isEditView) {
+        switchDocView("preview");
+      } else {
+        renderDocument();
+      }
+      saveState();
+    });
+  }
+
+  if (els.documentRestoreButton) {
+    els.documentRestoreButton.addEventListener("click", () => {
+      if (!isInitialized) return;
+      const index = state.ui.viewingVersionIndex;
+      const versions = state.document.versions || [];
+      if (index >= 0 && index < versions.length) {
+        if (!confirm(`Restore the document to Version ${index + 1}?`)) return;
+        
+        const historicalContent = versions[index].content || "";
+        
+        // Save current draft to history first so we don't lose it
+        state.document.versions.push({
+          author: "User",
+          content: state.document.content,
+          timestamp: new Date().toISOString()
+        });
+        
+        if (state.document.versions.length > (state.document.maxVersions || 20)) {
+          state.document.versions = state.document.versions.slice(-(state.document.maxVersions || 20));
+        }
+        
+        state.document.content = historicalContent;
+        state.ui.viewingVersionIndex = state.document.versions.length;
+        saveState();
+        renderDocument();
+      }
     });
   }
 
@@ -224,6 +338,16 @@ function wireEvents() {
   if (els.temperature) {
     els.temperature.addEventListener("input", () => {
       renderTemperatureDisplay();
+    });
+  }
+
+  if (els.quickStartTemp) {
+    els.quickStartTemp.addEventListener("input", () => {
+      state.ui.quickStartTemperature = Number(els.quickStartTemp.value || 0.8);
+      if (els.quickStartTempDisplay) {
+        els.quickStartTempDisplay.textContent = state.ui.quickStartTemperature.toFixed(2);
+      }
+      saveState();
     });
   }
 
@@ -279,7 +403,8 @@ function wireEvents() {
   els.generateQuickStart.addEventListener("click", generateQuickStart);
   els.applyQuickStart.addEventListener("click", () => applyQuickStartConfig());
   els.discardQuickStart.addEventListener("click", discardQuickStartConfig);
-  els.addActor.addEventListener("click", addActor);
+  els.addActor.addEventListener("click", () => addActor(false));
+  els.addResearcher.addEventListener("click", () => addActor(true));
   els.savePreset.addEventListener("click", savePreset);
   els.loadPreset.addEventListener("click", () => els.presetFile.click());
   els.exportSession.addEventListener("click", () => exportSession());
@@ -318,6 +443,109 @@ function wireEvents() {
     document.documentElement.dataset.theme = state.settings.theme;
     saveState();
   });
+
+  // ── Telemetry controls ────────────────────────────────────────
+  if (els.gravitySensitivityInput) {
+    els.gravitySensitivityInput.addEventListener("input", () => {
+      if (!isInitialized) return;
+      const val = Number(els.gravitySensitivityInput.value);
+      state.settings.gravitySensitivity = val;
+      if (els.gravitySensitivityDisplay) els.gravitySensitivityDisplay.textContent = `${val}%`;
+      saveState();
+    });
+  }
+
+  if (els.includeTracesInput) {
+    els.includeTracesInput.addEventListener("change", () => {
+      if (!isInitialized) return;
+      state.settings.includeTraces = els.includeTracesInput.checked;
+      saveState();
+    });
+  }
+
+  if (els.manualNudgeButton) {
+    els.manualNudgeButton.addEventListener("click", () => {
+      if (!isInitialized) return;
+      state.telemetry.nudgeTriggered = true;
+      saveState();
+      els.manualNudgeButton.textContent = "✅ Nudge Queued";
+      setTimeout(() => {
+        els.manualNudgeButton.textContent = "Trigger Steering Nudge";
+      }, 2000);
+    });
+  }
+
+  // Listen for telemetry updates to refresh the dial
+  document.addEventListener("telemetryUpdated", () => {
+    renderTelemetry();
+  });
+
+  // Show/hide the embedding warning banner based on live probe results
+  document.addEventListener("embeddingProbeResult", (e) => {
+    const { ok, reason } = e.detail || {};
+    if (!els.embeddingWarning) return;
+    if (ok) {
+      els.embeddingWarning.style.display = "none";
+    } else {
+      els.embeddingWarning.style.display = "flex";
+      const msgEl = els.embeddingWarning.querySelector("span:last-child");
+      if (msgEl) msgEl.textContent = reason || "Embedding unavailable — semantic memory is in keyword-only mode.";
+    }
+  });
+
+  // ── Sprint 5: Preflight Router toggle ────────────────────────
+  if (els.enablePreflightRouterInput) {
+    els.enablePreflightRouterInput.addEventListener("change", () => {
+      if (!isInitialized) return;
+      state.settings.enablePreflightRouter = els.enablePreflightRouterInput.checked;
+      saveState();
+    });
+  }
+
+  // ── Sprint 5: Hypothesis Sampling controls ────────────────────
+  function syncHypothesisControls() {
+    const on = state.settings.enableHypothesisSampling;
+    if (els.hypothesisSamplingControls) {
+      els.hypothesisSamplingControls.style.display = on ? "flex" : "none";
+    }
+  }
+
+  if (els.enableHypothesisSamplingInput) {
+    els.enableHypothesisSamplingInput.addEventListener("change", () => {
+      if (!isInitialized) return;
+      state.settings.enableHypothesisSampling = els.enableHypothesisSamplingInput.checked;
+      saveState();
+      syncHypothesisControls();
+    });
+  }
+
+  if (els.hypothesisSampleCountInput) {
+    els.hypothesisSampleCountInput.addEventListener("input", () => {
+      if (!isInitialized) return;
+      const val = Number(els.hypothesisSampleCountInput.value);
+      state.settings.hypothesisSampleCount = val;
+      if (els.hypothesisSampleCountDisplay) els.hypothesisSampleCountDisplay.textContent = String(val);
+      saveState();
+    });
+  }
+
+  if (els.hypothesisAutoSelectInput) {
+    els.hypothesisAutoSelectInput.addEventListener("change", () => {
+      if (!isInitialized) return;
+      state.settings.hypothesisAutoSelect = els.hypothesisAutoSelectInput.checked;
+      saveState();
+    });
+  }
+
+  // Sprint 7B: Show Influence Bars toggle
+  if (els.showInfluenceBarsInput) {
+    els.showInfluenceBarsInput.addEventListener("change", () => {
+      if (!isInitialized) return;
+      state.settings.showInfluenceBars = els.showInfluenceBarsInput.checked;
+      saveState();
+      renderTranscript();
+    });
+  }
 }
 
 async function startApp() {

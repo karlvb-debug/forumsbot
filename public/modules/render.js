@@ -1,8 +1,15 @@
 import { VALID_TABS, defaultState, DELTA_REWRITE_EVERY } from './constants.js';
-import { state, saveState } from './state.js';
+import { state, saveState, logWarning } from './state.js';
+import { calculateInfluenceBudget } from './telemetry.js';
 import { storageAvailable, storageWarning } from './db.js';
-import { publicMessageContent } from './utils.js';
+import { publicMessageContent, normalizeStringArray } from './utils.js';
 import { renderMarkdown } from './markdown.js';
+import {
+  startTensionGridAnimation,
+  stopTensionGridAnimation,
+  startConfluenceRiverAnimation,
+  stopConfluenceRiverAnimation
+} from './telemetry.js';
 
 export const $ = (selector, root = document) => root.querySelector(selector);
 export const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
@@ -31,6 +38,8 @@ export const els = {
   apiKey: $("#apiKeyInput"),
   model: $("#modelInput"),
   modelOptions: $("#modelOptions"),
+  embeddingModel: $("#embeddingModelInput"),
+  embeddingWarning: $("#embeddingWarning"),
   temperature: $("#temperatureInput"),
   loadModels: $("#loadModelsButton"),
   connectionStatus: $("#connectionStatus"),
@@ -54,6 +63,7 @@ export const els = {
   copySession: $("#copySessionButton"),
   stop: $("#stopButton"),
   addActor: $("#addActorButton"),
+  addResearcher: $("#addResearcherButton"),
   actorList: $("#actorList"),
   conversationSummary: $("#conversationSummary"),
   autoStopEnabled: $("#autoStopEnabledInput"),
@@ -65,6 +75,8 @@ export const els = {
   checkGoalNow: $("#checkGoalNowButton"),
   autoStopStatus: $("#autoStopStatus"),
   quickStartPrompt: $("#quickStartPromptInput"),
+  quickStartTemp: $("#quickStartTempInput"),
+  quickStartTempDisplay: $("#quickStartTempDisplay"),
   generateQuickStart: $("#generateQuickStartButton"),
   applyQuickStart: $("#applyQuickStartButton"),
   discardQuickStart: $("#discardQuickStartButton"),
@@ -116,12 +128,50 @@ export const els = {
   documentVersionCount: $("#documentVersionCount"),
   documentCopy: $("#documentCopyButton"),
   documentClear: $("#documentClearButton"),
+  documentAttributionContainer: $("#documentAttributionContainer"),
+  documentHistoryContainer: $("#documentHistoryContainer"),
+  documentHistorySlider: $("#documentHistorySlider"),
+  documentHistoryStatus: $("#documentHistoryStatus"),
+  documentRestoreButton: $("#documentRestoreButton"),
   docEditView: $(".doc-edit-view"),
   docPreviewView: $(".doc-preview-view"),
   docViewBtns: $$(".doc-view-btn"),
   sidebarTabs: $$(".sidebar-tab"),
   sidebarPanels: $$(".sidebar-panel"),
-  sidebarResizeHandle: $("#sidebarResizeHandle")
+  sidebarResizeHandle: $("#sidebarResizeHandle"),
+  toggleSidebarButton: $("#toggleSidebarButton"),
+  // Telemetry panel elements
+  telemetryDialFill: $("#telemetryDialFill"),
+  telemetryAlignmentScore: $("#telemetryAlignmentScore"),
+  tensionGridCanvas: $("#tensionGridCanvas"),
+  gravitySensitivityInput: $("#gravitySensitivityInput"),
+  gravitySensitivityDisplay: $("#gravitySensitivityDisplay"),
+  includeTracesInput: $("#includeTracesInput"),
+  manualNudgeButton: $("#manualNudgeButton"),
+  // Sprint 5: metrics tiles
+  metricAlignmentVal: $("#metricAlignmentVal"),
+  metricSkipRateVal: $("#metricSkipRateVal"),
+  metricOutcomesVal: $("#metricOutcomesVal"),
+  metricMemDupVal: $("#metricMemDupVal"),
+  metricTileAlignment: $("#metricTileAlignment"),
+  metricTileSkipRate: $("#metricTileSkipRate"),
+  metricTileOutcomes: $("#metricTileOutcomes"),
+  metricTileMemDup: $("#metricTileMemDup"),
+  // Sprint 5: preflight + hypothesis controls
+  enablePreflightRouterInput: $("#enablePreflightRouterInput"),
+  enableHypothesisSamplingInput: $("#enableHypothesisSamplingInput"),
+  hypothesisSamplingControls: $("#hypothesisSamplingControls"),
+  hypothesisSampleCountInput: $("#hypothesisSampleCountInput"),
+  hypothesisSampleCountDisplay: $("#hypothesisSampleCountDisplay"),
+  hypothesisAutoSelectInput: $("#hypothesisAutoSelectInput"),
+  // Document attribution
+  documentShowAttributionInput: $("#documentShowAttributionInput"),
+  documentConfluenceContainer: $("#documentConfluenceContainer"),
+  documentConfluenceCanvas: $("#documentConfluenceCanvas"),
+  // Export mode
+  exportModeSelect: $("#exportModeSelect"),
+  // Sprint 7: Influence bars toggle
+  showInfluenceBarsInput: $("#showInfluenceBarsInput")
 };
 
 export let isInitialized = false;
@@ -150,9 +200,102 @@ export function render() {
   renderQuickStartPreview();
   renderMemory();
   renderOutcomes();
+  renderAnchors();
   renderAutoStop();
   renderTranscript();
+  renderTelemetry();
   els.auto.textContent = state.autoRunning ? "Pause" : "Auto";
+}
+
+/** Update the SVG circular alignment dial and score text. */
+export function renderTelemetry() {
+  if (!els.telemetryDialFill || !els.telemetryAlignmentScore) return;
+
+  const score = state.telemetry?.currentAlignmentScore ?? 100;
+  const circumference = 251.2; // 2 * Math.PI * 40
+  const offset = circumference - (score / 100) * circumference;
+
+  els.telemetryDialFill.style.strokeDashoffset = offset;
+  const mode = state.telemetry?.alignmentMode ?? "none";
+  const modeTag = mode === "embedding" ? "" : ` <span class="alignment-mode-badge" title="No embedding model configured — using keyword similarity">keyword</span>`;
+  els.telemetryAlignmentScore.innerHTML = `${score}%${modeTag}`;
+
+  // Determine visual level: critical < 35, warn < 60, ok >= 60
+  const level = score < 35 ? "critical" : score < 60 ? "warn" : "ok";
+  els.telemetryDialFill.dataset.level = level;
+
+  const textContainer = els.telemetryDialFill.closest(".telemetry-dial-container")?.querySelector(".telemetry-dial-text");
+  if (textContainer) textContainer.dataset.level = level;
+
+  // Update gravity sensitivity display from state (in case it changed programmatically)
+  if (els.gravitySensitivityDisplay && els.gravitySensitivityInput) {
+    const val = state.settings?.gravitySensitivity ?? 50;
+    els.gravitySensitivityInput.value = val;
+    els.gravitySensitivityDisplay.textContent = `${val}%`;
+  }
+
+  // Sprint 5: Update the four north-star metric tiles
+  renderMetricsTiles();
+  // Sprint 7: Update influence summary bar
+  renderInfluenceSummary();
+}
+
+/** Render the 2x2 Session Health north-star metrics tiles. */
+export function renderMetricsTiles() {
+  if (!els.metricAlignmentVal) return; // Tiles not in DOM
+
+  // 1. Alignment (from telemetry)
+  const alignScore = state.telemetry?.currentAlignmentScore ?? 100;
+  setMetricTile(els.metricTileAlignment, els.metricAlignmentVal, `${alignScore}%`,
+    alignScore >= 60 ? 'ok' : alignScore >= 35 ? 'warn' : 'critical');
+
+  // 2. Skip Rate (from messages)
+  const msgs = state.messages || [];
+  const totalMsgs = msgs.filter(m => m.type === 'actor' || m.type === 'dm' || m.type === 'skip').length;
+  const skipMsgs = msgs.filter(m => m.type === 'skip').length;
+  const skipRate = totalMsgs ? Math.round((skipMsgs / totalMsgs) * 100) : 0;
+  setMetricTile(els.metricTileSkipRate, els.metricSkipRateVal, `${skipRate}%`,
+    skipRate <= 25 ? 'ok' : skipRate <= 50 ? 'warn' : 'critical');
+
+  // 3. Outcomes — rolling extraction rate from outcomeExtractionLog
+  const log = state.diagnostics?.outcomeExtractionLog || [];
+  if (log.length === 0) {
+    setMetricTile(els.metricTileOutcomes, els.metricOutcomesVal, '—', 'ok');
+  } else {
+    const successes = log.filter(e => e.success).length;
+    const rate = Math.round((successes / log.length) * 100);
+    setMetricTile(els.metricTileOutcomes, els.metricOutcomesVal,
+      `${successes}/${log.length}`,
+      rate >= 70 ? 'ok' : rate >= 40 ? 'warn' : 'critical');
+  }
+
+  // 4. Memory Duplication Score
+  const deltas = state.memory?.recentDeltas || [];
+  let memDup = 0;
+  if (deltas.length > 1) {
+    // Quick overlap heuristic: count pairs with >40% word overlap
+    let matches = 0, comparisons = 0;
+    for (let i = 0; i < deltas.length; i++) {
+      for (let j = i + 1; j < deltas.length; j++) {
+        comparisons++;
+        const setA = new Set(deltas[i].toLowerCase().split(/\s+/).filter(w => w.length > 2));
+        const setB = new Set(deltas[j].toLowerCase().split(/\s+/).filter(w => w.length > 2));
+        let intersect = 0;
+        for (const w of setA) { if (setB.has(w)) intersect++; }
+        if (setA.size && intersect / setA.size > 0.4) matches++;
+      }
+    }
+    memDup = comparisons ? Math.round((matches / comparisons) * 100) : 0;
+  }
+  setMetricTile(els.metricTileMemDup, els.metricMemDupVal,
+    deltas.length < 2 ? '—' : `${memDup}%`,
+    memDup <= 20 ? 'ok' : memDup <= 50 ? 'warn' : 'critical');
+}
+
+function setMetricTile(tileEl, valueEl, text, level) {
+  if (!tileEl || !valueEl) return;
+  valueEl.textContent = text;
+  tileEl.dataset.level = level;
 }
 
 export function renderOutcomes() {
@@ -163,6 +306,85 @@ export function renderOutcomes() {
   els.outcomeActions.value = state.outcomes.actionItems;
   els.outcomeRisks.value = state.outcomes.risks;
   els.outcomeStatus.textContent = state.outcomes.status || "No outcomes extracted yet.";
+}
+
+// Sprint 7A: Anchors panel
+export function renderAnchors() {
+  const list = document.getElementById('anchorsList');
+  const count = document.getElementById('anchorsCount');
+  if (!list) return;
+  const anchors = Array.isArray(state.anchors) ? state.anchors : [];
+  if (count) count.textContent = anchors.length ? String(anchors.length) : '';
+  if (!anchors.length) {
+    list.innerHTML = '<p class="anchors-empty">No anchors yet. Click ⚓ on any message to anchor a settled claim.</p>';
+    return;
+  }
+  list.innerHTML = anchors.map(a => `
+    <div class="anchor-item" data-id="${escapeHtml(a.id)}">
+      <span class="anchor-dot" style="background:${escapeHtml(a.color || 'var(--gold)')}"></span>
+      <span class="anchor-text">${escapeHtml((a.text || '').slice(0, 160))}${(a.text || '').length > 160 ? '…' : ''}</span>
+      <span class="anchor-speaker">${escapeHtml(a.speaker || 'Group')}</span>
+      <button class="anchor-remove" type="button" title="Remove anchor" data-id="${escapeHtml(a.id)}">✕</button>
+    </div>
+  `).join('');
+
+  // Wire remove buttons
+  list.querySelectorAll('.anchor-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      state.anchors = state.anchors.filter(a => a.id !== id);
+      saveState();
+      renderAnchors();
+      renderTranscript();
+    });
+  });
+}
+
+// Sprint 7B: Session-level influence summary bar
+export function renderInfluenceSummary() {
+  const container = document.getElementById('influenceSummaryBar');
+  if (!container) return;
+
+  const actorMessages = state.messages.filter(m =>
+    (m.type === 'actor' || m.type === 'dm') && m.content
+  );
+  if (!actorMessages.length) {
+    container.innerHTML = '<span class="influence-empty">No turns yet.</span>';
+    return;
+  }
+
+  // Aggregate influence across all messages
+  const sessionTotals = new Map();
+  actorMessages.forEach(msg => {
+    const budget = calculateInfluenceBudget(msg, state.messages, state.actors);
+    budget.forEach(seg => {
+      const prev = sessionTotals.get(seg.speakerName) || { fraction: 0, color: seg.color };
+      sessionTotals.set(seg.speakerName, { fraction: prev.fraction + seg.fraction, color: seg.color });
+    });
+  });
+
+  if (!sessionTotals.size) {
+    container.innerHTML = '<span class="influence-empty">Insufficient data.</span>';
+    return;
+  }
+
+  const total = [...sessionTotals.values()].reduce((s, v) => s + v.fraction, 0);
+  const sorted = [...sessionTotals.entries()]
+    .map(([name, v]) => ({ name, fraction: v.fraction / total, color: v.color }))
+    .sort((a, b) => b.fraction - a.fraction);
+
+  container.innerHTML = `
+    <div class="influence-summary-bar">${
+      sorted.map(s =>
+        `<span class="influence-segment" style="flex:${s.fraction};background:${s.color}" title="${escapeHtml(s.name)}: ${Math.round(s.fraction * 100)}%"></span>`
+      ).join('')
+    }</div>
+    <div class="influence-legend">${
+      sorted.map(s =>
+        `<span class="influence-legend-item"><span class="influence-dot" style="background:${s.color}"></span>${escapeHtml(s.name)} ${Math.round(s.fraction * 100)}%</span>`
+      ).join('')
+    }</div>
+  `;
 }
 
 export function renderAutoStop() {
@@ -223,6 +445,11 @@ export function renderTemperatureDisplay() {
   if (els.temperatureDisplay) {
     els.temperatureDisplay.textContent = Number(state.settings.temperature).toFixed(2);
   }
+  if (els.quickStartTempDisplay && els.quickStartTemp) {
+    const qVal = state.ui.quickStartTemperature ?? 0.8;
+    els.quickStartTemp.value = qVal;
+    els.quickStartTempDisplay.textContent = Number(qVal).toFixed(2);
+  }
 }
 
 export function renderConversationSummary() {
@@ -272,16 +499,132 @@ export function renderDocument() {
   if (!els.documentEnabled) return;
   els.documentEnabled.checked = state.document.enabled;
   els.documentTitle.value = state.document.title || "";
-  // Only update textarea if it's not focused (user might be typing)
-  if (document.activeElement !== els.documentContent) {
-    els.documentContent.value = state.document.content || "";
+  
+  const versions = state.document.versions || [];
+  const maxIndex = versions.length;
+  
+  // 1. Calculate & Render Attribution Bar
+  if (els.documentAttributionContainer) {
+    if (!state.document.enabled || versions.length === 0) {
+      els.documentAttributionContainer.style.display = "none";
+    } else {
+      els.documentAttributionContainer.style.display = "flex";
+      els.documentAttributionContainer.innerHTML = "";
+      
+      const counts = {};
+      let total = 0;
+      versions.forEach((v) => {
+        const authorName = v.author || "Unknown";
+        counts[authorName] = (counts[authorName] || 0) + 1;
+        total++;
+      });
+      
+      const actorColorMap = {};
+      state.actors.forEach((a) => {
+        actorColorMap[a.name] = a.color;
+      });
+      actorColorMap["User"] = "#355f9f";
+      actorColorMap["Director"] = "#a2611a";
+      if (state.dm && state.dm.name) {
+        actorColorMap[state.dm.name] = "#a2611a";
+      }
+      
+      Object.entries(counts).forEach(([author, count]) => {
+        const pct = (count / total) * 100;
+        const segment = document.createElement("div");
+        segment.className = "attribution-segment";
+        segment.style.width = `${pct}%`;
+        segment.style.backgroundColor = actorColorMap[author] || "#888";
+        segment.title = `${author}: ${count} edit${count !== 1 ? "s" : ""} (${pct.toFixed(0)}%)`;
+        els.documentAttributionContainer.appendChild(segment);
+      });
+    }
   }
-  // Render markdown preview
-  if (els.documentPreview) {
-    els.documentPreview.innerHTML = renderMarkdown(state.document.content || "");
+
+  // 2. Render History Scrubber & Current Preview Content
+  if (els.documentHistoryContainer && els.documentHistorySlider && els.documentHistoryStatus && els.documentRestoreButton) {
+    if (!state.document.enabled || versions.length === 0) {
+      els.documentHistoryContainer.style.display = "none";
+    } else {
+      els.documentHistoryContainer.style.display = "block";
+      els.documentHistorySlider.max = maxIndex;
+      
+      if (typeof state.ui.viewingVersionIndex === "undefined" || state.ui.viewingVersionIndex > maxIndex || state.ui.viewingVersionIndex < 0) {
+        state.ui.viewingVersionIndex = maxIndex;
+      }
+      
+      els.documentHistorySlider.value = state.ui.viewingVersionIndex;
+      
+      if (state.ui.viewingVersionIndex === maxIndex) {
+        // Viewing Current Draft
+        els.documentHistoryStatus.innerHTML = `<span class="muted-text">Viewing: <strong>Current Draft</strong></span>`;
+        els.documentRestoreButton.style.display = "none";
+        if (els.documentPreview) {
+          els.documentPreview.classList.remove("viewing-history");
+          els.documentPreview.innerHTML = renderMarkdown(state.document.content || "");
+        }
+        if (document.activeElement !== els.documentContent) {
+          els.documentContent.value = state.document.content || "";
+        }
+      } else {
+        // Viewing Historical Version
+        const ver = versions[state.ui.viewingVersionIndex];
+        const dateStr = ver.timestamp ? new Date(ver.timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "unknown time";
+        
+        let authorColor = "#888";
+        if (ver.author === "User") authorColor = "#355f9f";
+        else if (ver.author === "Director" || (state.dm && ver.author === state.dm.name)) authorColor = "#a2611a";
+        else {
+          const match = state.actors.find((a) => a.name === ver.author);
+          if (match) authorColor = match.color;
+        }
+        
+        els.documentHistoryStatus.innerHTML = `
+          <span>Viewing: <strong>Version ${state.ui.viewingVersionIndex + 1} of ${maxIndex}</strong></span>
+          <span>By <span class="author-badge" style="background:${authorColor}">${escapeHtml(ver.author)}</span> at ${dateStr}</span>
+        `;
+        els.documentRestoreButton.style.display = "";
+        
+        if (els.documentPreview) {
+          els.documentPreview.classList.add("viewing-history");
+          els.documentPreview.innerHTML = renderMarkdown(ver.content || "");
+        }
+        if (document.activeElement !== els.documentContent) {
+          els.documentContent.value = ver.content || "";
+        }
+      }
+    }
   }
-  const vCount = state.document.versions?.length || 0;
+
+  // Fallback if versions is empty or document history UI components don't exist
+  if (versions.length === 0 || !els.documentHistoryContainer) {
+    if (document.activeElement !== els.documentContent) {
+      els.documentContent.value = state.document.content || "";
+    }
+    if (els.documentPreview) {
+      els.documentPreview.classList.remove("viewing-history");
+      els.documentPreview.innerHTML = renderMarkdown(state.document.content || "");
+    }
+  }
+  
+  const vCount = versions.length;
   els.documentVersionCount.textContent = `${vCount} version${vCount !== 1 ? "s" : ""}`;
+
+  // 3. Attribution toggle sync
+  if (els.documentShowAttributionInput) {
+    els.documentShowAttributionInput.checked = !!state.document.showAttribution;
+  }
+
+  // 4. Confluence River Canvas — show/hide based on showAttribution
+  if (els.documentConfluenceContainer && els.documentConfluenceCanvas) {
+    const showConfluence = !!state.document.showAttribution && state.document.enabled;
+    els.documentConfluenceContainer.style.display = showConfluence ? "" : "none";
+    if (showConfluence) {
+      startConfluenceRiverAnimation(els.documentConfluenceCanvas);
+    } else {
+      stopConfluenceRiverAnimation();
+    }
+  }
 }
 
 export function switchDocView(viewName) {
@@ -290,14 +633,14 @@ export function switchDocView(viewName) {
   els.docViewBtns.forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.docView === viewName);
   });
-  // Sync textarea when switching to edit
+  
   if (viewName === "edit") {
-    els.documentContent.value = state.document.content || "";
+    // Snap scrubber back to current active draft so edits affect the correct draft
+    state.ui.viewingVersionIndex = state.document.versions.length;
+    renderDocument();
     els.documentContent.focus();
-  }
-  // Sync preview when switching back
-  if (viewName === "preview" && els.documentPreview) {
-    els.documentPreview.innerHTML = renderMarkdown(state.document.content || "");
+  } else if (viewName === "preview") {
+    renderDocument();
   }
 }
 
@@ -337,10 +680,12 @@ export function renderQuickStartPreview() {
     `Sees private thoughts: ${draft.dm.seesPrivateThoughts ? "yes" : "no"}`
   ]);
   const actors = quickStartPreviewSection("Actors", draft.actors.map((actor) => `${actor.name} — ${actor.role}: ${actor.goal}`));
+  const pinnedText = normalizeStringArray(draft.memory.pinnedFacts).join("; ");
+  const questionsText = normalizeStringArray(draft.memory.openQuestions).join("; ");
   const memory = quickStartPreviewSection("Memory Seed", [
-    draft.memory.pinnedFacts ? `Pinned: ${draft.memory.pinnedFacts}` : "No pinned facts.",
+    pinnedText ? `Pinned: ${pinnedText}` : "No pinned facts.",
     draft.memory.sharedSummary ? `Summary: ${draft.memory.sharedSummary}` : "No summary seed.",
-    draft.memory.openQuestions ? `Questions: ${draft.memory.openQuestions}` : "No open questions.",
+    questionsText ? `Questions: ${questionsText}` : "No open questions.",
     draft.memory.dmState ? `DM state: ${draft.memory.dmState}` : "No DM state."
   ]);
   els.quickStartPreview.append(scenario, dm, actors, memory);
@@ -362,9 +707,9 @@ export function quickStartPreviewSection(title, lines) {
 
 export function renderMemory() {
   els.memoryEnabled.checked = state.memory.enabled;
-  els.pinnedFacts.value = safeString(state.memory.pinnedFacts);
+  els.pinnedFacts.value = Array.isArray(state.memory.pinnedFacts) ? state.memory.pinnedFacts.join("\n") : safeString(state.memory.pinnedFacts);
   els.sharedSummary.value = safeString(state.memory.sharedSummary);
-  els.openQuestions.value = safeString(state.memory.openQuestions);
+  els.openQuestions.value = Array.isArray(state.memory.openQuestions) ? state.memory.openQuestions.join("\n") : safeString(state.memory.openQuestions);
   els.dmState.value = safeString(state.memory.dmState);
   renderPendingFacts();
   renderRecentDeltas();
@@ -424,7 +769,34 @@ export function renderTokenGauge() {
   els.tokenGaugeLabel.dataset.level = level;
 
   els.tokenGauge.title = `Context window: ${used.toLocaleString()} of ${maxContextLength.toLocaleString()} tokens used`;
+
+  // Warn when the context window is too tight for this app to work well.
+  // A comfortable session needs at least 8K total: ~4-6K prompt + 1.2K completion headroom.
+  const maxTokens = state.settings?.maxTokens || 1200;
+  const headroom = maxContextLength - used;
+  let ctxWarning = "";
+  if (maxContextLength < 6000) {
+    ctxWarning = `⚠️ Context window is only ${fmt(maxContextLength)} tokens — too small for reliable sessions. Recommend 8K+.`;
+  } else if (headroom < maxTokens && used > 0) {
+    ctxWarning = `⚠️ Only ${fmt(headroom)} tokens left for completion (${fmt(maxTokens)} needed) — responses may be truncated.`;
+  }
+
+  // Find or create the context warning element
+  let ctxWarnEl = els.tokenGauge.parentElement?.querySelector(".ctx-window-warning");
+  if (ctxWarning) {
+    if (!ctxWarnEl) {
+      ctxWarnEl = document.createElement("div");
+      ctxWarnEl.className = "ctx-window-warning";
+      els.tokenGauge.after(ctxWarnEl);
+    }
+    ctxWarnEl.textContent = ctxWarning;
+    ctxWarnEl.dataset.level = maxContextLength < 6000 ? "critical" : "warn";
+    ctxWarnEl.hidden = false;
+  } else if (ctxWarnEl) {
+    ctxWarnEl.hidden = true;
+  }
 }
+
 
 /**
  * Render archived memory chunks into the chunk browser panel.
@@ -486,6 +858,15 @@ export function renderChunkBrowser(chunks) {
 }
 
 export function renderPendingFacts() {
+  // Preserve any facts the user has explicitly unchecked before we wipe the DOM.
+  const uncheckedFacts = new Set();
+  els.pendingFactsList.querySelectorAll(".pending-fact-check").forEach((cb) => {
+    if (!cb.checked) {
+      const fact = state.memory.pendingPinnedFacts[Number(cb.dataset.index)];
+      if (fact) uncheckedFacts.add(fact);
+    }
+  });
+
   els.pendingFactsList.innerHTML = "";
   if (!state.memory.pendingPinnedFacts.length) {
     const empty = document.createElement("p");
@@ -498,7 +879,9 @@ export function renderPendingFacts() {
   state.memory.pendingPinnedFacts.forEach((fact, index) => {
     const label = document.createElement("label");
     label.className = "pending-fact-row";
-    label.innerHTML = `<input class="pending-fact-check" type="checkbox" checked data-index="${index}"><span></span>`;
+    // Restore unchecked state if the user had deselected this fact before the re-render.
+    const isChecked = !uncheckedFacts.has(fact);
+    label.innerHTML = `<input class="pending-fact-check" type="checkbox" ${isChecked ? "checked" : ""} data-index="${index}"><span></span>`;
     $("span", label).textContent = fact;
     els.pendingFactsList.append(label);
   });
@@ -531,6 +914,9 @@ export function renderActors() {
     if (actor.expanded) node.classList.add("expanded");
 
     $(".actor-enabled", node).checked = actor.enabled;
+    $(".actor-is-researcher", node).checked = !!actor.isResearcher;
+    $(".researcher-badge", node).style.display = actor.isResearcher ? "" : "none";
+    node.classList.toggle("researcher-agent", !!actor.isResearcher);
     $(".actor-swatch", node).style.background = actor.color;
     $(".actor-name-display", node).textContent = actor.name || `Actor ${index + 1}`;
     $(".role-badge", node).textContent = actor.role || "Participant";
@@ -540,6 +926,9 @@ export function renderActors() {
     $(".actor-goal", node).value = actor.goal;
     $(".actor-voice", node).value = actor.voice;
     $(".actor-thoughts", node).value = safeString(actor.thoughts);
+    const tempVal = typeof actor.temperature === "number" ? actor.temperature : 0.8;
+    $(".actor-temperature", node).value = tempVal;
+    $(".actor-temperature-display", node).textContent = Number(tempVal).toFixed(2);
 
     // Relationship ledger — shown only when entries exist
     const relBlock = $(".actor-relationships-block", node);
@@ -575,15 +964,20 @@ export function renderActors() {
 
     node.addEventListener("input", () => {
       actor.enabled = $(".actor-enabled", node).checked;
+      actor.isResearcher = $(".actor-is-researcher", node).checked;
       actor.name = $(".actor-name", node).value.trim() || `Actor ${index + 1}`;
       actor.role = $(".actor-role", node).value.trim();
       actor.persona = $(".actor-persona", node).value.trim();
       actor.goal = $(".actor-goal", node).value.trim();
       actor.voice = $(".actor-voice", node).value.trim();
       actor.thoughts = $(".actor-thoughts", node).value.trim();
+      actor.temperature = Number($(".actor-temperature", node).value || 0.8);
       // Sync display elements
       $(".actor-name-display", node).textContent = actor.name;
       $(".role-badge", node).textContent = actor.role || "Participant";
+      $(".researcher-badge", node).style.display = actor.isResearcher ? "" : "none";
+      node.classList.toggle("researcher-agent", actor.isResearcher);
+      $(".actor-temperature-display", node).textContent = actor.temperature.toFixed(2);
       saveState();
       renderTranscript();
     });
@@ -614,6 +1008,10 @@ export function formatMessageHtml(text, color) {
 }
 
 export function renderTranscript() {
+  // Snapshot whether the user was already pinned to the bottom before we touch the DOM.
+  // 80px threshold accounts for the last message being partially visible.
+  const wasAtBottom = els.transcript.scrollHeight - els.transcript.scrollTop - els.transcript.clientHeight < 80;
+
   els.transcript.innerHTML = "";
 
   if (!state.messages.length) {
@@ -669,7 +1067,7 @@ export function renderTranscript() {
     const toolCalls = message.toolCalls || [];
     if (toolCalls.length) {
       toolCallsEl.style.display = "";
-      toolCallsEl.innerHTML = toolCalls.map((tc) => {
+      let badgeHtml = toolCalls.map((tc) => {
         if (tc.tool === "web_search") {
           return `<span class="tool-badge tool-badge--search" title="Searched: ${escapeHtml(tc.query || "")}">🔍 searched: <em>${escapeHtml(tc.query || "")}</em></span>`;
         }
@@ -680,6 +1078,19 @@ export function renderTranscript() {
         }
         return `<span class="tool-badge" title="${escapeHtml(tc.tool)}">⚙️ ${escapeHtml(tc.tool)}</span>`;
       }).join("");
+
+      // Sprint 6: Tool Usefulness chip
+      const tus = message.trace?.toolUsefulnessScore;
+      if (typeof tus === 'number') {
+        const [icon, label, cls] = tus >= 0.5
+          ? ['🔗', `cited (${Math.round(tus * 100)}%)`, 'metric-chip highlight']
+          : tus >= 0.1
+            ? ['〰', `partial (${Math.round(tus * 100)}%)`, 'metric-chip']
+            : ['✗', 'unused', 'metric-chip'];
+        badgeHtml += ` <span class="${cls}" title="Tool content cited in response: ${Math.round(tus * 100)}%">${icon} ${label}</span>`;
+      }
+
+      toolCallsEl.innerHTML = badgeHtml;
     } else {
       toolCallsEl.style.display = "none";
     }
@@ -692,9 +1103,181 @@ export function renderTranscript() {
       docBadge.style.display = "none";
     }
 
+    // Preflight badge on pre-screened skip cards
+    if (message.preflightSkipped) {
+      const badge = document.createElement('span');
+      badge.className = 'preflight-badge';
+      badge.title = message.trace?.preflightReason || 'Pre-screened by preflight router';
+      badge.textContent = '🔍 pre-screened';
+      $('.message-meta', node)?.appendChild(badge);
+    }
+
+    // Alternative candidates from hypothesis sampling
+    if (Array.isArray(message.alternativeCandidates) && message.alternativeCandidates.length > 0) {
+      const section = document.createElement('div');
+      section.className = 'branch-candidates';
+      const header = document.createElement('div');
+      header.className = 'branch-candidates-header';
+      header.textContent = `🌿 ${message.alternativeCandidates.length} alternative candidate${message.alternativeCandidates.length > 1 ? 's' : ''} sampled`;
+      section.appendChild(header);
+
+      message.alternativeCandidates.forEach((cand, ci) => {
+        const card = document.createElement('div');
+        card.className = 'branch-candidate-card';
+
+        const content = document.createElement('div');
+        content.className = 'branch-candidate-content';
+        content.textContent = cand.message || '(empty)';
+
+        const footer = document.createElement('div');
+        footer.className = 'branch-candidate-footer';
+
+        const score = typeof cand.compositeScore === 'number' ? cand.compositeScore.toFixed(2) : '?';
+        const novelty = cand.metrics?.noveltyScore?.toFixed(2) ?? '?';
+        const alignment = cand.metrics?.premiseAlignmentScore?.toFixed(2) ?? '?';
+
+        footer.innerHTML = `
+          <span class="metric-chip">Score: ${score}</span>
+          <span class="metric-chip">Novelty: ${novelty}</span>
+          <span class="metric-chip">Align: ${alignment}</span>
+        `;
+
+        const useBtn = document.createElement('button');
+        useBtn.className = 'use-candidate-btn';
+        useBtn.type = 'button';
+        useBtn.textContent = 'Use This';
+        useBtn.addEventListener('click', () => {
+          // Swap the accepted content
+          const prev = message.content;
+          message.content = cand.message;
+          cand.message = prev;
+          // Re-render so the swap is visible
+          renderTranscript();
+          saveState();
+        });
+
+        footer.appendChild(useBtn);
+        card.appendChild(content);
+        card.appendChild(footer);
+        section.appendChild(card);
+      });
+
+      node.appendChild(section);
+    }
+
+    // Feedback thumbs — only shown on actor/dm messages
+    const feedbackBar = $(".message-feedback", node);
+    if (message.type === "actor" || message.type === "dm") {
+      feedbackBar.style.display = "flex";
+
+      const thumbUp = $(".feedback-thumbs-up", node);
+      const thumbDown = $(".feedback-thumbs-down", node);
+      const tagSelect = $(".feedback-tag-select", node);
+
+      // Restore prior rating
+      if (message.feedback === "up") thumbUp.classList.add("active-up");
+      if (message.feedback === "down") {
+        thumbDown.classList.add("active-down");
+        tagSelect.style.display = "";
+      }
+      if (message.feedbackTag) tagSelect.value = message.feedbackTag;
+
+      thumbUp.addEventListener("click", () => {
+        message.feedback = message.feedback === "up" ? null : "up";
+        message.feedbackTag = null;
+        thumbUp.classList.toggle("active-up", message.feedback === "up");
+        thumbDown.classList.remove("active-down");
+        tagSelect.style.display = "none";
+        saveState();
+      });
+
+      thumbDown.addEventListener("click", () => {
+        message.feedback = message.feedback === "down" ? null : "down";
+        thumbDown.classList.toggle("active-down", message.feedback === "down");
+        thumbUp.classList.remove("active-up");
+        tagSelect.style.display = message.feedback === "down" ? "" : "none";
+        if (message.feedback !== "down") {
+          message.feedbackTag = null;
+          tagSelect.value = "";
+        }
+        saveState();
+      });
+
+      tagSelect.addEventListener("change", () => {
+        message.feedbackTag = tagSelect.value || null;
+        saveState();
+      });
+    } else {
+      if (feedbackBar) feedbackBar.style.display = "none";
+    }
+
+    // Sprint 7A: Anchor button — shown on actor/dm messages only
+    if (message.type === 'actor' || message.type === 'dm') {
+      const anchorBtn = document.createElement('button');
+      anchorBtn.className = 'anchor-btn';
+      anchorBtn.type = 'button';
+      const isAnchored = Array.isArray(state.anchors) &&
+        state.anchors.some(a => a.messageId === message.id);
+      anchorBtn.title = isAnchored ? 'Remove anchor' : 'Anchor this claim';
+      anchorBtn.textContent = '⚓';
+      if (isAnchored) {
+        anchorBtn.classList.add('is-anchored');
+        node.style.borderLeftColor = 'var(--gold)';
+        node.classList.add('anchored-card');
+      }
+      anchorBtn.addEventListener('click', () => {
+        if (!Array.isArray(state.anchors)) state.anchors = [];
+        const existing = state.anchors.findIndex(a => a.messageId === message.id);
+        if (existing >= 0) {
+          state.anchors.splice(existing, 1);
+        } else {
+          state.anchors.push({
+            id: `anchor-${Date.now()}`,
+            text: message.content,
+            speaker: message.speaker,
+            color: message.color,
+            messageId: message.id,
+            createdAt: new Date().toISOString()
+          });
+        }
+        saveState();
+        renderTranscript();
+        renderAnchors();
+      });
+      const feedbackOrBottom = $('.message-feedback', node) || node;
+      feedbackOrBottom.parentNode
+        ? feedbackOrBottom.parentNode.insertBefore(anchorBtn, feedbackOrBottom)
+        : node.appendChild(anchorBtn);
+    }
+
+    // Sprint 7B: Influence bar — computed on-the-fly, shown when enabled
+    if ((message.type === 'actor' || message.type === 'dm') && state.settings?.showInfluenceBars) {
+      const budget = calculateInfluenceBudget(message, state.messages, state.actors);
+      if (budget.length > 0) {
+        const bar = document.createElement('div');
+        bar.className = 'influence-bar';
+        bar.title = budget.map(s => `${s.speakerName}: ${Math.round(s.fraction * 100)}%`).join(' | ');
+        budget.forEach(seg => {
+          const span = document.createElement('span');
+          span.className = 'influence-segment';
+          span.style.flex = String(seg.fraction);
+          span.style.background = seg.color;
+          span.dataset.speaker = seg.speakerName;
+          span.title = `${seg.speakerName}: ${Math.round(seg.fraction * 100)}%`;
+          bar.appendChild(span);
+        });
+        node.insertBefore(bar, node.firstChild);
+      }
+    }
+
     els.transcript.append(node);
   });
-  els.transcript.scrollTop = els.transcript.scrollHeight;
+
+  // Only jump to the bottom if the user was already there before the render.
+  // If they've scrolled up to read, leave them where they are.
+  if (wasAtBottom) {
+    els.transcript.scrollTop = els.transcript.scrollHeight;
+  }
 }
 
 export function colorForType(type) {
@@ -713,6 +1296,7 @@ export function syncFormFromState() {
   els.baseUrl.value = state.settings.baseUrl;
   els.apiKey.value = state.settings.apiKey;
   els.model.value = state.settings.model;
+  els.embeddingModel.value = state.settings.embeddingModel || "";
   els.temperature.value = state.settings.temperature;
   els.mode.value = state.scenario.mode;
   els.title.value = state.scenario.title;
@@ -723,18 +1307,21 @@ export function syncFormFromState() {
   els.dmPersona.value = state.dm.persona;
   els.dmPrivate.checked = state.dm.seesPrivateThoughts;
   els.quickStartPrompt.value = state.ui.quickStartPrompt;
+  if (els.quickStartTemp) {
+    els.quickStartTemp.value = state.ui.quickStartTemperature ?? 0.8;
+  }
   els.quickStartStatus.textContent = state.ui.quickStartStatus;
   els.memoryEnabled.checked = state.memory.enabled;
-  els.pinnedFacts.value = state.memory.pinnedFacts;
+  els.pinnedFacts.value = Array.isArray(state.memory.pinnedFacts) ? state.memory.pinnedFacts.join("\n") : safeString(state.memory.pinnedFacts);
   els.sharedSummary.value = state.memory.sharedSummary;
-  els.openQuestions.value = state.memory.openQuestions;
+  els.openQuestions.value = Array.isArray(state.memory.openQuestions) ? state.memory.openQuestions.join("\n") : safeString(state.memory.openQuestions);
   els.dmState.value = state.memory.dmState;
   els.outcomeRecommendation.value = state.outcomes.finalRecommendation;
-  els.outcomeDecisions.value = state.outcomes.decisions;
-  els.outcomeRationale.value = state.outcomes.rationale;
-  els.outcomeRejected.value = state.outcomes.rejectedOptions;
-  els.outcomeActions.value = state.outcomes.actionItems;
-  els.outcomeRisks.value = state.outcomes.risks;
+  els.outcomeDecisions.value = Array.isArray(state.outcomes.decisions) ? state.outcomes.decisions.join("\n") : safeString(state.outcomes.decisions);
+  els.outcomeRationale.value = Array.isArray(state.outcomes.rationale) ? state.outcomes.rationale.join("\n") : safeString(state.outcomes.rationale);
+  els.outcomeRejected.value = Array.isArray(state.outcomes.rejectedOptions) ? state.outcomes.rejectedOptions.join("\n") : safeString(state.outcomes.rejectedOptions);
+  els.outcomeActions.value = Array.isArray(state.outcomes.actionItems) ? state.outcomes.actionItems.join("\n") : safeString(state.outcomes.actionItems);
+  els.outcomeRisks.value = Array.isArray(state.outcomes.risks) ? state.outcomes.risks.join("\n") : safeString(state.outcomes.risks);
   els.outcomeStatus.textContent = state.outcomes.status;
   els.autoStopEnabled.checked = state.autoStop.enabled;
   els.autoGoal.value = state.autoStop.goal;
@@ -749,22 +1336,42 @@ export function syncFormFromState() {
   renderModePills();
   renderTemperatureDisplay();
   document.documentElement.dataset.theme = state.settings.theme || "dark";
+  validateEmbeddingModel(state.settings.embeddingModel);
+  // Sprint 7: Influence bars
+  if (els.showInfluenceBarsInput) els.showInfluenceBarsInput.checked = !!state.settings.showInfluenceBars;
 }
 
 export function readSettingsFromForm() {
   state.settings.baseUrl = els.baseUrl.value.trim() || defaultState.settings.baseUrl;
   state.settings.apiKey = els.apiKey.value.trim() || "lm-studio";
   state.settings.model = els.model.value.trim();
+  state.settings.embeddingModel = els.embeddingModel.value.trim();
   state.settings.temperature = Number(els.temperature.value || defaultState.settings.temperature);
   state.scenario.mode = els.mode.value;
   state.scenario.title = els.title.value.trim() || "Untitled forum";
+  // Mirror to document title if it hasn't been manually customised
+  // (document title equals scenario title, or is blank — both indicate it's still the default)
+  if (state.document && (!state.document.title || state.document.title === state.scenario._lastSyncedTitle)) {
+    state.document.title = state.scenario.title;
+    if (els.documentTitle) els.documentTitle.value = state.scenario.title;
+  }
+  state.scenario._lastSyncedTitle = state.scenario.title;
+
   state.scenario.premise = els.premise.value.trim();
   state.scenario.objective = els.objective.value.trim();
+  // Auto-populate goal from objective when the user hasn't manually set a goal
+  if (!state.autoStop.goal.trim() && state.scenario.objective) {
+    state.autoStop.goal = state.scenario.objective;
+    if (els.autoGoal) els.autoGoal.value = state.scenario.objective;
+  }
   state.dm.enabled = els.dmEnabled.checked;
   state.dm.name = els.dmName.value.trim() || "Director";
   state.dm.persona = els.dmPersona.value.trim();
   state.dm.seesPrivateThoughts = els.dmPrivate.checked;
   state.ui.quickStartPrompt = els.quickStartPrompt.value.trim();
+  if (els.quickStartTemp) {
+    state.ui.quickStartTemperature = Number(els.quickStartTemp.value || 0.8);
+  }
   readMemoryFromForm();
   readOutcomesFromForm();
   readAutoStopFromForm();
@@ -779,22 +1386,22 @@ export function readSettingsFromForm() {
 
 export function readMemoryFromForm() {
   state.memory.enabled = els.memoryEnabled.checked;
-  state.memory.pinnedFacts = els.pinnedFacts.value.trim();
+  state.memory.pinnedFacts = normalizeStringArray(els.pinnedFacts.value);
   // Don't overwrite AI-managed fields while a background summarize is running
   if (!state.memory.isSummarizing) {
     state.memory.sharedSummary = els.sharedSummary.value.trim();
-    state.memory.openQuestions = els.openQuestions.value.trim();
+    state.memory.openQuestions = normalizeStringArray(els.openQuestions.value);
     state.memory.dmState = els.dmState.value.trim();
   }
 }
 
 export function readOutcomesFromForm() {
   state.outcomes.finalRecommendation = els.outcomeRecommendation.value.trim();
-  state.outcomes.decisions = els.outcomeDecisions.value.trim();
-  state.outcomes.rationale = els.outcomeRationale.value.trim();
-  state.outcomes.rejectedOptions = els.outcomeRejected.value.trim();
-  state.outcomes.actionItems = els.outcomeActions.value.trim();
-  state.outcomes.risks = els.outcomeRisks.value.trim();
+  state.outcomes.decisions = normalizeStringArray(els.outcomeDecisions.value);
+  state.outcomes.rationale = normalizeStringArray(els.outcomeRationale.value);
+  state.outcomes.rejectedOptions = normalizeStringArray(els.outcomeRejected.value);
+  state.outcomes.actionItems = normalizeStringArray(els.outcomeActions.value);
+  state.outcomes.risks = normalizeStringArray(els.outcomeRisks.value);
 }
 
 export function readAutoStopFromForm() {
@@ -804,4 +1411,55 @@ export function readAutoStopFromForm() {
   state.autoStop.stopOnAllSkip = els.stopOnAllSkip.checked;
   state.autoStop.maxRoundsEnabled = els.maxRoundsEnabled.checked;
   state.autoStop.maxRounds = Math.min(50, Math.max(1, Number(els.maxRounds.value || defaultState.autoStop.maxRounds)));
+}
+
+export async function validateEmbeddingModel(modelName) {
+  if (!modelName) {
+    if (els.embeddingWarning) els.embeddingWarning.style.display = "none";
+    return;
+  }
+  const nameLower = modelName.toLowerCase();
+  const looksLikeEmbedding = nameLower.includes("embed") ||
+                             nameLower.includes("nomic") ||
+                             nameLower.includes("bge") ||
+                             nameLower.includes("minilm") ||
+                             nameLower.includes("bert");
+  
+  if (!looksLikeEmbedding) {
+    if (els.embeddingWarning) {
+      els.embeddingWarning.style.display = "flex";
+      els.embeddingWarning.querySelector("span:last-child").textContent = "Non-embedding model selected. Memory query vectorization may fail or be extremely slow.";
+    }
+    return;
+  }
+
+  // Quick 1-token verification
+  try {
+    const response = await fetch("/api/embeddings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        baseUrl: state.settings.baseUrl,
+        apiKey: state.settings.apiKey,
+        request: {
+          model: modelName,
+          input: "test"
+        }
+      })
+    });
+    const data = await response.json();
+    if (!response.ok || !Array.isArray(data?.data?.[0]?.embedding)) {
+      if (els.embeddingWarning) {
+        els.embeddingWarning.style.display = "flex";
+        els.embeddingWarning.querySelector("span:last-child").textContent = "Embedding test request failed. Check server logs or model availability.";
+      }
+    } else {
+      if (els.embeddingWarning) els.embeddingWarning.style.display = "none";
+    }
+  } catch (err) {
+    if (els.embeddingWarning) {
+      els.embeddingWarning.style.display = "flex";
+      els.embeddingWarning.querySelector("span:last-child").textContent = "Embedding test request failed. Check connection or settings.";
+    }
+  }
 }

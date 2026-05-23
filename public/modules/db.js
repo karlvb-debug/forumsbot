@@ -1,4 +1,4 @@
-import { DB_NAME, DB_VERSION, MESSAGE_STORE, CHUNK_STORE } from './constants.js';
+import { DB_NAME, DB_VERSION, MESSAGE_STORE, CHUNK_STORE, ACTOR_MEMORY_STORE } from './constants.js';
 import { state } from './state.js';
 import { cleanStoredMessage } from './utils.js';
 
@@ -40,7 +40,7 @@ export function openMemoryDb() {
       reject(new Error("IndexedDB open timed out."));
     }, 4000);
     const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.addEventListener("upgradeneeded", () => {
+    request.addEventListener("upgradeneeded", (event) => {
       const database = request.result;
       if (!database.objectStoreNames.contains(MESSAGE_STORE)) {
         const messages = database.createObjectStore(MESSAGE_STORE, { keyPath: "id" });
@@ -49,6 +49,10 @@ export function openMemoryDb() {
       if (!database.objectStoreNames.contains(CHUNK_STORE)) {
         const chunks = database.createObjectStore(CHUNK_STORE, { keyPath: "id" });
         chunks.createIndex("createdAt", "createdAt");
+      }
+      // Sprint 6: per-actor cross-session memory store (keyed by actor name)
+      if (!database.objectStoreNames.contains(ACTOR_MEMORY_STORE)) {
+        database.createObjectStore(ACTOR_MEMORY_STORE, { keyPath: "name" });
       }
     });
     request.addEventListener("blocked", () => {
@@ -151,4 +155,53 @@ export async function clearChunks() {
 
 export function byCreatedAt(left, right) {
   return new Date(left.createdAt || 0) - new Date(right.createdAt || 0);
+}
+
+// ──────────────────────────────────────────────────────────────
+// Sprint 6: Cross-Session Actor Memory
+// Persists per-actor memory text across session resets.
+// Keyed by actor name. Never wiped by clearMessages/clearChunks.
+// ──────────────────────────────────────────────────────────────
+
+export async function getActorMemory(actorName) {
+  if (!storageAvailable || !db) return null;
+  try {
+    const tx = db.transaction(ACTOR_MEMORY_STORE, 'readonly');
+    const record = await idbRequest(tx.objectStore(ACTOR_MEMORY_STORE).get(actorName));
+    return record?.memory || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function putActorMemory(actorName, memory) {
+  if (!storageAvailable || !db) return;
+  try {
+    const tx = db.transaction(ACTOR_MEMORY_STORE, 'readwrite');
+    tx.objectStore(ACTOR_MEMORY_STORE).put({ name: actorName, memory, updatedAt: new Date().toISOString() });
+    await idbDone(tx);
+  } catch (err) {
+    console.warn('[actor-memory] putActorMemory failed:', err.message);
+  }
+}
+
+export async function clearActorMemory(actorName) {
+  if (!storageAvailable || !db) return;
+  try {
+    const tx = db.transaction(ACTOR_MEMORY_STORE, 'readwrite');
+    tx.objectStore(ACTOR_MEMORY_STORE).delete(actorName);
+    await idbDone(tx);
+  } catch (err) {
+    console.warn('[actor-memory] clearActorMemory failed:', err.message);
+  }
+}
+
+export async function getAllActorMemories() {
+  if (!storageAvailable || !db) return [];
+  try {
+    const tx = db.transaction(ACTOR_MEMORY_STORE, 'readonly');
+    return await idbRequest(tx.objectStore(ACTOR_MEMORY_STORE).getAll());
+  } catch {
+    return [];
+  }
 }

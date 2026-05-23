@@ -1,5 +1,5 @@
 import { STORAGE_KEY, VALID_TABS, defaultState } from './constants.js';
-import { normalizeQuickStartConfig, cleanStoredMessage } from './utils.js';
+import { normalizeQuickStartConfig, cleanStoredMessage, normalizeStringArray } from './utils.js';
 
 function normalizeState(value) {
   const merged = {
@@ -8,6 +8,8 @@ function normalizeState(value) {
     settings: { ...defaultState.settings, ...value.settings },
     ui: { ...defaultState.ui, ...value.ui },
     memory: { ...defaultState.memory, ...value.memory },
+    telemetry: { ...defaultState.telemetry, ...value.telemetry },
+    diagnostics: { ...defaultState.diagnostics, ...value.diagnostics },
     outcomes: { ...defaultState.outcomes, ...value.outcomes },
     autoStop: { ...defaultState.autoStop, ...value.autoStop },
     document: { ...defaultState.document, ...value.document },
@@ -18,6 +20,16 @@ function normalizeState(value) {
     turnQueue: Array.isArray(value.turnQueue) ? value.turnQueue : []
   };
   if (!Array.isArray(merged.document.versions)) merged.document.versions = [];
+  if (!Array.isArray(merged.document.lineAttribution)) merged.document.lineAttribution = [];
+  if (!Array.isArray(merged.telemetry.alignmentHistory)) merged.telemetry.alignmentHistory = [];
+  if (!Array.isArray(merged.diagnostics.transitions)) merged.diagnostics.transitions = [];
+  if (!Array.isArray(merged.diagnostics.warnings)) merged.diagnostics.warnings = [];
+  if (!Array.isArray(merged.diagnostics.sessionsIndex)) merged.diagnostics.sessionsIndex = [];
+  if (!Array.isArray(merged.diagnostics.apiCallLogs)) merged.diagnostics.apiCallLogs = [];
+  if (!Array.isArray(merged.diagnostics.parseFailures)) merged.diagnostics.parseFailures = [];
+  if (!Array.isArray(merged.diagnostics.outcomeExtractionLog)) merged.diagnostics.outcomeExtractionLog = [];
+  if (!Array.isArray(merged.anchors)) merged.anchors = [];
+
   merged.memory.isSummarizing = false;
   if (!value.settings?.baseUrl || value.settings.baseUrl === "http://localhost:1234/v1") {
     merged.settings.baseUrl = defaultState.settings.baseUrl;
@@ -42,8 +54,24 @@ function normalizeState(value) {
   if (!Array.isArray(merged.memory.recentDeltas)) {
     merged.memory.recentDeltas = [];
   }
-  // Ensure all memory text fields are strings (AI sometimes returns objects)
-  for (const key of ["pinnedFacts", "sharedSummary", "openQuestions", "dmState"]) {
+  
+  // Ensure memory array fields are clean arrays (excluding single characters or empty strings)
+  for (const key of ["pinnedFacts", "openQuestions"]) {
+    const val = value.memory?.[key];
+    merged.memory[key] = normalizeStringArray(val)
+      .filter((item) => typeof item === "string" && item.trim().length > 1);
+  }
+
+  // Ensure outcome array fields are clean arrays
+  for (const key of ["decisions", "rationale", "rejectedOptions", "actionItems", "risks"]) {
+    const val = value.outcomes?.[key];
+    merged.outcomes[key] = normalizeStringArray(val);
+  }
+  merged.outcomes.isExtracting = false;
+  merged.outcomes.isExtractingOutcomes = false;
+  
+  // Ensure other memory fields are strings
+  for (const key of ["sharedSummary", "dmState"]) {
     const val = merged.memory[key];
     if (val && typeof val === "object") {
       merged.memory[key] = JSON.stringify(val);
@@ -51,11 +79,22 @@ function normalizeState(value) {
       merged.memory[key] = String(val || "");
     }
   }
+  
   merged.memory.cycleCount = Number(merged.memory.cycleCount || 0);
   merged.memory.archivedCount = Number(merged.memory.archivedCount || 0);
   merged.memory.turnsSinceSummary = Number(merged.memory.turnsSinceSummary || 0);
   merged.autoStop.maxRounds = Math.min(50, Math.max(1, Number(merged.autoStop.maxRounds || defaultState.autoStop.maxRounds)));
   merged.autoStop.roundsRun = Math.max(0, Number(merged.autoStop.roundsRun || 0));
+  
+  if (merged.autoStop.enabled && !String(merged.autoStop.goal || "").trim()) {
+    merged.autoStop.goal = String(merged.scenario.objective || "").trim();
+  }
+  // Auto-populate document title from scenario title when blank
+  if (!String(merged.document?.title || "").trim() && merged.scenario?.title) {
+    if (!merged.document) merged.document = {};
+    merged.document.title = merged.scenario.title;
+  }
+
   merged.actors = merged.actors.map((actor, index) => ({
     id: actor.id || crypto.randomUUID(),
     name: actor.name || `Actor ${index + 1}`,
@@ -67,8 +106,11 @@ function normalizeState(value) {
     relationships: (actor.relationships && typeof actor.relationships === "object") ? actor.relationships : {},
     enabled: actor.enabled !== false,
     expanded: actor.expanded || false,
+    isResearcher: !!actor.isResearcher,
+    temperature: typeof actor.temperature === "number" ? actor.temperature : 0.8,
     color: actor.color || defaultState.actors[index % defaultState.actors.length]?.color || "#18726d"
   }));
+  merged.ui.viewingVersionIndex = merged.document.versions.length;
   return merged;
 }
 
@@ -93,4 +135,31 @@ export function setState(newState) {
 export function saveState() {
   const { messages, autoRunning, ...persisted } = state;
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...persisted, messages: [] }));
+}
+
+export function logTransition(type, detail = {}) {
+  if (!state.diagnostics) state.diagnostics = {};
+  if (!Array.isArray(state.diagnostics.transitions)) state.diagnostics.transitions = [];
+  state.diagnostics.transitions.push({
+    at: new Date().toISOString(),
+    type,
+    ...detail
+  });
+  if (state.diagnostics.transitions.length > 500) {
+    state.diagnostics.transitions.shift();
+  }
+}
+
+export function logWarning(category, msg, severity = "warn") {
+  if (!state.diagnostics) state.diagnostics = {};
+  if (!Array.isArray(state.diagnostics.warnings)) state.diagnostics.warnings = [];
+  state.diagnostics.warnings.push({
+    at: new Date().toISOString(),
+    severity,
+    category,
+    msg
+  });
+  if (state.diagnostics.warnings.length > 100) {
+    state.diagnostics.warnings.shift();
+  }
 }

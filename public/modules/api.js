@@ -1,6 +1,6 @@
 import { AVAILABLE_TOOLS, MAX_TOOL_ROUNDS } from './constants.js';
 import { state } from './state.js';
-import { parseAiJson, parseTextToolCalls, stripTextToolCalls } from './utils.js';
+import { parseAiJson, parseTextToolCalls, stripTextToolCalls, stripCodeFence } from './utils.js';
 
 // els reference — set via initApi() called from main.js
 let els = null;
@@ -48,21 +48,65 @@ export async function chatCompletion(system, user, { temperature = state.setting
       payload.tool_choice = "auto";
     }
 
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        baseUrl: state.settings.baseUrl,
-        apiKey: state.settings.apiKey,
-        request: payload
-      }),
-      signal
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || "LM Studio request failed.");
+    const startTime = Date.now();
+    let response;
+    let status = "ok";
+    let data;
+    try {
+      response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          baseUrl: state.settings.baseUrl,
+          apiKey: state.settings.apiKey,
+          request: payload
+        }),
+        signal
+      });
+      data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "LM Studio request failed.");
+      }
+    } catch (err) {
+      status = err.name === "TimeoutError" ? "timeout" : "error";
+      const apiLog = {
+        timestamp: new Date().toISOString(),
+        endpoint: "/v1/chat/completions",
+        model: payload.model || "unknown",
+        promptTokens: 0,
+        completionTokens: 0,
+        latencyMs: Date.now() - startTime,
+        tokensPerSecondCompletion: 0,
+        status,
+        error: err.message
+      };
+      if (!state.diagnostics) state.diagnostics = {};
+      if (!Array.isArray(state.diagnostics.apiCallLogs)) state.diagnostics.apiCallLogs = [];
+      state.diagnostics.apiCallLogs.push(apiLog);
+      if (state.diagnostics.apiCallLogs.length > 100) state.diagnostics.apiCallLogs.shift();
+      throw err;
     }
+
+    const latencyMs = Date.now() - startTime;
+    const promptTokens = data?.usage?.prompt_tokens || 0;
+    const completionTokens = data?.usage?.completion_tokens || 0;
+    const tokensPerSecond = completionTokens && latencyMs > 0 ? Math.round(completionTokens / (latencyMs / 1000)) : 0;
+
+    const apiLog = {
+      timestamp: new Date().toISOString(),
+      endpoint: "/v1/chat/completions",
+      model: payload.model || "unknown",
+      promptTokens,
+      completionTokens,
+      latencyMs,
+      tokensPerSecondCompletion: tokensPerSecond,
+      status: "ok",
+      estimatedCostCents: Number(((promptTokens * 0.00015 + completionTokens * 0.0006) / 1000).toFixed(4))
+    };
+    if (!state.diagnostics) state.diagnostics = {};
+    if (!Array.isArray(state.diagnostics.apiCallLogs)) state.diagnostics.apiCallLogs = [];
+    state.diagnostics.apiCallLogs.push(apiLog);
+    if (state.diagnostics.apiCallLogs.length > 100) state.diagnostics.apiCallLogs.shift();
 
     const choice = data?.choices?.[0];
     const msg = choice?.message;
@@ -83,8 +127,8 @@ export async function chatCompletion(system, user, { temperature = state.setting
 
     // Capture real token usage from LM Studio response
     if (data.usage) {
-      state.contextInfo.lastPromptTokens = data.usage.prompt_tokens || 0;
-      state.contextInfo.lastCompletionTokens = data.usage.completion_tokens || 0;
+      state.contextInfo.lastPromptTokens = promptTokens;
+      state.contextInfo.lastCompletionTokens = completionTokens;
       // Notify render layer without importing render.js (circular dep avoidance)
       document.dispatchEvent(new CustomEvent("tokenUsageUpdated"));
     }
@@ -127,7 +171,88 @@ export async function chatJson(system, user, temperature, signal) {
     signal,
     useTools: true
   });
-  return parseAiJson(content);
+
+  // Detect truncation: JSON that ends mid-string, mid-key, or with an unclosed brace
+  // is almost always a token-budget hit rather than a model error.
+  const looksLikeTruncation = (text) => {
+    const t = text.trimEnd();
+    // Ends without a closing brace, or ends inside a string value
+    if (!t.endsWith("}") && !t.endsWith('"}') && !t.endsWith('"}')) return true;
+    try { JSON.parse(stripCodeFence(t)); return false; } catch { return true; }
+  };
+
+  let finalContent = content;
+  let retryAttempted = false;
+  let retrySucceeded = false;
+
+  let isStrictJson = true;
+  let parseError = null;
+  try {
+    JSON.parse(stripCodeFence(content));
+  } catch (err) {
+    isStrictJson = false;
+    parseError = err.message;
+
+    // Truncation retry: one attempt with a higher token budget and a resume prompt
+    if (looksLikeTruncation(content) && !signal?.aborted) {
+      retryAttempted = true;
+      try {
+        const resumeUser = [
+          "Your previous response was cut off before the JSON was complete. Here is what you sent:",
+          "```",
+          content.slice(-300), // show the tail so the model knows where it stopped
+          "```",
+          "Resume and return ONLY the complete, valid JSON object. Do not repeat content already sent — just complete the JSON from where it was cut off, starting with the missing fields or closing braces."
+        ].join("\n");
+        const retryContent = await chatCompletion(system, resumeUser, {
+          temperature: 0.1, // deterministic for repair
+          maxTokens: Math.min(state.settings.maxTokens * 2, 4000),
+          signal,
+          useTools: false
+        });
+        // Merge: try the retry content alone first, then as a suffix to the original
+        const candidates = [retryContent, content + retryContent];
+        for (const candidate of candidates) {
+          try {
+            JSON.parse(stripCodeFence(candidate));
+            finalContent = candidate;
+            isStrictJson = true;
+            retrySucceeded = true;
+            parseError = null;
+            break;
+          } catch { /* try next */ }
+        }
+      } catch {
+        // Retry itself failed — fall through to normal fallback
+      }
+    }
+  }
+
+  const parsed = parseAiJson(finalContent);
+
+  if (!isStrictJson) {
+    if (!state.diagnostics) state.diagnostics = {};
+    if (!Array.isArray(state.diagnostics.parseFailures)) state.diagnostics.parseFailures = [];
+    state.diagnostics.parseFailures.push({
+      timestamp: new Date().toISOString(),
+      expectedSchema: "ActorEnvelope",
+      rawOutput: content,
+      parseError: parseError || "No strict JSON structure found",
+      retryAttempted,
+      retrySucceeded,
+      fallbackUsed: (finalContent.includes("thought") || finalContent.includes("message")) ? "regex_extraction" : "raw_message_injection"
+    });
+    if (state.diagnostics.parseFailures.length > 50) state.diagnostics.parseFailures.shift();
+  }
+
+  Object.defineProperties(parsed, {
+    _rawCompletion: { value: finalContent, writable: true, enumerable: false },
+    _promptTokens: { value: state.contextInfo.lastPromptTokens, writable: true, enumerable: false },
+    _completionTokens: { value: state.contextInfo.lastCompletionTokens, writable: true, enumerable: false },
+    _parseFailure: { value: !isStrictJson, writable: true, enumerable: false }
+  });
+
+  return parsed;
 }
 
 /**
@@ -143,12 +268,26 @@ export async function chatStructured(system, user, schema, { temperature = 0.2, 
       signal,
       jsonSchema: schema
     });
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    Object.defineProperties(parsed, {
+      _rawCompletion: { value: raw, writable: true, enumerable: false },
+      _promptTokens: { value: state.contextInfo.lastPromptTokens, writable: true, enumerable: false },
+      _completionTokens: { value: state.contextInfo.lastCompletionTokens, writable: true, enumerable: false },
+      _parseFailure: { value: false, writable: true, enumerable: false }
+    });
+    return parsed;
   } catch (err) {
     // If schema-constrained call fails (model doesn't support it), fall back to plain call
     console.warn("[api] chatStructured schema mode failed, falling back to plain completion:", err.message);
     const raw = await chatCompletion(system, user, { temperature, maxTokens: maxTokens || state.settings.maxTokens, signal });
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    Object.defineProperties(parsed, {
+      _rawCompletion: { value: raw, writable: true, enumerable: false },
+      _promptTokens: { value: state.contextInfo.lastPromptTokens, writable: true, enumerable: false },
+      _completionTokens: { value: state.contextInfo.lastCompletionTokens, writable: true, enumerable: false },
+      _parseFailure: { value: true, writable: true, enumerable: false }
+    });
+    return parsed;
   }
 }
 
@@ -303,6 +442,40 @@ export async function pingConnection(silent = false) {
       }
     }).catch(() => {}); // non-critical
 
+    // Probe the embedding endpoint so we can warn the user if it's broken.
+    // Runs after every successful ping, silent — never blocks or throws.
+    (async () => {
+      const embedModel = state.settings.embeddingModel || state.settings.model;
+      if (!embedModel) {
+        document.dispatchEvent(new CustomEvent("embeddingProbeResult", {
+          detail: { ok: false, reason: "No model configured. Semantic memory recall and drift detection are disabled." }
+        }));
+        return;
+      }
+      try {
+        const resp = await fetch("/api/embeddings", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            baseUrl, apiKey,
+            request: { model: embedModel, input: "test" }
+          }),
+          signal: AbortSignal.timeout(5000)
+        });
+        const data = await resp.json();
+        const ok = resp.ok && Array.isArray(data?.data?.[0]?.embedding);
+        document.dispatchEvent(new CustomEvent("embeddingProbeResult", {
+          detail: ok
+            ? { ok: true }
+            : { ok: false, reason: `Embedding model "${embedModel}" returned an error — semantic memory is in keyword-only mode.` }
+        }));
+      } catch {
+        document.dispatchEvent(new CustomEvent("embeddingProbeResult", {
+          detail: { ok: false, reason: `Embedding probe failed — check that an embedding model is loaded in LM Studio.` }
+        }));
+      }
+    })();
+
     return true;
   } catch (error) {
     if (!silent) setStatus(error.message || "Could not reach LM Studio", "error");
@@ -341,7 +514,8 @@ export function restoreLastConnection() {
 }
 
 export async function getEmbedding(text) {
-  if (!state.settings.model) {
+  const modelToUse = state.settings.embeddingModel || state.settings.model;
+  if (!modelToUse) {
     throw new Error("No model selected.");
   }
   const response = await fetch("/api/embeddings", {
@@ -351,7 +525,7 @@ export async function getEmbedding(text) {
       baseUrl: state.settings.baseUrl,
       apiKey: state.settings.apiKey,
       request: {
-        model: state.settings.model,
+        model: modelToUse,
         input: text
       }
     })

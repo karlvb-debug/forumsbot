@@ -31,7 +31,16 @@ export function sanitizeJsonString(content) {
   for (let i = 0; i < content.length; i++) {
     const ch = content[i];
     if (escaped) {
-      result += ch;
+      if (inString) {
+        const isValidEscape = /["\\\/bfnrtu]/.test(ch);
+        if (!isValidEscape) {
+          result = result.slice(0, -1) + "\\\\" + ch;
+        } else {
+          result += ch;
+        }
+      } else {
+        result += ch;
+      }
       escaped = false;
       continue;
     }
@@ -261,11 +270,44 @@ export function stringifyList(value) {
   return String(value || "").trim();
 }
 
-export function normalizeStringArray(value) {
-  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
-  const text = String(value || "").trim();
-  if (!text) return [];
-  return text.split(/\n|,/).map((item) => item.replace(/^[-*]\s*/, "").trim()).filter(Boolean);
+export function normalizeStringArray(value, splitOnComma = false) {
+  let arr;
+  if (Array.isArray(value)) {
+    arr = value.map((item) => String(item).trim()).filter(Boolean);
+  } else {
+    const text = String(value || "").trim();
+    if (!text) return [];
+    if (text.startsWith("[") && text.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+          arr = parsed.map((item) => String(item).trim()).filter(Boolean);
+        }
+      } catch {}
+    }
+    if (!arr) {
+      const pattern = splitOnComma ? /\n|,/ : /\n/;
+      arr = text.split(pattern).map((item) => item.replace(/^[-*]\s*/, "").trim()).filter(Boolean);
+    }
+  }
+
+  // Check for char-spread array corruption (e.g. ["P", "r", "o", "d", "u", "c", "t"])
+  // — single character per item
+  if (arr.length > 1 && arr.every((item) => item.length === 1)) {
+    arr = [arr.join("")];
+  }
+  // Also catch word-split corruption (e.g. ["Use", "React", "hooks"])
+  // — every item is a single word (no spaces), there are 4+ items, and the average
+  //   item length is short (≤12 chars), which together strongly indicate a single
+  //   sentence that was accidentally spread across array slots.
+  else if (
+    arr.length >= 4 &&
+    arr.every((item) => !item.includes(" ")) &&
+    arr.reduce((sum, item) => sum + item.length, 0) / arr.length <= 12
+  ) {
+    arr = [arr.join(" ")];
+  }
+  return arr;
 }
 
 export function trimWords(text, limit) {
@@ -275,7 +317,25 @@ export function trimWords(text, limit) {
 }
 
 export function extractKeywords(text) {
-  const stop = new Set(["about", "after", "again", "also", "because", "before", "being", "could", "every", "from", "have", "into", "just", "like", "more", "need", "only", "other", "should", "that", "their", "there", "these", "they", "this", "through", "with", "would", "your"]);
+  const stop = new Set([
+    "about", "after", "again", "also", "because", "before", "being", "could", "every", 
+    "from", "have", "into", "just", "like", "more", "need", "only", "other", "should", 
+    "that", "their", "there", "these", "they", "this", "through", "with", "would", "your",
+    "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", 
+    "aren", "as", "at", "be", "because", "been", "before", "being", "below", "between", 
+    "both", "but", "by", "can", "cannot", "could", "did", "didn", "do", "does", "doesn", 
+    "doing", "don", "down", "during", "each", "few", "for", "from", "further", "had", 
+    "hadn", "has", "hasn", "have", "haven", "having", "he", "her", "here", "hers", 
+    "herself", "him", "himself", "his", "how", "if", "in", "into", "is", "isn", "it", 
+    "its", "itself", "let", "me", "more", "most", "mustn", "my", "myself", "no", "nor", 
+    "not", "of", "off", "on", "once", "only", "or", "other", "ought", "our", "ours", 
+    "ourselves", "out", "over", "own", "same", "shan", "she", "should", "shouldn", "so", 
+    "some", "such", "than", "that", "the", "their", "theirs", "them", "themselves", 
+    "then", "there", "these", "they", "this", "those", "through", "to", "too", "under", 
+    "until", "up", "very", "was", "wasn", "we", "were", "weren", "what", "when", "where", 
+    "which", "while", "who", "whom", "why", "will", "with", "would", "wouldn", "you", 
+    "your", "yours", "yourself", "yourselves"
+  ]);
   const words = String(text || "").toLowerCase().match(/[a-z0-9][a-z0-9-]{2,}/g) || [];
   const counts = new Map();
   words.forEach((word) => {
@@ -304,6 +364,7 @@ export function normalizeQuickStartActor(actor, index, assignFreshIds) {
     voice: cleanConfigText(source.voice, "", 120),
     thoughts: cleanConfigText(source.thoughts, "", 700),
     enabled: source.enabled !== false,
+    isResearcher: !!source.isResearcher,
     color: ["#18726d", "#b84738", "#a2611a", "#355f9f", "#6e4c99", "#4f7d2d", "#9a4668"][index % 7]
   };
 }
@@ -370,4 +431,57 @@ export function normalizeQuickStartConfig(config, assignFreshIds = true) {
       dmState: cleanConfigText(memory.dmState, "", 500)
     }
   };
+}
+
+/**
+ * Detects if the recent discussion is stuck in an agreement loop or drifting.
+ * Analyses the last few messages to see if they are dominated by agreement keywords
+ * and lack substance/questions/challenges.
+ */
+export function checkDrift(messages) {
+  if (!Array.isArray(messages) || messages.length < 3) return false;
+  
+  // Look at the last 4 active messages (excluding skips, empty, system, or director messages)
+  const recent = messages
+    .filter(msg => msg && msg.type !== "skip" && msg.text && msg.role !== "system" && msg.role !== "director")
+    .slice(-4);
+    
+  if (recent.length < 3) return false;
+
+  // If any recent active message contains a question, it breaks the consensus loop
+  if (recent.some(msg => msg.text.includes("?"))) {
+    return false;
+  }
+
+  const agreementPatterns = [
+    /\b(i\s+)?agree\b/i,
+    /\bfully\s+agree\b/i,
+    /\bconcur\b/i,
+    /\bexcellent\s+point\b/i,
+    /\bexactly\b/i,
+    /\bspot\s+on\b/i,
+    /\baligned\b/i,
+    /\bwell\s+said\b/i,
+    /\bcouldn't\s+agree\s+more\b/i,
+    /\bbuilding\s+on\b/i,
+    /\bmakes\s+sense\b/i,
+    /\becho\b/i,
+    /\bresonate\b/i,
+    /\bconsensus\b/i,
+    /\bshare\s+your\s+view\b/i
+  ];
+
+  let agreementCount = 0;
+  for (const msg of recent) {
+    const text = msg.text.toLowerCase();
+    const hasAgreement = agreementPatterns.some(pattern => pattern.test(text));
+    
+    // An agreement message is one that has agreement keywords and doesn't contain a question
+    if (hasAgreement && !text.includes("?")) {
+      agreementCount++;
+    }
+  }
+
+  // If 3 or more of the recent active messages are agreements, we have a consensus loop
+  return agreementCount >= 3;
 }

@@ -1,13 +1,15 @@
 export const STORAGE_KEY = "forum-state-v1";
 export const PRESET_VERSION = 1;
 export const DB_NAME = "forum-memory";
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 export const MESSAGE_STORE = "messages";
 export const CHUNK_STORE = "chunks";
+export const ACTOR_MEMORY_STORE = "actor-memory";
 export const RECENT_MESSAGE_LIMIT = 80;
 export const PROMPT_MESSAGE_LIMIT = 20;
 export const RECALLED_CHUNK_LIMIT = 6;
 export const PINNED_FACTS_WORD_CAP = 300; // ~40 facts; above this, offer compaction
+export const ANCHOR_WORD_CAP = 400;       // Sprint 7: max words injected from anchors
 export const DELTA_REWRITE_EVERY = 4;   // full summary rewrite every N delta cycles
 export const WORD_LIMITS = {
   sharedSummary: 520,
@@ -60,23 +62,38 @@ export const defaultState = {
     baseUrl: "http://127.0.0.1:1234",
     apiKey: "lm-studio",
     model: "",
+    embeddingModel: "",
     temperature: 0.8,
-    maxTokens: 1200,
+    maxTokens: 2000,
     showThoughts: false,
     toolsEnabled: true,
-    theme: "dark"
+    theme: "dark",
+    includeTraces: true,
+    gravitySensitivity: 50,
+    // Sprint 5: Preflight Skip Router
+    enablePreflightRouter: true,
+    preflightThreshold: 0.35,
+    // Sprint 5: Parallel Hypothesis Sampling
+    enableHypothesisSampling: false,
+    hypothesisSampleCount: 2,
+    hypothesisAutoSelect: true,
+    // Sprint 6: Cross-Session Actor Memory
+    enableCrossSessionMemory: true,
+    // Sprint 7: Influence Budget
+    showInfluenceBars: false
   },
   ui: {
     activeTab: "",
     quickStartPrompt: "",
     quickStartDraft: null,
-    quickStartStatus: "No generated setup yet."
+    quickStartStatus: "No generated setup yet.",
+    quickStartTemperature: 0.8
   },
   memory: {
     enabled: true,
-    pinnedFacts: "",
+    pinnedFacts: [],
     sharedSummary: "",
-    openQuestions: "",
+    openQuestions: [],
     dmState: "",
     pendingPinnedFacts: [],
     recentDeltas: [],      // short bullet summaries appended each cycle
@@ -87,16 +104,34 @@ export const defaultState = {
     archivedCount: 0,
     isSummarizing: false
   },
+  telemetry: {
+    objectiveEmbedding: null,
+    embeddedObjectiveText: "",
+    currentAlignmentScore: 100,
+    alignmentMode: "none",      // "embedding" | "keyword" | "none" — shown in UI
+    alignmentHistory: [],
+    nudgeTriggered: false
+  },
+  diagnostics: {
+    transitions: [],
+    warnings: [],
+    sessionsIndex: [],
+    apiCallLogs: [],
+    parseFailures: [],
+    outcomeExtractionLog: []  // Sprint 6: { at, attempt, success, error? }
+  },
   outcomes: {
     finalRecommendation: "",
-    decisions: "",
-    rationale: "",
-    rejectedOptions: "",
-    actionItems: "",
-    risks: "",
+    decisions: [],
+    rationale: [],
+    rejectedOptions: [],
+    actionItems: [],
+    risks: [],
     lastExtractedAt: "",
     lastExtractMessageId: "",
-    status: "No outcomes extracted yet."
+    status: "No outcomes extracted yet.",
+    isExtracting: false,
+    isExtractingOutcomes: false
   },
   autoStop: {
     enabled: true,
@@ -110,10 +145,12 @@ export const defaultState = {
   },
   document: {
     enabled: false,
-    title: "Untitled Document",
+    title: "",
     content: "",
     versions: [],
-    maxVersions: 20
+    maxVersions: 20,
+    lineAttribution: [],
+    showAttribution: false
   },
   scenario: {
     mode: "problem",
@@ -169,6 +206,8 @@ export const defaultState = {
   messages: [],
   turnQueue: [],
   autoRunning: false,
+  // Sprint 7: Conceptual Anchors — settled group agreements, injected into every prompt
+  anchors: [],  // [{ id, text, speaker, color, messageId, createdAt }]
   // Runtime-only: not persisted between sessions
   contextInfo: {
     maxContextLength: 0,      // fetched from /api/v0/models
