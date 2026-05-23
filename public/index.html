@@ -16,597 +16,546 @@
           <p class="eyebrow">Local AI council</p>
           <h1>Forum</h1>
         </div>
-        <nav class="tab-list" role="tablist" aria-label="Forum sections">
-          <button class="tab-button" id="setupTabButton" type="button" role="tab" data-tab="setup" aria-controls="setupTab">Setup</button>
-          <button class="tab-button" id="conversationTabButton" type="button" role="tab" data-tab="conversation" aria-controls="conversationTab">Conversation</button>
-          <button class="tab-button" id="memoryTabButton" type="button" role="tab" data-tab="memory" aria-controls="memoryTab">Memory</button>
-        </nav>
         <button class="icon-button" id="themeToggle" type="button" aria-label="Toggle theme" title="Toggle theme">
           <span aria-hidden="true">◐</span>
         </button>
       </header>
 
       <!-- ═══════════════════════════════════════════════════════════════
-           SETUP TAB
+           CONVERSATION LAYOUT — always visible, fills the shell
       ════════════════════════════════════════════════════════════════ -->
-      <section class="tab-panel setup-tab" id="setupTab" role="tabpanel" aria-labelledby="setupTabButton" data-tab-panel="setup">
-        <div class="setup-grid">
-          <div class="panel-stack">
+      <div class="conversation-layout">
+        <main class="stage-panel">
+          <header class="stage-header">
+            <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+              <div style="min-width:0">
+                <h2 id="stageTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Untitled forum</h2>
+              </div>
+              <span class="mode-badge" id="modeLabel">Problem</span>
+            </div>
+            <div class="turn-toolbar" aria-label="Conversation controls">
+              <button class="secondary-button" id="toggleSidebarButton" type="button" aria-expanded="true" aria-label="Toggle sidebar">📁 Sidebar</button>
+              <button class="secondary-button" id="copySessionButton" type="button">Copy Session</button>
+              <button class="danger-button" id="clearConversationButton" type="button">Clear</button>
+            </div>
+          </header>
 
-            <!-- Connection -->
-            <section class="panel-section section--connection">
-              <div class="section-title">
-                <h2>Connection</h2>
-                <span class="status-pill" id="connectionStatus" title="Auto-checks every 12s">Not connected</span>
-              </div>
-              <label>
-                Server URL
-                <input id="baseUrlInput" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:1234">
-              </label>
-              <div class="two-column">
-                <label>
-                  Model
-                  <input id="modelInput" list="modelOptions" autocomplete="off" spellcheck="false" placeholder="Select a model…">
-                  <datalist id="modelOptions"></datalist>
-                </label>
-                <button class="soft-button" id="loadModelsButton" type="button" style="align-self:end">Refresh</button>
-              </div>
-              <div>
-                <label>
-                  Embedding Model
-                  <input id="embeddingModelInput" list="modelOptions" autocomplete="off" spellcheck="false" placeholder="Fall back to chat model…">
-                </label>
-                <div id="embeddingWarning" class="input-warning" style="display:none;">
-                  <span>⚠️</span>
-                  <span>Non-embedding model selected. Memory query vectorization may fail or be extremely slow.</span>
-                </div>
-              </div>
-              <label>
-                Temperature
-                <div class="slider-row">
-                  <input id="temperatureInput" type="range" min="0" max="2" step="0.05">
-                  <span class="slider-value" id="temperatureDisplay">0.8</span>
-                </div>
-              </label>
-              <label>
-                API key
-                <input id="apiKeyInput" autocomplete="off" spellcheck="false" placeholder="lm-studio">
-              </label>
-            </section>
+          <section class="transcript" id="transcript" aria-live="polite"></section>
 
-            <!-- Quick Setup (collapsible) -->
-            <section class="panel-section section--connection">
-              <details class="quick-start-details" id="quickStartDetails">
-                <summary>
-                  <h2 style="margin:0">Quick Setup</h2>
-                  <span class="chevron">▶</span>
-                </summary>
-                <div class="quick-start-body">
+          <form class="composer" id="composer">
+            <textarea id="userInput" rows="2" placeholder="Join the forum…"></textarea>
+            <div class="token-gauge" id="tokenGauge" hidden title="Tokens used in last prompt vs. model context window">
+              <div class="token-gauge-bar-wrap">
+                <div class="token-gauge-bar" id="tokenGaugeBar"></div>
+              </div>
+              <div class="token-gauge-meta">
+                <span class="token-gauge-label" id="tokenGaugeLabel"></span>
+                <span class="token-gauge-hint">context used</span>
+              </div>
+            </div>
+            <div class="turbo-banner" id="turboBanner" style="display:none">⚡ Turbo Mode — memory, thoughts &amp; alignment suspended for speed</div>
+            <div class="composer-actions">
+              <button class="secondary-button" id="nextTurnButton" type="button" title="Next AI turn (⌘⇧N)">Next AI</button>
+              <button class="secondary-button" id="roundButton" type="button" title="Run a full round (⌘⇧R)">Round</button>
+              <button class="secondary-button" id="autoButton" type="button">Auto</button>
+              <button class="quiet-button" id="stopButton" type="button">Stop</button>
+              <div class="spacer"></div>
+              <label class="composer-toggle" title="Show private thoughts">
+                <input id="showThoughtsMirror" type="checkbox">
+                <span>💭</span>
+              </label>
+              <label class="composer-toggle" title="Enable web tools">
+                <input id="toolsEnabledMirror" type="checkbox">
+                <span>🔍</span>
+              </label>
+              <button class="composer-toggle" id="turboModeButton" type="button" title="Turbo Mode — disable memory, thoughts &amp; alignment for faster turns">⚡</button>
+              <button class="primary-button" type="submit" title="Send (⌘↵)">Send</button>
+            </div>
+          </form>
+        </main>
+
+        <div class="sidebar-resize-handle" id="sidebarResizeHandle" title="Drag to resize"></div>
+        <aside class="panel-section conversation-sidebar" aria-label="Sidebar">
+          <!-- Compact segmented switcher — Setup / Memory / Telemetry / Doc -->
+          <div class="sidebar-header">
+            <div class="sidebar-tabs">
+              <button class="sidebar-tab active" data-sidebar="setup" type="button">⚙ Setup</button>
+              <button class="sidebar-tab" data-sidebar="memory" type="button">🧠 Memory</button>
+              <button class="sidebar-tab" data-sidebar="telemetry" type="button">📊 Telemetry</button>
+              <button class="sidebar-tab" data-sidebar="document" type="button">📝 Doc</button>
+            </div>
+          </div>
+
+          <!-- ── Setup panel ──────────────────────────────────────────── -->
+          <div class="sidebar-panel" data-sidebar-panel="setup">
+            <div class="setup-grid sidebar-setup-grid">
+              <div class="panel-stack">
+
+                <!-- Connection -->
+                <section class="panel-section section--connection">
+                  <div class="section-title">
+                    <h2>Connection</h2>
+                    <span class="status-pill" id="connectionStatus" title="Auto-checks every 12s">Not connected</span>
+                  </div>
                   <label>
-                    Prompt
-                    <textarea id="quickStartPromptInput" rows="3" placeholder="Describe the forum you want, e.g. 'Three scientists debating climate policy'…"></textarea>
+                    Server URL
+                    <input id="baseUrlInput" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:1234">
                   </label>
+                  <div class="two-column">
+                    <label>
+                      Model
+                      <input id="modelInput" list="modelOptions" autocomplete="off" spellcheck="false" placeholder="Select a model…">
+                      <datalist id="modelOptions"></datalist>
+                    </label>
+                    <button class="soft-button" id="loadModelsButton" type="button" style="align-self:end">Refresh</button>
+                  </div>
+                  <div>
+                    <label>
+                      Embedding Model
+                      <input id="embeddingModelInput" list="modelOptions" autocomplete="off" spellcheck="false" placeholder="Fall back to chat model…">
+                    </label>
+                    <div id="embeddingWarning" class="input-warning" style="display:none;">
+                      <span>⚠️</span>
+                      <span>Non-embedding model selected. Memory query vectorization may fail or be extremely slow.</span>
+                    </div>
+                  </div>
                   <label>
-                    Generation Temperature
+                    Temperature
                     <div class="slider-row">
-                      <input id="quickStartTempInput" type="range" min="0" max="2" step="0.05" value="0.8">
-                      <span class="slider-value" id="quickStartTempDisplay">0.8</span>
+                      <input id="temperatureInput" type="range" min="0" max="2" step="0.05">
+                      <span class="slider-value" id="temperatureDisplay">0.8</span>
                     </div>
-                  </label>
-                  <div class="quick-start-actions">
-                    <button class="soft-button" id="generateQuickStartButton" type="button">Generate</button>
-                    <button class="primary-button" id="applyQuickStartButton" type="button">Apply</button>
-                  </div>
-                  <button class="secondary-button" id="discardQuickStartButton" type="button" style="width:100%">Discard</button>
-                  <div class="quick-start-preview" id="quickStartPreview" aria-live="polite"></div>
-                  <p class="status-line" id="quickStartStatus">No generated setup yet.</p>
-                </div>
-              </details>
-            </section>
-
-            <!-- Scenario -->
-            <section class="panel-section section--scenario">
-              <div class="section-title">
-                <h2>Scenario</h2>
-                <div class="mode-pills" role="group" aria-label="Forum mode">
-                  <button class="mode-pill" data-mode="problem" type="button">Problem</button>
-                  <button class="mode-pill" data-mode="story" type="button">Story</button>
-                  <button class="mode-pill" data-mode="freeform" type="button">Freeform</button>
-                </div>
-              </div>
-              <!-- Hidden native select to keep state in sync -->
-              <select id="modeSelect" aria-label="Forum mode" class="hidden-file">
-                <option value="problem">Problem</option>
-                <option value="story">Story</option>
-                <option value="freeform">Freeform</option>
-              </select>
-              <label>
-                Title
-                <input id="titleInput" maxlength="80" placeholder="Untitled forum">
-              </label>
-              <label>
-                Premise
-                <textarea id="premiseInput" rows="3" placeholder="What's the situation?"></textarea>
-              </label>
-              <label>
-                Objective
-                <textarea id="objectiveInput" rows="2" placeholder="What should the group achieve?"></textarea>
-              </label>
-            </section>
-
-            <!-- Director -->
-            <section class="panel-section section--director">
-              <div class="section-title">
-                <h2>Director</h2>
-                <label class="toggle-row compact">
-                  <input id="dmEnabledInput" type="checkbox">
-                  <span>DM enabled</span>
-                </label>
-              </div>
-              <div class="director-fields">
-                <div style="display:grid;gap:10px">
-                  <label>
-                    Name
-                    <input id="dmNameInput" maxlength="50" placeholder="Director">
                   </label>
                   <label>
-                    Style
-                    <textarea id="dmPersonaInput" rows="2" placeholder="Describe the director's moderation style…"></textarea>
+                    API key
+                    <input id="apiKeyInput" autocomplete="off" spellcheck="false" placeholder="lm-studio">
                   </label>
-                  <label class="toggle-row">
-                    <input id="dmPrivateInput" type="checkbox">
-                    <span>DM sees private thoughts</span>
-                  </label>
-                </div>
-              </div>
-            </section>
+                </section>
 
-            <!-- Auto-stop / Goal -->
-            <section class="panel-section section--goal">
-              <div class="section-title">
-                <h2>Goal &amp; Auto-stop</h2>
-                <label class="toggle-row compact" style="margin:0">
-                  <input id="autoStopEnabledInput" type="checkbox">
-                  <span>On</span>
-                </label>
-              </div>
-              <label>
-                Goal
-                <textarea id="autoGoalInput" rows="3" placeholder="What should the group finish or decide?"></textarea>
-              </label>
-              <div class="goal-options">
-                <label class="toggle-row">
-                  <input id="goalCheckEnabledInput" type="checkbox">
-                  <span>Judge goal after each round</span>
-                </label>
-                <label class="toggle-row">
-                  <input id="stopOnAllSkipInput" type="checkbox">
-                  <span>Stop when everyone skips</span>
-                </label>
-                <div class="split-row">
-                  <label class="toggle-row">
-                    <input id="maxRoundsEnabledInput" type="checkbox">
-                    <span>Max rounds</span>
-                  </label>
-                  <label>
-                    Rounds
-                    <input id="maxRoundsInput" type="number" min="1" max="50" step="1">
-                  </label>
-                </div>
-              </div>
-              <div class="goal-actions">
-                <button class="soft-button" id="checkGoalNowButton" type="button">Check Goal Now</button>
-              </div>
-              <p class="status-line" id="autoStopStatus">Auto-stop ready.</p>
-            </section>
-
-            <!-- Session -->
-            <section class="panel-section section--session">
-              <div class="section-title">
-                <h2>Session</h2>
-              </div>
-              <label style="margin-bottom: 8px; display: block;">
-                Export Mode
-                <select id="exportModeSelect" style="width: 100%; margin-top: 4px; padding: 6px; border-radius: 4px; background: var(--bg-card); color: var(--text); border: 1px solid var(--border);">
-                  <option value="debug" selected>Debug Export (All Traces &amp; Metrics)</option>
-                  <option value="shareable">Shareable Export (Redacted Privacy Mode)</option>
-                  <option value="eval">Evaluation Export (Metrics &amp; Structure Only)</option>
-                </select>
-              </label>
-              <div class="session-grid">
-                <button class="secondary-button" id="savePresetButton" type="button">Save</button>
-                <button class="secondary-button" id="loadPresetButton" type="button">Load</button>
-                <button class="secondary-button" id="exportButton" type="button">Export</button>
-                <button class="danger-button" id="resetButton" type="button">Reset</button>
-              </div>
-              <label class="toggle-row">
-                <input id="showThoughtsInput" type="checkbox">
-                <span>Show private thoughts in transcript</span>
-              </label>
-              <label class="toggle-row">
-                <input id="toolsEnabledInput" type="checkbox">
-                <span>Enable web tools (search &amp; read pages)</span>
-              </label>
-              <input class="hidden-file" id="presetFileInput" type="file" accept="application/json">
-            </section>
-
-          </div><!-- /panel-stack -->
-
-          <!-- Actors -->
-          <section class="panel-section section--actors actors-section">
-            <div class="section-title">
-              <h2>Actors</h2>
-              <div style="display:flex;gap:8px">
-                <button class="soft-button" id="addActorButton" type="button">+ Add</button>
-                <button class="soft-button" id="addResearcherButton" type="button" title="Add Specialized Research Agent">+ Add Researcher</button>
-              </div>
-            </div>
-            <div class="actor-list" id="actorList"></div>
-          </section>
-        </div><!-- /setup-grid -->
-      </section>
-
-      <!-- ═══════════════════════════════════════════════════════════════
-           CONVERSATION TAB
-      ════════════════════════════════════════════════════════════════ -->
-      <section class="tab-panel conversation-tab" id="conversationTab" role="tabpanel" aria-labelledby="conversationTabButton" data-tab-panel="conversation">
-        <div class="conversation-layout">
-          <main class="stage-panel">
-            <header class="stage-header">
-              <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
-                <div style="min-width:0">
-                  <h2 id="stageTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Untitled forum</h2>
-                </div>
-                <span class="mode-badge" id="modeLabel">Problem</span>
-              </div>
-              <div class="turn-toolbar" aria-label="Conversation controls">
-                <button class="secondary-button" id="toggleSidebarButton" type="button" aria-expanded="true" aria-label="Toggle sidebar">📁 Sidebar</button>
-                <button class="secondary-button" id="copySessionButton" type="button">Copy Session</button>
-                <button class="danger-button" id="clearConversationButton" type="button">Clear</button>
-              </div>
-            </header>
-
-            <section class="transcript" id="transcript" aria-live="polite"></section>
-
-            <form class="composer" id="composer">
-              <textarea id="userInput" rows="2" placeholder="Join the forum…"></textarea>
-              <div class="token-gauge" id="tokenGauge" hidden title="Tokens used in last prompt vs. model context window">
-                <div class="token-gauge-bar-wrap">
-                  <div class="token-gauge-bar" id="tokenGaugeBar"></div>
-                </div>
-                <div class="token-gauge-meta">
-                  <span class="token-gauge-label" id="tokenGaugeLabel"></span>
-                  <span class="token-gauge-hint">context used</span>
-                </div>
-              </div>
-              <div class="turbo-banner" id="turboBanner" style="display:none">⚡ Turbo Mode — memory, thoughts &amp; alignment suspended for speed</div>
-              <div class="composer-actions">
-                <button class="secondary-button" id="nextTurnButton" type="button" title="Next AI turn (⌘⇧N)">Next AI</button>
-                <button class="secondary-button" id="roundButton" type="button" title="Run a full round (⌘⇧R)">Round</button>
-                <button class="secondary-button" id="autoButton" type="button">Auto</button>
-                <button class="quiet-button" id="stopButton" type="button">Stop</button>
-                <div class="spacer"></div>
-                <label class="composer-toggle" title="Show private thoughts">
-                  <input id="showThoughtsMirror" type="checkbox">
-                  <span>💭</span>
-                </label>
-                <label class="composer-toggle" title="Enable web tools">
-                  <input id="toolsEnabledMirror" type="checkbox">
-                  <span>🔍</span>
-                </label>
-                <button class="composer-toggle" id="turboModeButton" type="button" title="Turbo Mode — disable memory, thoughts &amp; alignment for faster turns">⚡</button>
-                <button class="primary-button" type="submit" title="Send (⌘↵)">Send</button>
-              </div>
-            </form>
-          </main>
-
-
-          <div class="sidebar-resize-handle" id="sidebarResizeHandle" title="Drag to resize"></div>
-          <aside class="panel-section conversation-sidebar" aria-label="Sidebar">
-            <!-- Compact segmented switcher -->
-            <div class="sidebar-header">
-              <div class="sidebar-tabs">
-                <button class="sidebar-tab active" data-sidebar="setup" type="button">Setup</button>
-                <button class="sidebar-tab" data-sidebar="telemetry" type="button">📊 Telemetry</button>
-                <button class="sidebar-tab" data-sidebar="document" type="button">📝 Doc</button>
-              </div>
-            </div>
-
-            <!-- Setup summary panel -->
-            <div class="sidebar-panel" data-sidebar-panel="setup">
-              <details class="summary-collapse" open>
-                <summary class="section-title">
-                  <h2>Current Setup</h2>
-                  <span class="summary-collapse-actions">
-                    <button class="soft-button" type="button" data-tab-jump="setup">Edit</button>
-                    <span class="collapse-chevron">▾</span>
-                  </span>
-                </summary>
-                <div id="conversationSummary"></div>
-              </details>
-            </div>
-
-            <!-- Telemetry panel -->
-            <div class="sidebar-panel" data-sidebar-panel="telemetry" style="display:none">
-              <div class="telemetry-panel-fields">
-                <div class="telemetry-dial-container glass-card">
-                  <svg class="telemetry-dial-svg" viewBox="0 0 100 100">
-                    <circle class="telemetry-dial-bg" cx="50" cy="50" r="40"></circle>
-                    <circle class="telemetry-dial-fill" id="telemetryDialFill" cx="50" cy="50" r="40" stroke-dasharray="251.2" stroke-dashoffset="251.2"></circle>
-                  </svg>
-                  <div class="telemetry-dial-text">
-                    <span id="telemetryAlignmentScore">100%</span>
-                    <span class="telemetry-dial-label">Alignment</span>
-                  </div>
-                </div>
-
-                <!-- Session Health: North-Star Metrics Tiles -->
-                <div class="session-health-card glass-card">
-                  <span class="tension-title">Session Health</span>
-                  <div class="metrics-grid">
-                    <div class="metric-tile" id="metricTileAlignment" data-level="ok">
-                      <span class="metric-tile-icon">🎯</span>
-                      <span class="metric-tile-value" id="metricAlignmentVal">—</span>
-                      <span class="metric-tile-label">Alignment</span>
-                    </div>
-                    <div class="metric-tile" id="metricTileSkipRate" data-level="ok">
-                      <span class="metric-tile-icon">⏭</span>
-                      <span class="metric-tile-value" id="metricSkipRateVal">—</span>
-                      <span class="metric-tile-label">Skip Rate</span>
-                    </div>
-                    <div class="metric-tile" id="metricTileOutcomes" data-level="ok">
-                      <span class="metric-tile-icon">📊</span>
-                      <span class="metric-tile-value" id="metricOutcomesVal">—</span>
-                      <span class="metric-tile-label">Extract Rate</span>
-                    </div>
-                    <div class="metric-tile" id="metricTileMemDup" data-level="ok">
-                      <span class="metric-tile-icon">🔁</span>
-                      <span class="metric-tile-value" id="metricMemDupVal">—</span>
-                      <span class="metric-tile-label">Mem Dup</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="tension-grid-container glass-card">
-                  <span class="tension-title">Canvas Tension Field Grid</span>
-                  <canvas id="tensionGridCanvas"></canvas>
-                </div>
-
-                <div class="telemetry-controls glass-card">
-                  <label>
-                    Gravity Sensitivity
-                    <div class="slider-row">
-                      <input id="gravitySensitivityInput" type="range" min="0" max="100" step="5" value="50">
-                      <span class="slider-value" id="gravitySensitivityDisplay">50%</span>
-                    </div>
-                  </label>
-                  <label class="toggle-row">
-                    <input id="includeTracesInput" type="checkbox" checked>
-                    <span>Include Prompt Traces</span>
-                  </label>
-                  <label class="toggle-row">
-                    <input id="enablePreflightRouterInput" type="checkbox" checked>
-                    <span>Preflight Skip Router <span class="toggle-hint">(saves tokens)</span></span>
-                  </label>
-                  <label class="toggle-row">
-                    <input id="enableHypothesisSamplingInput" type="checkbox">
-                    <span>Hypothesis Sampling <span class="toggle-hint">(N candidates)</span></span>
-                  </label>
-                  <div id="hypothesisSamplingControls" style="display:none; padding-left: 24px; display: flex; flex-direction: column; gap: 6px;">
-                    <label style="font-size: 0.78rem;">
-                      Candidates (N)
-                      <div class="slider-row">
-                        <input id="hypothesisSampleCountInput" type="range" min="2" max="3" step="1" value="2">
-                        <span class="slider-value" id="hypothesisSampleCountDisplay">2</span>
+                <!-- Quick Setup (collapsible) -->
+                <section class="panel-section section--connection">
+                  <details class="quick-start-details" id="quickStartDetails">
+                    <summary>
+                      <h2 style="margin:0">Quick Setup</h2>
+                      <span class="chevron">▶</span>
+                    </summary>
+                    <div class="quick-start-body">
+                      <label>
+                        Prompt
+                        <textarea id="quickStartPromptInput" rows="3" placeholder="Describe the forum you want, e.g. 'Three scientists debating climate policy'…"></textarea>
+                      </label>
+                      <label>
+                        Generation Temperature
+                        <div class="slider-row">
+                          <input id="quickStartTempInput" type="range" min="0" max="2" step="0.05" value="0.8">
+                          <span class="slider-value" id="quickStartTempDisplay">0.8</span>
+                        </div>
+                      </label>
+                      <div class="quick-start-actions">
+                        <button class="soft-button" id="generateQuickStartButton" type="button">Generate</button>
+                        <button class="primary-button" id="applyQuickStartButton" type="button">Apply</button>
                       </div>
-                    </label>
-                    <label class="toggle-row" style="font-size: 0.78rem;">
-                      <input id="hypothesisAutoSelectInput" type="checkbox" checked>
-                      <span>Auto-select best candidate</span>
-                    </label>
-                  </div>
-                  <button class="primary-button" id="manualNudgeButton" type="button" style="width: 100%; margin-top: 10px;">Trigger Steering Nudge</button>
-                </div>
+                      <button class="secondary-button" id="discardQuickStartButton" type="button" style="width:100%">Discard</button>
+                      <div class="quick-start-preview" id="quickStartPreview" aria-live="polite"></div>
+                      <p class="status-line" id="quickStartStatus">No generated setup yet.</p>
+                    </div>
+                  </details>
+                </section>
 
-                <!-- Sprint 7B: Influence Budget -->
-                <div class="influence-budget-card glass-card">
-                  <span class="tension-title">Session Influence Budget</span>
-                  <label class="toggle-row" style="margin-bottom: 8px;">
-                    <input id="showInfluenceBarsInput" type="checkbox">
-                    <span>Show Influence Bars on Messages</span>
+                <!-- Scenario -->
+                <section class="panel-section section--scenario">
+                  <div class="section-title">
+                    <h2>Scenario</h2>
+                    <div class="mode-pills" role="group" aria-label="Forum mode">
+                      <button class="mode-pill" data-mode="problem" type="button">Problem</button>
+                      <button class="mode-pill" data-mode="story" type="button">Story</button>
+                      <button class="mode-pill" data-mode="freeform" type="button">Freeform</button>
+                    </div>
+                  </div>
+                  <select id="modeSelect" aria-label="Forum mode" class="hidden-file">
+                    <option value="problem">Problem</option>
+                    <option value="story">Story</option>
+                    <option value="freeform">Freeform</option>
+                  </select>
+                  <label>
+                    Title
+                    <input id="titleInput" maxlength="80" placeholder="Untitled forum">
                   </label>
-                  <div id="influenceSummaryBar" class="influence-summary-container">
-                    <span class="influence-empty">No turns yet.</span>
+                  <label>
+                    Premise
+                    <textarea id="premiseInput" rows="3" placeholder="What's the situation?"></textarea>
+                  </label>
+                  <label>
+                    Objective
+                    <textarea id="objectiveInput" rows="2" placeholder="What should the group achieve?"></textarea>
+                  </label>
+                </section>
+
+                <!-- Director -->
+                <section class="panel-section section--director">
+                  <div class="section-title">
+                    <h2>Director</h2>
+                    <label class="toggle-row compact">
+                      <input id="dmEnabledInput" type="checkbox">
+                      <span>DM enabled</span>
+                    </label>
+                  </div>
+                  <div class="director-fields">
+                    <div style="display:grid;gap:10px">
+                      <label>
+                        Name
+                        <input id="dmNameInput" maxlength="50" placeholder="Director">
+                      </label>
+                      <label>
+                        Style
+                        <textarea id="dmPersonaInput" rows="2" placeholder="Describe the director's moderation style…"></textarea>
+                      </label>
+                      <label class="toggle-row">
+                        <input id="dmPrivateInput" type="checkbox">
+                        <span>DM sees private thoughts</span>
+                      </label>
+                    </div>
+                  </div>
+                </section>
+
+                <!-- Auto-stop / Goal -->
+                <section class="panel-section section--goal">
+                  <div class="section-title">
+                    <h2>Goal &amp; Auto-stop</h2>
+                    <label class="toggle-row compact" style="margin:0">
+                      <input id="autoStopEnabledInput" type="checkbox">
+                      <span>On</span>
+                    </label>
+                  </div>
+                  <label>
+                    Goal
+                    <textarea id="autoGoalInput" rows="3" placeholder="What should the group finish or decide?"></textarea>
+                  </label>
+                  <div class="goal-options">
+                    <label class="toggle-row">
+                      <input id="goalCheckEnabledInput" type="checkbox">
+                      <span>Judge goal after each round</span>
+                    </label>
+                    <label class="toggle-row">
+                      <input id="stopOnAllSkipInput" type="checkbox">
+                      <span>Stop when everyone skips</span>
+                    </label>
+                    <div class="split-row">
+                      <label class="toggle-row">
+                        <input id="maxRoundsEnabledInput" type="checkbox">
+                        <span>Max rounds</span>
+                      </label>
+                      <label>
+                        Rounds
+                        <input id="maxRoundsInput" type="number" min="1" max="50" step="1">
+                      </label>
+                    </div>
+                  </div>
+                  <div class="goal-actions">
+                    <button class="soft-button" id="checkGoalNowButton" type="button">Check Goal Now</button>
+                  </div>
+                  <p class="status-line" id="autoStopStatus">Auto-stop ready.</p>
+                </section>
+
+                <!-- Session -->
+                <section class="panel-section section--session">
+                  <div class="section-title">
+                    <h2>Session</h2>
+                  </div>
+                  <label style="margin-bottom: 8px; display: block;">
+                    Export Mode
+                    <select id="exportModeSelect" style="width: 100%; margin-top: 4px; padding: 6px; border-radius: 4px; background: var(--bg-card); color: var(--text); border: 1px solid var(--border);">
+                      <option value="debug" selected>Debug Export (All Traces &amp; Metrics)</option>
+                      <option value="shareable">Shareable Export (Redacted Privacy Mode)</option>
+                      <option value="eval">Evaluation Export (Metrics &amp; Structure Only)</option>
+                    </select>
+                  </label>
+                  <div class="session-grid">
+                    <button class="secondary-button" id="savePresetButton" type="button">Save</button>
+                    <button class="secondary-button" id="loadPresetButton" type="button">Load</button>
+                    <button class="secondary-button" id="exportButton" type="button">Export</button>
+                    <button class="danger-button" id="resetButton" type="button">Reset</button>
+                  </div>
+                  <label class="toggle-row">
+                    <input id="showThoughtsInput" type="checkbox">
+                    <span>Show private thoughts in transcript</span>
+                  </label>
+                  <label class="toggle-row">
+                    <input id="toolsEnabledInput" type="checkbox">
+                    <span>Enable web tools (search &amp; read pages)</span>
+                  </label>
+                  <input class="hidden-file" id="presetFileInput" type="file" accept="application/json">
+                </section>
+
+              </div><!-- /panel-stack -->
+
+              <!-- Actors -->
+              <section class="panel-section section--actors actors-section">
+                <div class="section-title">
+                  <h2>Actors</h2>
+                  <div style="display:flex;gap:8px">
+                    <button class="soft-button" id="addActorButton" type="button">+ Add</button>
+                    <button class="soft-button" id="addResearcherButton" type="button" title="Add Specialized Research Agent">+ Add Researcher</button>
                   </div>
                 </div>
-              </div>
-            </div>
+                <div class="actor-list" id="actorList"></div>
+              </section>
+            </div><!-- /setup-grid -->
+          </div><!-- /sidebar-panel setup -->
 
-            <!-- Document panel -->
-            <div class="sidebar-panel" data-sidebar-panel="document" style="display:none">
-              <div class="doc-header">
-                <label class="toggle-row compact">
-                  <input id="documentEnabledInput" type="checkbox">
-                  <span>Active</span>
-                </label>
-                <div class="doc-view-toggle">
-                  <button class="doc-view-btn active" data-doc-view="preview" type="button">Preview</button>
-                  <button class="doc-view-btn" data-doc-view="edit" type="button">Edit</button>
-                </div>
-              </div>
-              <div class="document-panel-fields">
-                <label style="margin-bottom: 4px;">
-                  Title
-                  <input id="documentTitleInput" placeholder="e.g. Design Brief, Study Guide">
-                </label>
-
-                <div class="doc-controls-row" style="margin-bottom: 8px;">
+          <!-- ── Memory panel ─────────────────────────────────────────── -->
+          <div class="sidebar-panel" data-sidebar-panel="memory" style="display:none">
+            <div class="memory-sidebar-grid">
+              <section class="panel-section memory-section">
+                <div class="section-title">
+                  <h2>Memory</h2>
                   <label class="toggle-row compact">
-                    <input id="documentShowAttributionInput" type="checkbox">
-                    <span>Show Attribution</span>
+                    <input id="memoryEnabledInput" type="checkbox">
+                    <span>On</span>
                   </label>
                 </div>
-
-                <!-- Confluence River Container -->
-                <div id="documentConfluenceContainer" class="document-confluence-container" style="display:none; margin-bottom: 8px;">
-                  <span class="confluence-title">Document Confluence River</span>
-                  <canvas id="documentConfluenceCanvas"></canvas>
+                <label>
+                  Pinned Facts
+                  <textarea id="pinnedFactsInput" rows="4"></textarea>
+                </label>
+                <label>
+                  Shared Summary
+                  <textarea id="sharedSummaryInput" rows="5"></textarea>
+                </label>
+                <label>
+                  Open Questions
+                  <textarea id="openQuestionsInput" rows="3"></textarea>
+                </label>
+                <label>
+                  DM State
+                  <textarea id="dmStateInput" rows="3"></textarea>
+                </label>
+                <div class="memory-actions">
+                  <button class="secondary-button" id="summarizeNowButton" type="button">Summarize Now</button>
+                  <button class="secondary-button" id="rebuildMemoryButton" type="button">Rebuild from History</button>
+                  <button class="secondary-button" id="approveFactsButton" type="button">Save Facts</button>
+                  <button class="soft-button" id="compactFactsButton" type="button" title="Merge and deduplicate pinned facts when they get too long">Compact Facts</button>
+                  <button class="danger-button" id="clearArchiveButton" type="button">Clear Archive</button>
                 </div>
-                
-                <!-- Attribution Breakdown Bar -->
-                <div id="documentAttributionContainer" class="document-attribution-bar" style="display:none"></div>
+                <div class="pending-facts" id="pendingFactsList"></div>
 
-                <!-- Document History Scrubber (Temporal Anchoring) -->
-                <div id="documentHistoryContainer" class="document-history-scrubber" style="display:none">
-                  <div class="slider-row history-row">
-                    <span class="scrub-label">History Scrubber:</span>
-                    <input id="documentHistorySlider" type="range" min="0" max="0" step="1" value="0">
-                    <button class="soft-button compact-button" id="documentRestoreButton" type="button" style="display:none">Restore</button>
+                <details class="notes-block memory-deltas-section" id="recentDeltasSection" style="display:none">
+                  <summary>Recent updates <span class="delta-count" id="deltaCount"></span></summary>
+                  <div class="deltas-list" id="recentDeltasList"></div>
+                </details>
+
+                <div class="memory-status-row">
+                  <p class="status-line" id="memoryStatus">Memory starting…</p>
+                  <span class="cycle-badge" id="cycleBadge" style="display:none"></span>
+                </div>
+
+                <details class="notes-block chunk-browser-section" id="chunkBrowserSection">
+                  <summary>Archive browser <button class="soft-button" id="browseChunksButton" type="button">Load</button></summary>
+                  <div class="chunk-browser" id="chunkBrowserList">
+                    <p class="pending-empty">Click Load to browse archived memory chunks.</p>
                   </div>
-                  <div id="documentHistoryStatus" class="history-status-line"></div>
-                </div>
+                </details>
 
-                <!-- Edit view -->
-                <div class="doc-edit-view" style="display:none">
-                  <textarea id="documentContent" rows="20" placeholder="Start typing or let agents draft..."></textarea>
+                <details class="notes-block anchors-section" id="anchorsSection" open>
+                  <summary>Anchored Agreements <span class="anchor-badge" id="anchorsCount"></span></summary>
+                  <div class="anchors-list" id="anchorsList">
+                    <p class="anchors-empty">No anchors yet. Click ⚓ on any message to anchor a settled claim.</p>
+                  </div>
+                </details>
+              </section>
+
+              <section class="panel-section outcomes-section">
+                <div class="section-title">
+                  <h2>Outcomes</h2>
+                  <button class="soft-button" id="extractOutcomesButton" type="button">Extract</button>
                 </div>
-                <!-- Preview view -->
-                <div class="doc-preview-view">
-                  <div id="documentPreview" class="document-rendered"></div>
+                <label>
+                  Final Recommendation
+                  <textarea id="outcomeRecommendationInput" rows="3"></textarea>
+                </label>
+                <label>
+                  Decisions
+                  <textarea id="outcomeDecisionsInput" rows="3"></textarea>
+                </label>
+                <label>
+                  Rationale
+                  <textarea id="outcomeRationaleInput" rows="3"></textarea>
+                </label>
+                <label>
+                  Rejected Options
+                  <textarea id="outcomeRejectedInput" rows="2"></textarea>
+                </label>
+                <label>
+                  Action Items
+                  <textarea id="outcomeActionsInput" rows="3"></textarea>
+                </label>
+                <label>
+                  Risks
+                  <textarea id="outcomeRisksInput" rows="2"></textarea>
+                </label>
+                <p class="status-line" id="outcomeStatus">No outcomes extracted yet.</p>
+              </section>
+            </div>
+          </div><!-- /sidebar-panel memory -->
+
+          <!-- ── Telemetry panel ──────────────────────────────────────── -->
+          <div class="sidebar-panel" data-sidebar-panel="telemetry" style="display:none">
+            <div class="telemetry-panel-fields">
+              <div class="telemetry-dial-container glass-card">
+                <svg class="telemetry-dial-svg" viewBox="0 0 100 100">
+                  <circle class="telemetry-dial-bg" cx="50" cy="50" r="40"></circle>
+                  <circle class="telemetry-dial-fill" id="telemetryDialFill" cx="50" cy="50" r="40" stroke-dasharray="251.2" stroke-dashoffset="251.2"></circle>
+                </svg>
+                <div class="telemetry-dial-text">
+                  <span id="telemetryAlignmentScore">100%</span>
+                  <span class="telemetry-dial-label">Alignment</span>
                 </div>
-                <div class="document-meta">
-                  <span id="documentVersionCount" class="muted-text">0 versions</span>
-                  <div class="document-meta-actions">
-                    <button class="quiet-button" id="documentCopyButton" type="button" title="Copy document to clipboard">📋 Copy</button>
-                    <button class="quiet-button" id="documentClearButton" type="button" title="Clear document content">🗑 Clear</button>
+              </div>
+
+              <div class="session-health-card glass-card">
+                <span class="tension-title">Session Health</span>
+                <div class="metrics-grid">
+                  <div class="metric-tile" id="metricTileAlignment" data-level="ok">
+                    <span class="metric-tile-icon">🎯</span>
+                    <span class="metric-tile-value" id="metricAlignmentVal">—</span>
+                    <span class="metric-tile-label">Alignment</span>
+                  </div>
+                  <div class="metric-tile" id="metricTileSkipRate" data-level="ok">
+                    <span class="metric-tile-icon">⏭</span>
+                    <span class="metric-tile-value" id="metricSkipRateVal">—</span>
+                    <span class="metric-tile-label">Skip Rate</span>
+                  </div>
+                  <div class="metric-tile" id="metricTileOutcomes" data-level="ok">
+                    <span class="metric-tile-icon">📊</span>
+                    <span class="metric-tile-value" id="metricOutcomesVal">—</span>
+                    <span class="metric-tile-label">Extract Rate</span>
+                  </div>
+                  <div class="metric-tile" id="metricTileMemDup" data-level="ok">
+                    <span class="metric-tile-icon">🔁</span>
+                    <span class="metric-tile-value" id="metricMemDupVal">—</span>
+                    <span class="metric-tile-label">Mem Dup</span>
                   </div>
                 </div>
               </div>
-            </div>
-          </aside>
-        </div>
-      </section>
 
-      <!-- ═══════════════════════════════════════════════════════════════
-           MEMORY TAB
-      ════════════════════════════════════════════════════════════════ -->
-      <section class="tab-panel memory-tab" id="memoryTab" role="tabpanel" aria-labelledby="memoryTabButton" data-tab-panel="memory">
-        <div class="memory-tab-grid">
-          <section class="panel-section memory-section">
-            <div class="section-title">
-              <h2>Memory</h2>
+              <div class="tension-grid-container glass-card">
+                <span class="tension-title">Canvas Tension Field Grid</span>
+                <canvas id="tensionGridCanvas"></canvas>
+              </div>
+
+              <div class="telemetry-controls glass-card">
+                <label>
+                  Gravity Sensitivity
+                  <div class="slider-row">
+                    <input id="gravitySensitivityInput" type="range" min="0" max="100" step="5" value="50">
+                    <span class="slider-value" id="gravitySensitivityDisplay">50%</span>
+                  </div>
+                </label>
+                <label class="toggle-row">
+                  <input id="includeTracesInput" type="checkbox" checked>
+                  <span>Include Prompt Traces</span>
+                </label>
+                <label class="toggle-row">
+                  <input id="enablePreflightRouterInput" type="checkbox" checked>
+                  <span>Preflight Skip Router <span class="toggle-hint">(saves tokens)</span></span>
+                </label>
+                <label class="toggle-row">
+                  <input id="enableHypothesisSamplingInput" type="checkbox">
+                  <span>Hypothesis Sampling <span class="toggle-hint">(N candidates)</span></span>
+                </label>
+                <div id="hypothesisSamplingControls" style="display:none; padding-left: 24px; display: flex; flex-direction: column; gap: 6px;">
+                  <label style="font-size: 0.78rem;">
+                    Candidates (N)
+                    <div class="slider-row">
+                      <input id="hypothesisSampleCountInput" type="range" min="2" max="3" step="1" value="2">
+                      <span class="slider-value" id="hypothesisSampleCountDisplay">2</span>
+                    </div>
+                  </label>
+                  <label class="toggle-row" style="font-size: 0.78rem;">
+                    <input id="hypothesisAutoSelectInput" type="checkbox" checked>
+                    <span>Auto-select best candidate</span>
+                  </label>
+                </div>
+                <button class="primary-button" id="manualNudgeButton" type="button" style="width: 100%; margin-top: 10px;">Trigger Steering Nudge</button>
+              </div>
+
+              <div class="influence-budget-card glass-card">
+                <span class="tension-title">Session Influence Budget</span>
+                <label class="toggle-row" style="margin-bottom: 8px;">
+                  <input id="showInfluenceBarsInput" type="checkbox">
+                  <span>Show Influence Bars on Messages</span>
+                </label>
+                <div id="influenceSummaryBar" class="influence-summary-container">
+                  <span class="influence-empty">No turns yet.</span>
+                </div>
+              </div>
+            </div>
+          </div><!-- /sidebar-panel telemetry -->
+
+          <!-- ── Document panel ───────────────────────────────────────── -->
+          <div class="sidebar-panel" data-sidebar-panel="document" style="display:none">
+            <div class="doc-header">
               <label class="toggle-row compact">
-                <input id="memoryEnabledInput" type="checkbox">
-                <span>On</span>
+                <input id="documentEnabledInput" type="checkbox">
+                <span>Active</span>
               </label>
-            </div>
-            <label>
-              Pinned Facts
-              <textarea id="pinnedFactsInput" rows="4"></textarea>
-            </label>
-            <label>
-              Shared Summary
-              <textarea id="sharedSummaryInput" rows="5"></textarea>
-            </label>
-            <label>
-              Open Questions
-              <textarea id="openQuestionsInput" rows="3"></textarea>
-            </label>
-            <label>
-              DM State
-              <textarea id="dmStateInput" rows="3"></textarea>
-            </label>
-            <div class="memory-actions">
-              <button class="secondary-button" id="summarizeNowButton" type="button">Summarize Now</button>
-              <button class="secondary-button" id="rebuildMemoryButton" type="button">Rebuild from History</button>
-              <button class="secondary-button" id="approveFactsButton" type="button">Save Facts</button>
-              <button class="soft-button" id="compactFactsButton" type="button" title="Merge and deduplicate pinned facts when they get too long">Compact Facts</button>
-              <button class="danger-button" id="clearArchiveButton" type="button">Clear Archive</button>
-            </div>
-            <div class="pending-facts" id="pendingFactsList"></div>
-
-            <!-- Recent deltas: bullet updates captured since the last full summary rewrite -->
-            <details class="notes-block memory-deltas-section" id="recentDeltasSection" style="display:none">
-              <summary>Recent updates <span class="delta-count" id="deltaCount"></span></summary>
-              <div class="deltas-list" id="recentDeltasList"></div>
-            </details>
-
-            <!-- Status row with cycle progress indicator -->
-            <div class="memory-status-row">
-              <p class="status-line" id="memoryStatus">Memory starting…</p>
-              <span class="cycle-badge" id="cycleBadge" style="display:none"></span>
-            </div>
-
-            <!-- Archive chunk browser -->
-            <details class="notes-block chunk-browser-section" id="chunkBrowserSection">
-              <summary>Archive browser <button class="soft-button" id="browseChunksButton" type="button">Load</button></summary>
-              <div class="chunk-browser" id="chunkBrowserList">
-                <p class="pending-empty">Click Load to browse archived memory chunks.</p>
+              <div class="doc-view-toggle">
+                <button class="doc-view-btn active" data-doc-view="preview" type="button">Preview</button>
+                <button class="doc-view-btn" data-doc-view="edit" type="button">Edit</button>
               </div>
-            </details>
-
-            <!-- Sprint 7A: Conceptual Anchors -->
-            <details class="notes-block anchors-section" id="anchorsSection" open>
-              <summary>Anchored Agreements <span class="anchor-badge" id="anchorsCount"></span></summary>
-              <div class="anchors-list" id="anchorsList">
-                <p class="anchors-empty">No anchors yet. Click ⚓ on any message to anchor a settled claim.</p>
-              </div>
-            </details>
-          </section>
-
-          <section class="panel-section outcomes-section">
-            <div class="section-title">
-              <h2>Outcomes</h2>
-              <button class="soft-button" id="extractOutcomesButton" type="button">Extract</button>
             </div>
-            <label>
-              Final Recommendation
-              <textarea id="outcomeRecommendationInput" rows="3"></textarea>
-            </label>
-            <label>
-              Decisions
-              <textarea id="outcomeDecisionsInput" rows="3"></textarea>
-            </label>
-            <label>
-              Rationale
-              <textarea id="outcomeRationaleInput" rows="3"></textarea>
-            </label>
-            <label>
-              Rejected Options
-              <textarea id="outcomeRejectedInput" rows="2"></textarea>
-            </label>
-            <label>
-              Action Items
-              <textarea id="outcomeActionsInput" rows="3"></textarea>
-            </label>
-            <label>
-              Risks
-              <textarea id="outcomeRisksInput" rows="2"></textarea>
-            </label>
-            <p class="status-line" id="outcomeStatus">No outcomes extracted yet.</p>
-          </section>
-        </div>
-      </section>
+            <div class="document-panel-fields">
+              <label style="margin-bottom: 4px;">
+                Title
+                <input id="documentTitleInput" placeholder="e.g. Design Brief, Study Guide">
+              </label>
+
+              <div class="doc-controls-row" style="margin-bottom: 8px;">
+                <label class="toggle-row compact">
+                  <input id="documentShowAttributionInput" type="checkbox">
+                  <span>Show Attribution</span>
+                </label>
+              </div>
+
+              <div id="documentConfluenceContainer" class="document-confluence-container" style="display:none; margin-bottom: 8px;">
+                <span class="confluence-title">Document Confluence River</span>
+                <canvas id="documentConfluenceCanvas"></canvas>
+              </div>
+
+              <div id="documentAttributionContainer" class="document-attribution-bar" style="display:none"></div>
+
+              <div id="documentHistoryContainer" class="document-history-scrubber" style="display:none">
+                <div class="slider-row history-row">
+                  <span class="scrub-label">History Scrubber:</span>
+                  <input id="documentHistorySlider" type="range" min="0" max="0" step="1" value="0">
+                  <button class="soft-button compact-button" id="documentRestoreButton" type="button" style="display:none">Restore</button>
+                </div>
+                <div id="documentHistoryStatus" class="history-status-line"></div>
+              </div>
+
+              <div class="doc-edit-view" style="display:none">
+                <textarea id="documentContent" rows="20" placeholder="Start typing or let agents draft..."></textarea>
+              </div>
+              <div class="doc-preview-view">
+                <div id="documentPreview" class="document-rendered"></div>
+              </div>
+              <div class="document-meta">
+                <span id="documentVersionCount" class="muted-text">0 versions</span>
+                <div class="document-meta-actions">
+                  <button class="quiet-button" id="documentCopyButton" type="button" title="Copy document to clipboard">📋 Copy</button>
+                  <button class="quiet-button" id="documentClearButton" type="button" title="Clear document content">🗑 Clear</button>
+                </div>
+              </div>
+            </div>
+          </div><!-- /sidebar-panel document -->
+
+        </aside>
+      </div><!-- /conversation-layout -->
 
     </div><!-- /app-shell -->
 
-    <!-- Mobile bottom nav -->
-    <nav class="mobile-nav" aria-label="Section navigation">
-      <div class="mobile-nav-inner">
-        <button class="mobile-nav-btn" data-tab="setup" type="button">
-          <span class="nav-icon" aria-hidden="true">⚙︎</span>
-          <span>Setup</span>
-        </button>
-        <button class="mobile-nav-btn" data-tab="conversation" type="button">
-          <span class="nav-icon" aria-hidden="true">💬</span>
-          <span>Talk</span>
-        </button>
-        <button class="mobile-nav-btn" data-tab="memory" type="button">
-          <span class="nav-icon" aria-hidden="true">🧠</span>
-          <span>Memory</span>
-        </button>
-      </div>
-    </nav>
+    <!-- Hidden placeholder so renderConversationSummary() doesn't null-error -->
+    <div id="conversationSummary" hidden aria-hidden="true"></div>
 
     <!-- Message template -->
     <template id="messageTemplate">

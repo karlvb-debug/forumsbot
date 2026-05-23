@@ -97,9 +97,9 @@ button:disabled, textarea:disabled, input:disabled, select:disabled {
    Header
    ============================================================ */
 .app-header {
-  display: grid;
-  grid-template-columns: minmax(160px, auto) minmax(300px, 1fr) auto;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 16px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -154,47 +154,15 @@ button:disabled, textarea:disabled, input:disabled, select:disabled {
   text-transform: uppercase;
 }
 
-/* ============================================================
-   Tabs
-   ============================================================ */
-.tab-list {
+/* ── Sidebar setup/memory single-column overrides ─────────── */
+.sidebar-setup-grid {
+  grid-template-columns: 1fr;
+}
+.memory-sidebar-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel-strong);
-}
-.tab-button {
-  min-height: 36px;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--muted);
-  font-weight: 700;
-  font-size: 0.85rem;
-  transition: background 0.15s, color 0.15s;
-}
-.tab-button.active,
-.tab-button[aria-selected='true'] {
-  background: var(--accent);
-  color: white;
-}
-:root[data-theme='light'] .tab-button.active { color: white; }
-.tab-panel[hidden] { display: none; }
-.tab-panel {
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-}
-.setup-tab, .memory-tab {
-  overflow-y: auto;
-  padding-bottom: 24px;
-}
-.conversation-tab {
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
+  gap: 16px;
+  grid-template-columns: 1fr;
+  align-items: start;
 }
 
 /* ============================================================
@@ -1315,34 +1283,18 @@ summary {
    Responsive — Tablet (≤ 1120px)
    ============================================================ */
 @media (max-width: 1120px) {
-  .app-header { grid-template-columns: 1fr auto; }
-  .tab-list { grid-column: 1 / -1; order: 3; }
-  .setup-grid { grid-template-columns: 1fr; }
-  .summary-collapse { display: block; }
-  .summary-collapse:not([open]) #conversationSummary { display: none; }
-  .summary-collapse summary { cursor: pointer; }
-  .collapse-chevron {
-    display: inline-block; font-size: 0.8rem; color: var(--muted);
-    transition: transform 0.2s;
-  }
-  .summary-collapse:not([open]) .collapse-chevron { transform: rotate(-90deg); }
-  .actor-list { grid-template-columns: repeat(2, minmax(260px, 1fr)); }
-  .memory-tab-grid { grid-template-columns: 1fr; }
+  .actor-list { grid-template-columns: repeat(2, minmax(220px, 1fr)); }
 }
 
 /* ============================================================
    Responsive — Mobile (≤ 640px)
    ============================================================ */
 @media (max-width: 640px) {
-  .app-shell { padding: 8px 8px calc(8px + 64px); }
-  .app-header { display: none; }
-  .mobile-nav { display: block; }
-  .setup-grid { grid-template-columns: 1fr; }
+  .app-shell { padding: 8px; }
   .actor-list { grid-template-columns: 1fr; }
   .stage-header, .turn-toolbar, .composer-actions { flex-wrap: wrap; }
   .turn-toolbar button, .composer-actions button { flex: 1 1 90px; }
   .quick-start-actions, .memory-actions, .session-grid { grid-template-columns: 1fr; }
-  .memory-tab-grid { grid-template-columns: 1fr; }
 }
 
 /* ============================================================

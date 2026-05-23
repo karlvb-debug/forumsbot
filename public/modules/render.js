@@ -1,4 +1,4 @@
-import { VALID_TABS, defaultState, DELTA_REWRITE_EVERY } from './constants.js';
+import { defaultState, DELTA_REWRITE_EVERY } from './constants.js';
 import { state, saveState, logWarning } from './state.js';
 import { calculateInfluenceBudget } from './telemetry.js';
 import { storageAvailable, storageWarning } from './db.js';
@@ -28,10 +28,6 @@ function safeString(value) {
 }
 
 export const els = {
-  tabButtons: $$("[data-tab]").filter(el => el.closest(".mobile-nav") === null),
-  mobileNavBtns: $$("[data-tab]").filter(el => el.closest(".mobile-nav") !== null),
-  tabPanels: $$("[data-tab-panel]"),
-  tabJumps: $$("[data-tab-jump]"),
   modePills: $$("[data-mode]"),
   temperatureDisplay: $("#temperatureDisplay"),
   baseUrl: $("#baseUrlInput"),
@@ -255,7 +251,6 @@ export function renderTurboState() {
 }
 
 export function render() {
-  renderTabs();
   renderStageHeader();
   renderActors();
   renderConversationSummary();
@@ -463,40 +458,6 @@ export function renderAutoStop() {
   els.autoStopStatus.textContent = state.autoStop.status || "Auto-stop ready.";
 }
 
-export function switchTab(tabName) {
-  if (!VALID_TABS.includes(tabName)) return;
-
-  const update = () => {
-    state.ui.activeTab = tabName;
-    saveState();
-    renderTabs();
-    renderMemory();
-    renderAutoStop();
-  };
-
-  if (document.startViewTransition) {
-    document.startViewTransition(update);
-  } else {
-    update();
-  }
-}
-
-export function renderTabs() {
-  const activeTab = VALID_TABS.includes(state.ui.activeTab) ? state.ui.activeTab : "setup";
-  els.tabButtons.forEach((button) => {
-    const isActive = button.dataset.tab === activeTab;
-    button.classList.toggle("active", isActive);
-    button.setAttribute("aria-selected", String(isActive));
-    button.tabIndex = 0;
-  });
-  els.mobileNavBtns.forEach((button) => {
-    button.classList.toggle("active", button.dataset.tab === activeTab);
-  });
-  els.tabPanels.forEach((panel) => {
-    const isActive = panel.dataset.tabPanel === activeTab;
-    panel.hidden = !isActive;
-  });
-}
 
 export function renderModePills() {
   const mode = state.scenario.mode || "problem";
@@ -517,6 +478,7 @@ export function renderTemperatureDisplay() {
 }
 
 export function renderConversationSummary() {
+  if (!els.conversationSummary) return;
   els.conversationSummary.innerHTML = "";
   const scenario = document.createElement("div");
   scenario.className = "summary-block";

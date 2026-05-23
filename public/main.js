@@ -16,7 +16,6 @@ import {
   renderTelemetry,
   switchSidebarTab,
   switchDocView,
-  switchTab,
   isInitialized,
   setInitialized,
   validateEmbeddingModel,
@@ -58,6 +57,7 @@ import {
   discardQuickStartConfig
 } from './modules/session.js';
 import { initializeMemoryStorage, getAllChunks } from './modules/db.js';
+import { startTensionGridAnimation, stopTensionGridAnimation } from './modules/telemetry.js';
 
 // Wire the els reference into api.js so setStatus, loadModels, etc. can access DOM elements
 initApi(els);
@@ -313,16 +313,6 @@ function wireEvents() {
     });
   }
 
-  els.tabButtons.forEach((button) => {
-    button.addEventListener("click", () => switchTab(button.dataset.tab));
-  });
-  els.mobileNavBtns.forEach((button) => {
-    button.addEventListener("click", () => switchTab(button.dataset.tab));
-  });
-  els.tabJumps.forEach((button) => {
-    button.addEventListener("click", () => switchTab(button.dataset.tabJump));
-  });
-
   // Mode pill buttons
   els.modePills.forEach((pill) => {
     pill.addEventListener("click", () => {
@@ -367,9 +357,13 @@ function wireEvents() {
     if (!mod) return;
 
     // Cmd/Ctrl+Enter — send message or trigger next turn
+    // Guard: don't fire when typing in a sidebar form field
     if (e.key === "Enter" && !e.shiftKey) {
-      const activePanel = state.ui.activeTab;
-      if (activePanel === "conversation") {
+      const focused = document.activeElement;
+      const inSidebarInput = focused &&
+        (focused.tagName === "TEXTAREA" || focused.tagName === "INPUT") &&
+        focused !== els.userInput;
+      if (!inSidebarInput) {
         const content = els.userInput.value.trim();
         if (content) {
           e.preventDefault();
@@ -563,11 +557,6 @@ async function startApp() {
   syncFormFromState();
   setInitialized(true);
 
-  // On narrow screens, start with the summary collapsed
-  if (window.matchMedia("(max-width: 1120px)").matches) {
-    const collapse = document.querySelector(".summary-collapse");
-    if (collapse) collapse.removeAttribute("open");
-  }
   // Update token gauge whenever a chat response returns usage data or context length is fetched
   document.addEventListener("tokenUsageUpdated", renderTokenGauge);
   try {
