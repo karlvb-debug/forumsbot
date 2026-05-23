@@ -19,7 +19,8 @@ import {
   switchTab,
   isInitialized,
   setInitialized,
-  validateEmbeddingModel
+  validateEmbeddingModel,
+  renderTurboState
 } from './modules/render.js';
 import {
   loadModels,
@@ -443,6 +444,14 @@ function wireEvents() {
     document.documentElement.dataset.theme = state.settings.theme;
     saveState();
   });
+
+  if (els.turboButton) {
+    els.turboButton.addEventListener("click", () => {
+      state.settings.turboMode = !state.settings.turboMode;
+      saveState();
+      renderTurboState();
+    });
+  }
 
   // ── Telemetry controls ────────────────────────────────────────
   if (els.gravitySensitivityInput) {

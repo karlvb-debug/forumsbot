@@ -1,7 +1,7 @@
 import { RECENT_MESSAGE_LIMIT, PROMPT_MESSAGE_LIMIT, WORD_LIMITS, ANCHOR_WORD_CAP } from './constants.js';
 import { state, saveState, logTransition, logWarning } from './state.js';
 import { chatCompletion, chatJson, setStatus, setCurrentSpeaker, getLastToolCalls } from './api.js';
-import { render, renderTranscript, renderAutoStop, renderDocument, readSettingsFromForm, readAutoStopFromForm, setBusy, getIsGenerating, els, labelForMode } from './render.js';
+import { render, renderTranscript, renderAutoStop, renderDocument, readSettingsFromForm, readAutoStopFromForm, setBusy, getIsGenerating, els, labelForMode, showStreamingBubble, updateStreamingBubble, removeStreamingBubble } from './render.js';
 import { putMessage, getAllChunks, getActorMemory, putActorMemory } from './db.js';
 import { summarizeMemory, recallRelevantChunks, formatCurrentOutcomes, parseOutcomeJson, extractOutcomes } from './memory.js';
 import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, checkDrift } from './utils.js';
@@ -122,9 +122,18 @@ export async function runNextTurn(options = {}) {
         }
       }
 
+      // Show a streaming bubble so the user sees activity immediately.
+      // updateStreamingBubble() fills in message text as tokens arrive.
+      const streamingColor = participant.kind === "dm" ? "var(--gold)" : (participant.data.color || "var(--accent)");
+      showStreamingBubble(participant.data.name, streamingColor, participant.kind === "dm" ? "dm" : "actor");
+      const onStream = (messageText) => updateStreamingBubble(messageText);
+
       const result = participant.kind === "dm"
-        ? await askDirector(participant.data, abortController.signal)
-        : await askActor(participant.data, abortController.signal);
+        ? await askDirector(participant.data, abortController.signal, onStream)
+        : await askActor(participant.data, abortController.signal, onStream);
+
+      // Remove the streaming placeholder; renderTranscript() from addMessage will paint the real card.
+      removeStreamingBubble();
       const latencyMs = Date.now() - startTime;
 
       result.toolCalls = getLastToolCalls();
@@ -237,14 +246,14 @@ export async function runNextTurn(options = {}) {
       }
 
       // Sprint 6: Distill cross-session actor memory (fire-and-forget)
-      if (participant.kind === 'actor' && result.thought && state.settings.enableCrossSessionMemory !== false) {
+      if (participant.kind === 'actor' && result.thought && state.settings.enableCrossSessionMemory !== false && !state.settings.turboMode) {
         distillActorMemory(participant.data.name, result.thought).catch(err =>
           console.warn('[cross-session-memory] distill failed:', err.message)
         );
       }
 
-      await updateSemanticAlignment();
-      if (state.memory.enabled && options.summarizeCycle !== false) {
+      if (!state.settings.turboMode) await updateSemanticAlignment();
+      if (state.memory.enabled && options.summarizeCycle !== false && !state.settings.turboMode) {
         state.memory.turnsSinceSummary += 1;
         const cycleSize = participantCycleCount();
         if (state.memory.turnsSinceSummary >= cycleSize) {
@@ -258,6 +267,7 @@ export async function runNextTurn(options = {}) {
     } catch (error) {
       lastError = error;
       setCurrentSpeaker("");
+      removeStreamingBubble();
       abortController = null;
 
       if (error.name === "AbortError") {
@@ -309,7 +319,7 @@ export async function runRound(options = {}) {
     completedTurns += 1;
   }
   const roundMessages = state.messages.slice(startIndex);
-  if (roundMessages.length && state.memory.enabled) {
+  if (roundMessages.length && state.memory.enabled && !state.settings.turboMode) {
     state.memory.turnsSinceSummary = 0;
     summarizeMemory("round", roundMessages);
   }
@@ -623,8 +633,8 @@ export async function distillActorMemory(actorName, thought) {
   }
 }
 
-export async function askActor(actor, signal) {
-  const showThoughts = state.settings.showThoughts !== false;
+export async function askActor(actor, signal, onStream = null) {
+  const showThoughts = state.settings.showThoughts !== false && !state.settings.turboMode;
 
   if (actor.isResearcher) {
     const system = [
@@ -756,13 +766,13 @@ export async function askActor(actor, signal) {
     system,
     persona: `Name: ${actor.name}\nRole: ${actor.role || ""}\nPersona: ${actor.persona || ""}\nVoice: ${actor.voice || ""}`
   };
-  const result = await chatJson(system, user, actor.temperature ?? state.settings.temperature, signal);
+  const result = await chatJson(system, user, actor.temperature ?? state.settings.temperature, signal, onStream);
   result._promptParts = promptParts;
   return result;
 }
 
-export async function askDirector(dm, signal) {
-  const showThoughts = state.settings.showThoughts !== false;
+export async function askDirector(dm, signal, onStream = null) {
+  const showThoughts = state.settings.showThoughts !== false && !state.settings.turboMode;
   const privateThoughts = state.dm.seesPrivateThoughts ? privateThoughtDigest() : "";
   const isStoryMode = state.scenario.mode === "story" || state.scenario.mode === "freeform";
   const modeInstruction = isStoryMode
@@ -828,7 +838,7 @@ export async function askDirector(dm, signal) {
     system,
     persona: `Name: ${dm.name}\nPersona: ${dm.persona || ""}`
   };
-  const result = await chatJson(system, user, state.settings.temperature, signal);
+  const result = await chatJson(system, user, state.settings.temperature, signal, onStream);
   result._promptParts = promptParts;
   return result;
 }

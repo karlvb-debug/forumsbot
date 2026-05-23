@@ -80,7 +80,11 @@ export const defaultState = {
     // Sprint 6: Cross-Session Actor Memory
     enableCrossSessionMemory: true,
     // Sprint 7: Influence Budget
-    showInfluenceBars: false
+    showInfluenceBars: false,
+    // Streaming: show tokens as they arrive for actor/DM turns
+    streamingEnabled: true,
+    // Turbo Mode: skip memory cycles, thoughts, alignment, and cross-session memory
+    turboMode: false
   },
   ui: {
     activeTab: "",

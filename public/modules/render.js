@@ -171,8 +171,60 @@ export const els = {
   // Export mode
   exportModeSelect: $("#exportModeSelect"),
   // Sprint 7: Influence bars toggle
-  showInfluenceBarsInput: $("#showInfluenceBarsInput")
+  showInfluenceBarsInput: $("#showInfluenceBarsInput"),
+  // Turbo mode
+  turboButton: $("#turboModeButton"),
+  turboBanner: $("#turboBanner")
 };
+
+// ── Streaming bubble ──────────────────────────────────────────────────────────
+// A live placeholder card that shows tokens as they arrive, removed once
+// the real message card is painted by renderTranscript().
+let _streamingBubble = null;
+let _streamingMessageEl = null;
+
+export function showStreamingBubble(speaker, color, type = "actor") {
+  removeStreamingBubble();
+  const wasAtBottom = els.transcript.scrollHeight - els.transcript.scrollTop - els.transcript.clientHeight < 80;
+  const template = document.getElementById("messageTemplate");
+  if (!template) return;
+  const node = template.content.firstElementChild.cloneNode(true);
+  node.classList.add(type || "actor");
+  node.classList.add("streaming");
+  node.dataset.streaming = "true";
+  if (type !== "user" && type !== "skip") node.style.borderLeftColor = color;
+  const dotEl = node.querySelector(".speaker-dot");
+  if (dotEl) dotEl.style.background = color;
+  const nameEl = node.querySelector(".message-meta strong");
+  if (nameEl) nameEl.textContent = speaker;
+  const timeEl = node.querySelector(".message-time");
+  if (timeEl) timeEl.textContent = "generating…";
+  const contentEl = node.querySelector(".message-content");
+  if (contentEl) contentEl.innerHTML = '<span class="streaming-cursor">▌</span>';
+  [".thought-block", ".tool-calls", ".message-feedback", ".doc-edit-badge"].forEach((sel) => {
+    const el = node.querySelector(sel);
+    if (el) el.style.display = "none";
+  });
+  els.transcript.append(node);
+  _streamingBubble = node;
+  _streamingMessageEl = contentEl ?? null;
+  if (wasAtBottom) els.transcript.scrollTop = els.transcript.scrollHeight;
+}
+
+export function updateStreamingBubble(text) {
+  if (!_streamingMessageEl || !text) return;
+  const wasAtBottom = els.transcript.scrollHeight - els.transcript.scrollTop - els.transcript.clientHeight < 120;
+  _streamingMessageEl.innerHTML = escapeHtml(text) + '<span class="streaming-cursor">▌</span>';
+  if (wasAtBottom) els.transcript.scrollTop = els.transcript.scrollHeight;
+}
+
+export function removeStreamingBubble() {
+  if (_streamingBubble) {
+    _streamingBubble.remove();
+    _streamingBubble = null;
+    _streamingMessageEl = null;
+  }
+}
 
 export let isInitialized = false;
 export function setInitialized(v) { isInitialized = v; }
@@ -191,6 +243,17 @@ export function setBusy(value) {
   els.userInput.disabled = value;
 }
 
+export function renderTurboState() {
+  const on = !!state.settings?.turboMode;
+  if (els.turboButton) {
+    els.turboButton.classList.toggle("turbo-active", on);
+    els.turboButton.title = on
+      ? "Turbo Mode ON — click to disable (memory, thoughts, alignment suspended)"
+      : "Turbo Mode OFF — click to enable for faster turns (disables memory, thoughts, alignment)";
+  }
+  if (els.turboBanner) els.turboBanner.style.display = on ? "" : "none";
+}
+
 export function render() {
   renderTabs();
   renderStageHeader();
@@ -204,6 +267,7 @@ export function render() {
   renderAutoStop();
   renderTranscript();
   renderTelemetry();
+  renderTurboState();
   els.auto.textContent = state.autoRunning ? "Pause" : "Auto";
 }
 

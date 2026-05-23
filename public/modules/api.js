@@ -2,6 +2,34 @@ import { AVAILABLE_TOOLS, MAX_TOOL_ROUNDS } from './constants.js';
 import { state } from './state.js';
 import { parseAiJson, parseTextToolCalls, stripTextToolCalls, stripCodeFence } from './utils.js';
 
+// Extract the message field content progressively from a streaming JSON buffer.
+// Handles {"thought":"...","action":"...","message":"..."} with proper JSON unescape.
+function extractStreamingMessage(accumulated) {
+  const msgPattern = /"message"\s*:\s*"/;
+  const match = msgPattern.exec(accumulated);
+  if (!match) return null;
+  let result = "";
+  let escaped = false;
+  for (let i = match.index + match[0].length; i < accumulated.length; i++) {
+    const ch = accumulated[i];
+    if (escaped) {
+      if (ch === "n") result += "\n";
+      else if (ch === "t") result += "\t";
+      else if (ch === '"') result += '"';
+      else if (ch === "\\") result += "\\";
+      else result += ch;
+      escaped = false;
+    } else if (ch === "\\") {
+      escaped = true;
+    } else if (ch === '"') {
+      break;
+    } else {
+      result += ch;
+    }
+  }
+  return result;
+}
+
 // els reference — set via initApi() called from main.js
 let els = null;
 export function initApi(elsRef) {
@@ -164,13 +192,160 @@ export async function chatCompletion(system, user, { temperature = state.setting
   return lastAssistant?.content || "";
 }
 
-export async function chatJson(system, user, temperature, signal) {
-  const content = await chatCompletion(system, user, {
+/**
+ * Stream a single-round chat completion, calling onChunk(delta, accumulated) for each token.
+ * No tool-call handling — use chatCompletion for that. Returns the full accumulated text.
+ */
+export async function chatStream(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal } = {}, onChunk = null) {
+  const payload = {
+    model: state.settings.model,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user }
+    ],
     temperature,
-    maxTokens: state.settings.maxTokens,
-    signal,
-    useTools: true
+    max_tokens: maxTokens,
+    stream: true
+  };
+
+  const startTime = Date.now();
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        baseUrl: state.settings.baseUrl,
+        apiKey: state.settings.apiKey,
+        request: payload
+      }),
+      signal
+    });
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || "LM Studio request failed.");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let accumulated = "";
+    let sseBuffer = "";
+    let promptTokens = 0;
+    let completionTokens = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      sseBuffer += decoder.decode(value, { stream: true });
+      const lines = sseBuffer.split("\n");
+      sseBuffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const raw = line.slice(6).trim();
+        if (raw === "[DONE]") continue;
+        try {
+          const parsed = JSON.parse(raw);
+          const delta = parsed.choices?.[0]?.delta?.content;
+          if (delta) {
+            accumulated += delta;
+            completionTokens++;
+            if (onChunk) onChunk(delta, accumulated);
+          }
+          if (parsed.usage) {
+            promptTokens = parsed.usage.prompt_tokens || 0;
+            completionTokens = parsed.usage.completion_tokens || completionTokens;
+          }
+        } catch { /* ignore malformed SSE line */ }
+      }
+    }
+
+    const latencyMs = Date.now() - startTime;
+    const tokensPerSecond = completionTokens && latencyMs > 0 ? Math.round(completionTokens / (latencyMs / 1000)) : 0;
+    const apiLog = {
+      timestamp: new Date().toISOString(),
+      endpoint: "/v1/chat/completions (stream)",
+      model: payload.model || "unknown",
+      promptTokens,
+      completionTokens,
+      latencyMs,
+      tokensPerSecondCompletion: tokensPerSecond,
+      status: "ok",
+      estimatedCostCents: Number(((promptTokens * 0.00015 + completionTokens * 0.0006) / 1000).toFixed(4))
+    };
+    if (!state.diagnostics) state.diagnostics = {};
+    if (!Array.isArray(state.diagnostics.apiCallLogs)) state.diagnostics.apiCallLogs = [];
+    state.diagnostics.apiCallLogs.push(apiLog);
+    if (state.diagnostics.apiCallLogs.length > 100) state.diagnostics.apiCallLogs.shift();
+    if (promptTokens) {
+      state.contextInfo.lastPromptTokens = promptTokens;
+      state.contextInfo.lastCompletionTokens = completionTokens;
+      document.dispatchEvent(new CustomEvent("tokenUsageUpdated"));
+    }
+    return accumulated;
+  } catch (err) {
+    const apiLog = {
+      timestamp: new Date().toISOString(),
+      endpoint: "/v1/chat/completions (stream)",
+      model: payload.model || "unknown",
+      promptTokens: 0, completionTokens: 0,
+      latencyMs: Date.now() - startTime,
+      tokensPerSecondCompletion: 0,
+      status: err.name === "TimeoutError" ? "timeout" : "error",
+      error: err.message
+    };
+    if (!state.diagnostics) state.diagnostics = {};
+    if (!Array.isArray(state.diagnostics.apiCallLogs)) state.diagnostics.apiCallLogs = [];
+    state.diagnostics.apiCallLogs.push(apiLog);
+    if (state.diagnostics.apiCallLogs.length > 100) state.diagnostics.apiCallLogs.shift();
+    throw err;
+  }
+}
+
+/**
+ * Batch embedding request — embeds multiple texts in a single API call.
+ * Returns an array of embedding vectors in the same order as the input texts.
+ */
+export async function getEmbeddingsBatch(texts) {
+  if (!texts || !texts.length) return [];
+  const modelToUse = state.settings.embeddingModel || state.settings.model;
+  if (!modelToUse) throw new Error("No model selected.");
+  const response = await fetch("/api/embeddings", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      baseUrl: state.settings.baseUrl,
+      apiKey: state.settings.apiKey,
+      request: { model: modelToUse, input: texts }
+    })
   });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Embeddings batch request failed.");
+  const items = (data?.data || []).slice().sort((a, b) => (a.index || 0) - (b.index || 0));
+  return items.map(item => item.embedding).filter(Array.isArray);
+}
+
+export async function chatJson(system, user, temperature, signal, onStream = null) {
+  // Use streaming when: a callback is provided, tools won't be active, and streaming is enabled.
+  const isToolMode = state.settings.toolsEnabled && state.scenario.mode !== "story";
+  const canStream = onStream && !isToolMode && state.settings.streamingEnabled !== false;
+
+  let content;
+  if (canStream) {
+    content = await chatStream(system, user, {
+      temperature,
+      maxTokens: state.settings.maxTokens,
+      signal
+    }, (_delta, accumulated) => {
+      const msg = extractStreamingMessage(accumulated);
+      if (msg !== null) onStream(msg);
+    });
+  } else {
+    content = await chatCompletion(system, user, {
+      temperature,
+      maxTokens: state.settings.maxTokens,
+      signal,
+      useTools: true
+    });
+  }
 
   // Detect truncation: JSON that ends mid-string, mid-key, or with an unclosed brace
   // is almost always a token-budget hit rather than a model error.

@@ -711,6 +711,43 @@ input:focus, textarea:focus, select:focus {
   box-shadow: none;
 }
 
+/* ── Streaming message bubble ────────────────────────────────── */
+@keyframes streaming-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.streaming-cursor {
+  display: inline-block;
+  animation: streaming-blink 0.9s step-start infinite;
+  color: var(--accent);
+  font-weight: 700;
+  margin-left: 1px;
+  user-select: none;
+}
+.message-card.streaming {
+  opacity: 0.88;
+}
+.message-card.streaming .message-content {
+  white-space: pre-wrap;
+}
+
+/* ── Turbo mode ──────────────────────────────────────────────── */
+.turbo-banner {
+  background: var(--gold);
+  color: #2a1800;
+  padding: 5px 14px;
+  text-align: center;
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border-radius: 4px 4px 0 0;
+}
+.turbo-active {
+  background: var(--gold) !important;
+  color: #2a1800 !important;
+  font-weight: 700;
+}
+
 /* ── Message meta ────────────────────────────────────────────── */
 .message-meta {
   display: flex;
