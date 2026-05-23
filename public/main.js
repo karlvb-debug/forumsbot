@@ -24,7 +24,8 @@ import {
   hideTranscriptSearch,
   runTranscriptSearch,
   nextSearchMatch,
-  prevSearchMatch
+  prevSearchMatch,
+  renderSessionsList
 } from './modules/render.js';
 import {
   loadModels,
@@ -59,9 +60,11 @@ import {
   addActor,
   generateQuickStart,
   applyQuickStartConfig,
-  discardQuickStartConfig
+  discardQuickStartConfig,
+  saveCurrentSession,
+  loadSession
 } from './modules/session.js';
-import { initializeMemoryStorage, getAllChunks } from './modules/db.js';
+import { initializeMemoryStorage, getAllChunks, getAllSessions, deleteSession } from './modules/db.js';
 import { startTensionGridAnimation, stopTensionGridAnimation } from './modules/telemetry.js';
 
 // Wire the els reference into api.js so setStatus, loadModels, etc. can access DOM elements
@@ -145,6 +148,9 @@ function wireEvents() {
         startTensionGridAnimation(els.tensionGridCanvas);
       } else {
         stopTensionGridAnimation();
+      }
+      if (name === "sessions") {
+        getAllSessions().then(sessions => renderSessionsList(sessions));
       }
     });
   });
@@ -427,8 +433,8 @@ function wireEvents() {
   if (transcriptSearchClose) transcriptSearchClose.addEventListener("click", hideTranscriptSearch);
 
   els.loadModels.addEventListener("click", loadModels);
-  els.nextTurn.addEventListener("click", runNextTurn);
-  els.round.addEventListener("click", () => runRound());
+  els.nextTurn.addEventListener("click", () => runNextTurn().then(ok => { if (ok) saveCurrentSession().catch(console.warn); }));
+  els.round.addEventListener("click", () => runRound().then(ok => { if (ok) saveCurrentSession().catch(console.warn); }));
   els.auto.addEventListener("click", runAutoLoop);
   els.clearConversation.addEventListener("click", confirmAndResetSession);
   els.copySession.addEventListener("click", copySessionToClipboard);
@@ -441,6 +447,28 @@ function wireEvents() {
   els.savePreset.addEventListener("click", savePreset);
   els.loadPreset.addEventListener("click", () => els.presetFile.click());
   els.exportSession.addEventListener("click", () => exportSession());
+
+  // Sessions panel
+  document.getElementById("saveSessionBtn")?.addEventListener("click", async () => {
+    await saveCurrentSession();
+    const sessions = await getAllSessions();
+    renderSessionsList(sessions);
+  });
+  document.getElementById("sessionsList")?.addEventListener("click", async (e) => {
+    const loadBtn = e.target.closest(".session-load-btn");
+    const delBtn = e.target.closest(".session-delete-btn");
+    if (loadBtn) {
+      const id = loadBtn.dataset.sessionId;
+      const sessions = await getAllSessions();
+      const session = sessions.find(s => s.id === id);
+      if (session) await loadSession(session);
+    } else if (delBtn) {
+      const id = delBtn.dataset.sessionId;
+      await deleteSession(id);
+      const sessions = await getAllSessions();
+      renderSessionsList(sessions);
+    }
+  });
   els.reset.addEventListener("click", confirmAndFullReset);
   els.summarizeNow.addEventListener("click", () => summarizeMemory("manual"));
   els.rebuildMemory.addEventListener("click", () => summarizeMemory("rebuild", state.messages.slice(-24), { reset: true }));

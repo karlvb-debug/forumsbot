@@ -1,8 +1,8 @@
 import { PRESET_VERSION, RECENT_MESSAGE_LIMIT, defaultState } from './constants.js';
 import { state, setState, normalizeState, saveState } from './state.js';
-import { render, syncFormFromState, els, switchTab, renderQuickStartPreview } from './render.js';
+import { render, syncFormFromState, els, switchSidebarTab, renderQuickStartPreview } from './render.js';
 import { setStatus } from './api.js';
-import { clearMessages, clearChunks, putMessages, putChunk, countChunks, getRecentMessages, getAllMessages, getAllChunks } from './db.js';
+import { clearMessages, clearChunks, putMessages, putChunk, countChunks, getRecentMessages, getAllMessages, getAllChunks, putSession, getAllSessions, deleteSession } from './db.js';
 import { chatCompletion } from './api.js';
 import { colors } from './constants.js';
 import {
@@ -50,6 +50,58 @@ export async function exportSession() {
   const mode = modeEl ? modeEl.value : 'debug';
 
   let payload;
+
+  if (mode === 'markdown') {
+    const lines = [
+      `# ${state.scenario.title || 'Forum Session'}`,
+      state.scenario.premise ? `**Premise:** ${state.scenario.premise}` : '',
+      state.scenario.objective ? `**Objective:** ${state.scenario.objective}` : '',
+      '---'
+    ].filter(Boolean);
+
+    let turnNum = 0;
+    for (const msg of messages) {
+      if (msg.type === 'system') continue;
+      if (msg.type === 'skip') {
+        lines.push(`\n*[${msg.speaker} passed]*`);
+        continue;
+      }
+      turnNum++;
+      const timeStr = msg.createdAt
+        ? new Date(msg.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+        : '';
+      const speakerLabel = msg.type === 'dm' ? `${msg.speaker} (Director)` : (msg.speaker || 'Unknown');
+      lines.push(`\n## ${speakerLabel} — Turn ${turnNum}${timeStr ? ` *(${timeStr})*` : ''}`);
+      if (state.settings.showThoughts && msg.thought) {
+        lines.push(`> ${msg.thought.replace(/\n/g, '\n> ')}`);
+        lines.push('');
+      }
+      if (msg.content) lines.push(msg.content);
+    }
+
+    if (Array.isArray(state.anchors) && state.anchors.length) {
+      lines.push('\n---\n## Anchored Agreements');
+      state.anchors.forEach(a => lines.push(`- **[${a.speaker}]** ${a.text}`));
+    }
+    if (state.outcomes?.finalRecommendation) {
+      lines.push('\n---\n## Outcomes');
+      lines.push(`**Recommendation:** ${state.outcomes.finalRecommendation}`);
+      if (Array.isArray(state.outcomes.actionItems) && state.outcomes.actionItems.length) {
+        lines.push('\n**Action Items:**');
+        state.outcomes.actionItems.forEach(item => lines.push(`- ${item}`));
+      }
+    }
+
+    const mdText = lines.join('\n');
+    const blob = new Blob([mdText], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `forum-session-${slugDate()}.md`;
+    link.click();
+    URL.revokeObjectURL(url);
+    return;
+  }
 
   if (mode === 'eval') {
     // Eval mode: metrics, settings, scenario, and diagnostics only — no message content
@@ -204,7 +256,7 @@ export async function resetSession(fullReset = false) {
   saveState();
   syncFormFromState();
   render();
-  switchTab(fullReset ? "setup" : "conversation");
+  switchSidebarTab("setup");
   setStatus(fullReset ? "Everything reset to defaults." : "Conversation cleared.", "ok");
 }
 
@@ -395,7 +447,7 @@ export async function applyQuickStartConfig() {
       color: "var(--coral)"
     });
   }
-  switchTab("conversation");
+  switchSidebarTab("setup");
 }
 
 export function discardQuickStartConfig() {
@@ -415,4 +467,60 @@ export function setQuickStartStatus(message) {
   state.ui.quickStartStatus = message;
   els.quickStartStatus.textContent = message;
   saveState();
+}
+
+// ─── Session History ────────────────────────────────────────────────────────
+
+export async function saveCurrentSession() {
+  if (!state.messages.length) return;
+
+  if (!state._currentSessionId) {
+    state._currentSessionId = crypto.randomUUID();
+  }
+
+  const session = {
+    id: state._currentSessionId,
+    timestamp: new Date().toISOString(),
+    scenarioTitle: state.scenario.title || 'Untitled',
+    actorCount: state.actors.filter(a => a.enabled).length,
+    messageCount: state.messages.length,
+    messages: state.messages,
+    scenario: { ...state.scenario },
+    memory: { ...state.memory },
+    actors: state.actors,
+    dm: { ...state.dm }
+  };
+
+  // Keep at most 20 sessions; remove oldest others if over limit
+  const existing = await getAllSessions();
+  const others = existing.filter(s => s.id !== state._currentSessionId);
+  for (const old of others.slice(19)) {
+    await deleteSession(old.id);
+  }
+
+  await putSession(session);
+}
+
+export async function loadSession(session) {
+  if (!session) return;
+
+  await clearMessages();
+  if (Array.isArray(session.messages) && session.messages.length) {
+    await putMessages(session.messages.map(cleanStoredMessage));
+    state.messages = await getRecentMessages(RECENT_MESSAGE_LIMIT);
+  } else {
+    state.messages = [];
+  }
+
+  if (session.scenario) state.scenario = { ...state.scenario, ...session.scenario };
+  if (session.memory) state.memory = { ...state.memory, ...session.memory };
+  if (Array.isArray(session.actors)) state.actors = session.actors;
+  if (session.dm) state.dm = { ...state.dm, ...session.dm };
+
+  state._currentSessionId = session.id;
+
+  saveState();
+  syncFormFromState();
+  render();
+  setStatus(`Session "${session.scenarioTitle}" loaded.`, 'ok');
 }

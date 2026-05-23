@@ -1490,6 +1490,34 @@ export async function validateEmbeddingModel(modelName) {
   }
 }
 
+// ── Session history list ──────────────────────────────────────────────────────
+
+function esc(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+export function renderSessionsList(sessions) {
+  const container = document.getElementById('sessionsList');
+  if (!container) return;
+  if (!sessions?.length) {
+    container.innerHTML = '<p class="sessions-empty">No saved sessions yet.</p>';
+    return;
+  }
+  container.innerHTML = sessions.map(s => {
+    const date = s.timestamp
+      ? new Date(s.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+      : 'Unknown date';
+    return `<div class="session-card">
+      <div class="session-card-title">${esc(s.scenarioTitle || 'Untitled')}</div>
+      <div class="session-card-meta">${esc(date)} · ${s.actorCount || 0} actors · ${s.messageCount || 0} msgs</div>
+      <div class="session-card-actions">
+        <button class="secondary-button session-load-btn" data-session-id="${esc(s.id)}" type="button">Load</button>
+        <button class="danger-button session-delete-btn" data-session-id="${esc(s.id)}" type="button">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 // ── In-transcript search ──────────────────────────────────────────────────────
 let _searchMatches = [];
 let _searchIndex = -1;

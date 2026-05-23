@@ -92,6 +92,7 @@
               <button class="sidebar-tab" data-sidebar="memory" type="button">🧠 Memory</button>
               <button class="sidebar-tab" data-sidebar="telemetry" type="button">📊 Telemetry</button>
               <button class="sidebar-tab" data-sidebar="document" type="button">📝 Doc</button>
+              <button class="sidebar-tab" data-sidebar="sessions" type="button">📚 Sessions</button>
             </div>
           </div>
 
@@ -277,6 +278,7 @@
                       <option value="debug" selected>Debug Export (All Traces &amp; Metrics)</option>
                       <option value="shareable">Shareable Export (Redacted Privacy Mode)</option>
                       <option value="eval">Evaluation Export (Metrics &amp; Structure Only)</option>
+                      <option value="markdown">Markdown Export (Human-Readable)</option>
                     </select>
                   </label>
                   <div class="session-grid">
@@ -557,6 +559,18 @@
               </div>
             </div>
           </div><!-- /sidebar-panel document -->
+
+          <!-- ── Sessions panel ────────────────────────────────────────── -->
+          <div class="sidebar-panel" data-sidebar-panel="sessions" style="display:none">
+            <div class="sessions-panel">
+              <div class="sessions-toolbar">
+                <button class="secondary-button" id="saveSessionBtn" type="button">Save current session</button>
+              </div>
+              <div id="sessionsList" class="sessions-list">
+                <p class="sessions-empty">No saved sessions yet.</p>
+              </div>
+            </div>
+          </div><!-- /sidebar-panel sessions -->
 
         </aside>
       </div><!-- /conversation-layout -->

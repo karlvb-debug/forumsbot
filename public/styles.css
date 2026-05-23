@@ -640,6 +640,18 @@ input:focus, textarea:focus, select:focus {
   padding: 16px;
   overflow: auto;
 }
+/* ── Session history panel ─────────────────────────────────────────────────── */
+.sessions-panel { display: grid; gap: 12px; padding: 4px 0; }
+.sessions-toolbar { display: flex; gap: 8px; }
+.sessions-list { display: grid; gap: 8px; }
+.sessions-empty { color: var(--dim); font-size: 0.85em; text-align: center; padding: 16px 0; margin: 0; }
+.session-card { background: var(--panel-strong); border-radius: 8px; padding: 10px 12px; display: grid; gap: 4px; }
+.session-card-title { font-weight: 600; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-card-meta { font-size: 0.78em; color: var(--dim); }
+.session-card-actions { display: flex; gap: 6px; margin-top: 4px; }
+.session-card-actions .secondary-button,
+.session-card-actions .danger-button { font-size: 0.8em; padding: 3px 10px; }
+
 .transcript-search-bar {
   display: flex;
   align-items: center;

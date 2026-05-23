@@ -1,4 +1,4 @@
-import { DB_NAME, DB_VERSION, MESSAGE_STORE, CHUNK_STORE, ACTOR_MEMORY_STORE } from './constants.js';
+import { DB_NAME, DB_VERSION, MESSAGE_STORE, CHUNK_STORE, ACTOR_MEMORY_STORE, SESSION_STORE } from './constants.js';
 import { state } from './state.js';
 import { cleanStoredMessage } from './utils.js';
 
@@ -42,6 +42,7 @@ export function openMemoryDb() {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.addEventListener("upgradeneeded", (event) => {
       const database = request.result;
+      const oldVersion = event.oldVersion;
       if (!database.objectStoreNames.contains(MESSAGE_STORE)) {
         const messages = database.createObjectStore(MESSAGE_STORE, { keyPath: "id" });
         messages.createIndex("createdAt", "createdAt");
@@ -53,6 +54,12 @@ export function openMemoryDb() {
       // Sprint 6: per-actor cross-session memory store (keyed by actor name)
       if (!database.objectStoreNames.contains(ACTOR_MEMORY_STORE)) {
         database.createObjectStore(ACTOR_MEMORY_STORE, { keyPath: "name" });
+      }
+      // Sessions history store
+      if (oldVersion < 4) {
+        if (!database.objectStoreNames.contains(SESSION_STORE)) {
+          database.createObjectStore(SESSION_STORE, { keyPath: "id" });
+        }
       }
     });
     request.addEventListener("blocked", () => {
@@ -203,5 +210,43 @@ export async function getAllActorMemories() {
     return await idbRequest(tx.objectStore(ACTOR_MEMORY_STORE).getAll());
   } catch {
     return [];
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Session History Store
+// Persists named session snapshots keyed by session id.
+// ──────────────────────────────────────────────────────────────
+
+export async function putSession(session) {
+  if (!storageAvailable || !db) return;
+  try {
+    const tx = db.transaction(SESSION_STORE, 'readwrite');
+    tx.objectStore(SESSION_STORE).put(session);
+    await idbDone(tx);
+  } catch (err) {
+    console.warn('[sessions] putSession failed:', err.message);
+  }
+}
+
+export async function getAllSessions() {
+  if (!storageAvailable || !db) return [];
+  try {
+    const tx = db.transaction(SESSION_STORE, 'readonly');
+    const sessions = await idbRequest(tx.objectStore(SESSION_STORE).getAll());
+    return sessions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteSession(id) {
+  if (!storageAvailable || !db) return;
+  try {
+    const tx = db.transaction(SESSION_STORE, 'readwrite');
+    tx.objectStore(SESSION_STORE).delete(id);
+    await idbDone(tx);
+  } catch (err) {
+    console.warn('[sessions] deleteSession failed:', err.message);
   }
 }
