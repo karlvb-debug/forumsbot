@@ -627,12 +627,65 @@ input:focus, textarea:focus, select:focus {
 /* ============================================================
    Transcript
    ============================================================ */
+.transcript-wrapper {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 0;
+  overflow: hidden;
+}
 .transcript {
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 16px;
   overflow: auto;
+}
+.transcript-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--panel-strong);
+  border-bottom: 1px solid var(--line);
+}
+.transcript-search-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  padding: 5px 10px;
+  font-size: 0.85rem;
+  outline: none;
+}
+.transcript-search-input:focus { border-color: var(--accent); }
+.transcript-search-count {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 4ch;
+}
+.transcript-search-nav, .transcript-search-close {
+  min-height: 26px;
+  padding: 0 8px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.transcript-search-nav:hover, .transcript-search-close:hover { background: var(--panel-strong); }
+.message-card.search-match {
+  outline: 2px solid color-mix(in srgb, var(--gold) 60%, transparent);
+  outline-offset: 1px;
+}
+.message-card.search-current {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  background: color-mix(in srgb, var(--gold) 8%, var(--panel-strong));
 }
 .empty-state {
   display: grid;

@@ -92,8 +92,11 @@ export async function runNextTurn(options = {}) {
 
       const startTime = Date.now();
 
-      // ── Preflight Skip Router ─────────────────────────────────────
-      // Only runs for actor turns (not DM), bails immediately when disabled
+      // ── Phase 1: Skip/Speak decision ─────────────────────────────
+      // preflightSkipCheck returns {shouldSkip: false} when enablePreflightRouter is off.
+      // When router is on and Phase 1 says "speak", set twoPhase=true so askActor()
+      // skips the action/skip instruction and focuses Phase 2 purely on content.
+      let twoPhase = false;
       if (participant.kind === 'actor') {
         const preflight = await preflightSkipCheck(
           participant.data,
@@ -120,6 +123,8 @@ export async function runNextTurn(options = {}) {
           abortController = null;
           return true;
         }
+        // Phase 1 committed to speak — Phase 2 focuses on content only (no skip re-check)
+        if (state.settings.enablePreflightRouter) twoPhase = true;
       }
 
       // Show a streaming bubble so the user sees activity immediately.
@@ -130,7 +135,7 @@ export async function runNextTurn(options = {}) {
 
       const result = participant.kind === "dm"
         ? await askDirector(participant.data, abortController.signal, onStream)
-        : await askActor(participant.data, abortController.signal, onStream);
+        : await askActor(participant.data, abortController.signal, onStream, twoPhase);
 
       // Remove the streaming placeholder; renderTranscript() from addMessage will paint the real card.
       removeStreamingBubble();
@@ -633,8 +638,11 @@ export async function distillActorMemory(actorName, thought) {
   }
 }
 
-export async function askActor(actor, signal, onStream = null) {
+export async function askActor(actor, signal, onStream = null, twoPhase = false) {
   const showThoughts = state.settings.showThoughts !== false && !state.settings.turboMode;
+  // In two-phase mode, Phase 1 already decided to speak — Phase 2 never re-checks skip.
+  // Researchers are exempt: they have their own skip logic and are not simplified.
+  const skipAllowed = !twoPhase || !!actor.isResearcher;
 
   if (actor.isResearcher) {
     const system = [
@@ -700,27 +708,45 @@ export async function askActor(actor, signal, onStream = null) {
     relationships,
     contextLine,
     "Messages labelled [USER] in the transcript are from the human facilitator. Always acknowledge and respond to their instructions directly.",
-    showThoughts
-      ? "For every turn, think privately first, then either speak or skip."
-      : "For every turn, decide whether to speak or skip directly.",
-    showThoughts
-      ? "CRITICAL SKIP RULE: Ask yourself in your thoughts: 'Does my public message add new arguments, data, questions, or proposals?' If the answer is NO (e.g. you are just agreeing, repeating what someone else said, summarizing, or saying you have nothing to add), you MUST set action to \"skip\" and leave message empty. Yielding the floor is a positive, productive contribution that keeps the discussion efficient."
-      : "CRITICAL SKIP RULE: If your public message does not add new arguments, data, questions, or proposals (e.g. you are just agreeing, repeating what someone else said, summarizing, or saying you have nothing to add), you MUST set action to \"skip\" and leave message empty. Yielding the floor is a positive, productive contribution that keeps the discussion efficient.",
+    skipAllowed
+      ? (showThoughts
+          ? "For every turn, think privately first, then either speak or skip."
+          : "For every turn, decide whether to speak or skip directly.")
+      : (showThoughts
+          ? "You have been selected to speak this turn. Think privately, then deliver your message."
+          : "You have been selected to speak this turn. Deliver your message directly."),
+    skipAllowed
+      ? (showThoughts
+          ? "CRITICAL SKIP RULE: Ask yourself in your thoughts: 'Does my public message add new arguments, data, questions, or proposals?' If the answer is NO (e.g. you are just agreeing, repeating what someone else said, summarizing, or saying you have nothing to add), you MUST set action to \"skip\" and leave message empty. Yielding the floor is a positive, productive contribution that keeps the discussion efficient."
+          : "CRITICAL SKIP RULE: If your public message does not add new arguments, data, questions, or proposals (e.g. you are just agreeing, repeating what someone else said, summarizing, or saying you have nothing to add), you MUST set action to \"skip\" and leave message empty. Yielding the floor is a positive, productive contribution that keeps the discussion efficient.")
+      : "",
     "CONCISENESS RULE: Keep your public message brief, direct, and high-density. Avoid conversational filler (e.g. 'I agree with Anya', 'That's a good point', 'As an expert in...'). Speak ONLY to introduce new arguments, data, or questions. If a simple 'Yes' or single-sentence response is sufficient, keep it to exactly that. Do not generate words for the sake of it.",
     (!showThoughts)
       ? "IMPORTANT: Private thoughts display is disabled. You MUST keep your JSON \"thought\" field empty (\"\") to save tokens and minimize latency."
       : "",
     isStoryMode
-      ? (showThoughts
-          ? "Return only valid JSON: {\"thought\":\"your PRIVATE reasoning (not shown to others)\",\"action\":\"speak or skip\",\"message\":\"*actions in asterisks* plus \\\"spoken dialogue in quotes\\\"\"}"
-          : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"*actions in asterisks* plus \\\"spoken dialogue in quotes\\\"\"}")
+      ? (skipAllowed
+          ? (showThoughts
+              ? "Return only valid JSON: {\"thought\":\"your PRIVATE reasoning (not shown to others)\",\"action\":\"speak or skip\",\"message\":\"*actions in asterisks* plus \\\"spoken dialogue in quotes\\\"\"}"
+              : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"*actions in asterisks* plus \\\"spoken dialogue in quotes\\\"\"}")
+          : (showThoughts
+              ? "Return only valid JSON: {\"thought\":\"your PRIVATE reasoning (not shown to others)\",\"message\":\"*actions in asterisks* plus \\\"spoken dialogue in quotes\\\"\"}"
+              : "Return only valid JSON: {\"thought\":\"\",\"message\":\"*actions in asterisks* plus \\\"spoken dialogue in quotes\\\"\"}"))
       : state.document.enabled
-        ? (showThoughts
-            ? "Return only valid JSON: {\"thought\":\"private reasoning\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\"}."
-            : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\"}.")
-        : (showThoughts
-            ? "Return only valid JSON with this exact shape: {\"thought\":\"private reasoning for your memory\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\"}."
-            : "Return only valid JSON with this exact shape: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\"}."),
+        ? (skipAllowed
+            ? (showThoughts
+                ? "Return only valid JSON: {\"thought\":\"private reasoning\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\"}."
+                : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\"}.")
+            : (showThoughts
+                ? "Return only valid JSON: {\"thought\":\"private reasoning\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\"}."
+                : "Return only valid JSON: {\"thought\":\"\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\"}."))
+        : (skipAllowed
+            ? (showThoughts
+                ? "Return only valid JSON with this exact shape: {\"thought\":\"private reasoning for your memory\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\"}."
+                : "Return only valid JSON with this exact shape: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\"}.")
+            : (showThoughts
+                ? "Return only valid JSON with this exact shape: {\"thought\":\"private reasoning for your memory\",\"message\":\"your public message\"}."
+                : "Return only valid JSON with this exact shape: {\"thought\":\"\",\"message\":\"your public message\"}.")),
     "The JSON is transport only. Put natural public dialogue only inside message; do not make message itself JSON. Use plain text — no LaTeX notation (e.g. write 'leads to' not '\\rightarrow'), no markdown outside the message field.",
     state.document.enabled
       ? [

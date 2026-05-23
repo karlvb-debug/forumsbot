@@ -40,7 +40,16 @@
             </div>
           </header>
 
-          <section class="transcript" id="transcript" aria-live="polite"></section>
+          <div class="transcript-wrapper">
+            <div class="transcript-search-bar" id="transcriptSearchBar" style="display:none" role="search" aria-label="Search transcript">
+              <input class="transcript-search-input" id="transcriptSearchInput" type="search" placeholder="Search transcript…" autocomplete="off" spellcheck="false">
+              <span class="transcript-search-count" id="transcriptSearchCount"></span>
+              <button class="transcript-search-nav" id="transcriptSearchPrev" type="button" title="Previous match">↑</button>
+              <button class="transcript-search-nav" id="transcriptSearchNext" type="button" title="Next match">↓</button>
+              <button class="transcript-search-close" id="transcriptSearchClose" type="button" title="Close search (Esc)">✕</button>
+            </div>
+            <section class="transcript" id="transcript" aria-live="polite"></section>
+          </div>
 
           <form class="composer" id="composer">
             <textarea id="userInput" rows="2" placeholder="Join the forum…"></textarea>

@@ -19,7 +19,12 @@ import {
   isInitialized,
   setInitialized,
   validateEmbeddingModel,
-  renderTurboState
+  renderTurboState,
+  showTranscriptSearch,
+  hideTranscriptSearch,
+  runTranscriptSearch,
+  nextSearchMatch,
+  prevSearchMatch
 } from './modules/render.js';
 import {
   loadModels,
@@ -353,8 +358,25 @@ function wireEvents() {
 
   // Keyboard shortcuts
   document.addEventListener("keydown", (e) => {
+    // Escape — close search bar
+    if (e.key === "Escape") {
+      const bar = document.getElementById("transcriptSearchBar");
+      if (bar && bar.style.display !== "none") {
+        e.preventDefault();
+        hideTranscriptSearch();
+        return;
+      }
+    }
+
     const mod = e.metaKey || e.ctrlKey;
     if (!mod) return;
+
+    // Cmd/Ctrl+F — open transcript search
+    if (e.key === "f" || e.key === "F") {
+      e.preventDefault();
+      showTranscriptSearch();
+      return;
+    }
 
     // Cmd/Ctrl+Enter — send message or trigger next turn
     // Guard: don't fire when typing in a sidebar form field
@@ -387,6 +409,22 @@ function wireEvents() {
       runRound();
     }
   });
+
+  // Transcript search bar events
+  const transcriptSearchInput = document.getElementById("transcriptSearchInput");
+  const transcriptSearchPrev = document.getElementById("transcriptSearchPrev");
+  const transcriptSearchNext = document.getElementById("transcriptSearchNext");
+  const transcriptSearchClose = document.getElementById("transcriptSearchClose");
+  if (transcriptSearchInput) {
+    transcriptSearchInput.addEventListener("input", () => runTranscriptSearch(transcriptSearchInput.value));
+    transcriptSearchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.shiftKey ? prevSearchMatch() : nextSearchMatch(); }
+      if (e.key === "Escape") hideTranscriptSearch();
+    });
+  }
+  if (transcriptSearchPrev) transcriptSearchPrev.addEventListener("click", prevSearchMatch);
+  if (transcriptSearchNext) transcriptSearchNext.addEventListener("click", nextSearchMatch);
+  if (transcriptSearchClose) transcriptSearchClose.addEventListener("click", hideTranscriptSearch);
 
   els.loadModels.addEventListener("click", loadModels);
   els.nextTurn.addEventListener("click", runNextTurn);

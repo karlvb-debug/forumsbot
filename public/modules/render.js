@@ -1489,3 +1489,92 @@ export async function validateEmbeddingModel(modelName) {
     }
   }
 }
+
+// ── In-transcript search ──────────────────────────────────────────────────────
+let _searchMatches = [];
+let _searchIndex = -1;
+
+export function showTranscriptSearch() {
+  const bar = document.getElementById("transcriptSearchBar");
+  const input = document.getElementById("transcriptSearchInput");
+  if (!bar || !input) return;
+  bar.style.display = "flex";
+  input.focus();
+  input.select();
+}
+
+export function hideTranscriptSearch() {
+  const bar = document.getElementById("transcriptSearchBar");
+  const input = document.getElementById("transcriptSearchInput");
+  if (bar) bar.style.display = "none";
+  if (input) input.value = "";
+  clearSearchHighlights();
+  _searchMatches = [];
+  _searchIndex = -1;
+  updateSearchCount();
+}
+
+function clearSearchHighlights() {
+  els.transcript?.querySelectorAll(".search-match, .search-current").forEach(el => {
+    el.classList.remove("search-match", "search-current");
+  });
+}
+
+export function runTranscriptSearch(query) {
+  clearSearchHighlights();
+  _searchMatches = [];
+  _searchIndex = -1;
+
+  if (!query || !query.trim()) {
+    updateSearchCount();
+    return;
+  }
+
+  const lower = query.toLowerCase();
+  const cards = els.transcript ? Array.from(els.transcript.querySelectorAll(".message-card")) : [];
+  cards.forEach(card => {
+    const content = card.textContent || "";
+    if (content.toLowerCase().includes(lower)) {
+      card.classList.add("search-match");
+      _searchMatches.push(card);
+    }
+  });
+
+  if (_searchMatches.length > 0) {
+    _searchIndex = 0;
+    scrollToMatch(0);
+  }
+  updateSearchCount();
+}
+
+export function nextSearchMatch() {
+  if (!_searchMatches.length) return;
+  _searchIndex = (_searchIndex + 1) % _searchMatches.length;
+  scrollToMatch(_searchIndex);
+  updateSearchCount();
+}
+
+export function prevSearchMatch() {
+  if (!_searchMatches.length) return;
+  _searchIndex = (_searchIndex - 1 + _searchMatches.length) % _searchMatches.length;
+  scrollToMatch(_searchIndex);
+  updateSearchCount();
+}
+
+function scrollToMatch(index) {
+  _searchMatches.forEach((el, i) => {
+    el.classList.toggle("search-current", i === index);
+    el.classList.toggle("search-match", i !== index);
+  });
+  _searchMatches[index]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function updateSearchCount() {
+  const el = document.getElementById("transcriptSearchCount");
+  if (!el) return;
+  if (!_searchMatches.length) {
+    el.textContent = "";
+    return;
+  }
+  el.textContent = `${_searchIndex + 1} / ${_searchMatches.length}`;
+}
