@@ -30,6 +30,7 @@
             <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
               <div style="min-width:0">
                 <h2 id="stageTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Untitled forum</h2>
+                <div class="stage-memory-hint" id="stageMemoryHint" style="display:none"></div>
               </div>
               <span class="mode-badge" id="modeLabel">Problem</span>
             </div>
@@ -37,6 +38,7 @@
               <button class="secondary-button" id="toggleSidebarButton" type="button" aria-expanded="true" aria-label="Toggle sidebar">📁 Sidebar</button>
               <button class="secondary-button" id="copySessionButton" type="button">Copy Session</button>
               <button class="danger-button" id="clearConversationButton" type="button">Clear</button>
+              <span class="save-flash" id="saveFlash">✓ Saved</span>
             </div>
           </header>
 
@@ -288,6 +290,7 @@
                   </div>
                   <label title="What the group should finish or decide. The AI judge checks whether this is met after each round.">
                     Goal
+                    <span class="objective-sync-hint" id="objectiveSyncHint" style="display:none">↑ synced with objective</span>
                     <textarea id="autoGoalInput" rows="3" placeholder="What should the group finish or decide?"></textarea>
                   </label>
                   <div class="goal-options">
@@ -674,6 +677,7 @@
           <span class="actor-name-display"></span>
           <span class="role-badge"></span>
           <span class="researcher-badge" style="display:none">🔍 Researcher</span>
+          <span class="actor-card-preview"></span>
           <button class="actor-expand-toggle" type="button" aria-label="Expand actor details" title="Expand">▼</button>
           <button class="icon-button remove-actor" type="button" aria-label="Remove actor" title="Remove actor">
             <span aria-hidden="true">×</span>
