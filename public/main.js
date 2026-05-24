@@ -528,6 +528,15 @@ function wireEvents() {
   els.nextTurn.addEventListener("click", () => runNextTurn().then(ok => { if (ok) saveCurrentSession().catch(console.warn); }));
   els.round.addEventListener("click", () => runRound().then(ok => { if (ok) saveCurrentSession().catch(console.warn); }));
   els.auto.addEventListener("click", runAutoLoop);
+
+  if (els.turnDelaySlider) {
+    els.turnDelaySlider.addEventListener("input", () => {
+      const delay = Number(els.turnDelaySlider.value) || 0;
+      state.settings.turnDelay = delay;
+      if (els.turnDelayDisplay) els.turnDelayDisplay.textContent = delay === 0 ? "Instant" : `${delay}s`;
+      saveState();
+    });
+  }
   els.clearConversation.addEventListener("click", confirmAndResetSession);
   els.copySession.addEventListener("click", copySessionToClipboard);
   els.stop.addEventListener("click", stopGeneration);

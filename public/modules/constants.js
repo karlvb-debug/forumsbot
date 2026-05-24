@@ -93,7 +93,9 @@ export const defaultState = {
     // Adaptive compression: LLM micro-summarize private memory when prompt is over budget
     enableAdaptiveCompression: true,
     // KV cache: freeze transcript at round start so all actors share a byte-identical prefix
-    roundSnapshotEnabled: true
+    roundSnapshotEnabled: true,
+    // Pause between turns when auto-running (seconds, 0 = instant)
+    turnDelay: 0
   },
   ui: {
     activeTab: "",

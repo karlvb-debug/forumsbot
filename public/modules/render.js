@@ -170,6 +170,9 @@ export const els = {
   // Turbo mode
   turboButton: $("#turboModeButton"),
   turboBanner: $("#turboBanner"),
+  // Pace control
+  turnDelaySlider: $("#turnDelaySlider"),
+  turnDelayDisplay: $("#turnDelayDisplay"),
   // Generation controls (Setup panel)
   maxTokensInput: $("#maxTokensInput"),
   maxTokensDisplay: $("#maxTokensDisplay"),
@@ -1645,6 +1648,12 @@ export function syncFormFromState() {
   // Round snapshot / KV cache toggle
   const roundSnapshotInput = document.getElementById("roundSnapshotInput");
   if (roundSnapshotInput) roundSnapshotInput.checked = state.settings.roundSnapshotEnabled !== false;
+  // Pace control
+  if (els.turnDelaySlider) {
+    const delay = state.settings.turnDelay ?? 0;
+    els.turnDelaySlider.value = delay;
+    if (els.turnDelayDisplay) els.turnDelayDisplay.textContent = delay === 0 ? "Instant" : `${delay}s`;
+  }
 }
 
 export function readSettingsFromForm() {
@@ -1693,6 +1702,12 @@ export function readSettingsFromForm() {
   if (els.seedEnabledInput) {
     state.settings.seedEnabled = els.seedEnabledInput.checked;
     state.settings.seed = els.seedInput ? (Number(els.seedInput.value) >= 0 ? Number(els.seedInput.value) : -1) : -1;
+  }
+  // Pace control
+  if (els.turnDelaySlider) {
+    const delay = Number(els.turnDelaySlider.value) || 0;
+    state.settings.turnDelay = delay;
+    if (els.turnDelayDisplay) els.turnDelayDisplay.textContent = delay === 0 ? "Instant" : `${delay}s`;
   }
   // Keep mirrors in sync
   if (els.showThoughtsMirror) els.showThoughtsMirror.checked = state.settings.showThoughts;

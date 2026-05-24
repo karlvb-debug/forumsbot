@@ -993,7 +993,55 @@ summary {
   background: color-mix(in srgb, var(--coral) 10%, var(--panel));
   color: var(--coral);
   border: 1px solid color-mix(in srgb, var(--coral) 40%, var(--line));
-  margin-left: auto;
+}
+
+/* Pace / turn-delay control */
+.pace-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  cursor: default;
+  user-select: none;
+}
+.pace-icon {
+  font-size: 0.85rem;
+  opacity: 0.6;
+}
+.pace-control input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 72px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line);
+  outline: none;
+  cursor: pointer;
+}
+.pace-control input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+.pace-control input[type="range"]::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: none;
+}
+.pace-display {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  min-width: 36px;
 }
 
 /* ============================================================

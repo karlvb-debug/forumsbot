@@ -66,10 +66,15 @@
             </div>
             <div class="turbo-banner" id="turboBanner" style="display:none">⚡ Turbo Mode — memory, thoughts &amp; alignment suspended for speed</div>
             <div class="composer-actions">
-              <button class="secondary-button" id="nextTurnButton" type="button" title="Next AI turn (⌘⇧N)">Next AI</button>
-              <button class="secondary-button" id="roundButton" type="button" title="Run a full round (⌘⇧R)">Round</button>
+              <button class="secondary-button" id="nextTurnButton" type="button" title="Next AI turn (Enter when chat box is empty)">Next AI</button>
+              <button class="secondary-button" id="roundButton" type="button" title="Run a full round (all actors + DM)">Round</button>
               <button class="secondary-button" id="autoButton" type="button">Auto</button>
               <button class="quiet-button" id="stopButton" type="button">Stop</button>
+              <label class="pace-control" title="Pause between turns when auto-running — gives you time to read and interject, or to reduce GPU load">
+                <span class="pace-icon">⏱</span>
+                <input type="range" id="turnDelaySlider" min="0" max="15" step="1" value="0">
+                <span id="turnDelayDisplay" class="pace-display">Instant</span>
+              </label>
               <div class="spacer"></div>
               <label class="composer-toggle" title="Show private thoughts">
                 <input id="showThoughtsMirror" type="checkbox">

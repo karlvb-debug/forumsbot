@@ -349,6 +349,11 @@ export async function runRound(options = {}) {
       const ok = await runNextTurn({ summarizeCycle: false });
       if (!ok) break;
       completedTurns += 1;
+      // Configurable inter-turn pause when auto-running
+      if (options.fromAuto) {
+        const delayMs = (state.settings.turnDelay || 0) * 1000;
+        if (delayMs > 0) await wait(delayMs);
+      }
     }
   } finally {
     _roundSnapshot = null;
