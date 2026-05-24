@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "settings": {
+    "temperature": 0.8,
+    "maxTokens": 2000,
+    "showThoughts": true,
+    "toolsEnabled": false,
+    "includeTraces": false,
+    "gravitySensitivity": 50,
+    "enablePreflightRouter": true,
+    "preflightThreshold": 0.35,
+    "enableHypothesisSampling": false,
+    "hypothesisSampleCount": 2,
+    "hypothesisAutoSelect": true,
+    "enableCrossSessionMemory": false,
+    "showInfluenceBars": false,
+    "streamingEnabled": true,
+    "turboMode": false,
+    "enableAdaptiveCompression": true,
+    "roundSnapshotEnabled": true
+  },
+  "memory": {
+    "enabled": true,
+    "pinnedFacts": [
+      "The forum has: streaming responses (live token bubbles), two-phase skip/speak (Phase 1 preflight decides speak/skip; Phase 2 generates content only), and round-start transcript snapshots for KV-cache reuse across actors in the same round.",
+      "Memory system: pinned facts, shared summary, open questions, DM state, delta rewriting every 4 cycles, and semantic chunk recall via embeddings with keyword fallback when no embedding model is configured.",
+      "Sessions persist to IndexedDB. A Sessions panel lets users save, load, and delete sessions. Conversations can be forked from any message — the fork clears chunks, resets memory, and starts a new session ID.",
+      "Feedback rating buttons (👍/👎) and a tag dropdown are rendered inside every message card but have zero event handlers wired — the data is never captured, stored, or acted on. This is the one visibly non-functional UI element.",
+      "The nextSpeaker field is returned by actors in their JSON response and stored in the message trace, but it is never acted on. Turn order is always round-robin regardless of what actors request.",
+      "Hypothesis sampling generates N candidate responses in parallel and auto-selects the best by composite score (novelty + premise alignment + specificity). Rejected candidates are stored in alternativeCandidates but are never surfaced to the user.",
+      "The preflight skip router uses a fast constrained LLM call (~50 tokens) to pre-screen actor relevance before committing to a full generation (~1500 tokens). Saves significant token spend when actors have nothing new to add.",
+      "Actor quick-create from description uses window.prompt() for input and pushes the generated actor directly into state — no preview or edit step before it appears in the roster.",
+      "Turbo mode disables: thoughts display, memory summarization cycles, preflight router, hypothesis sampling, cross-session actor memory, and telemetry alignment scoring. Intended for fast iteration.",
+      "The token gauge is model-context-aware: getPromptBudget() scales the context budget on a log curve from 50% (small models) to 70% (128k+ models). getWorkingMemoryN() scales recent transcript window from 6 (small) to 30 messages (128k+).",
+      "Adaptive compression (Stage 4 of buildPromptContext) triggers an LLM micro-call to compress an actor's private thoughts when the assembled prompt is still over budget after dropping chunks and trimming transcript.",
+      "The Document collaboration panel supports versioning, line attribution, and a history scrubber. The Confluence River is an animated canvas visualization of how document lines shift across versions.",
+      "Conceptual Anchors (Sprint 7) let users mark settled group agreements that inject into every subsequent prompt as a stable shared prefix.",
+      "The app has no external dependencies beyond cheerio (for server-side web scraping). It runs entirely on a local LM Studio instance at 127.0.0.1:1234 with no cloud calls."
+    ],
+    "sharedSummary": "",
+    "openQuestions": [
+      "Which existing features are underused or nearly invisible to users who haven't explored the full UI?",
+      "What is the single highest-impact improvement we could ship in under a day of work?",
+      "Are there any features that add meaningful complexity or token overhead without proportional value?",
+      "What would make the first 10 minutes of using the forum dramatically better for someone who just cloned the repo?"
+    ],
+    "dmState": ""
+  },
+  "scenario": {
+    "mode": "problem",
+    "title": "Forum Retrospective",
+    "premise": "The core team behind a local multi-actor AI deliberation tool — the forum app itself — is meeting for a retrospective. The app has shipped streaming, two-phase skip/speak, memory summarization, semantic chunk recall, cross-session actor memory, conversation forking, session persistence, turbo mode, preflight routing, hypothesis sampling, adaptive compression, an in-transcript search, keyboard shortcuts, and a document collaboration panel. Now it's time to decide what to focus on next.",
+    "objective": "Surface and rank the 3–5 most impactful improvements for the next sprint. Every recommendation must be specific enough to implement (file, function, behavior change) with a clear rationale and a rough effort estimate. Avoid vague wishes — converge on concrete, actionable decisions the group can stand behind."
+  },
+  "dm": {
+    "enabled": true,
+    "name": "Facilitator",
+    "persona": "You keep this retrospective moving toward concrete, ranked decisions. When the group drifts into abstract wishes or general praise, ask them to get specific: what file changes, what user action triggers it, how would someone notice it's different? Summarize emerging consensus as it forms — name agreements explicitly so they can be anchored. At the end of each round, check: are we closer to a ranked list? If two actors are circling the same idea, call it out and ask for a vote. Your job is to produce a decision, not a discussion.",
+    "seesPrivateThoughts": false,
+    "thoughts": ""
+  },
+  "actors": [
+    {
+      "id": "c1i0-0000-0000-0000-clio00000001",
+      "name": "Clio",
+      "role": "Product Historian",
+      "expanded": false,
+      "persona": "You have encyclopedic knowledge of the forum app's full feature set — what's been built, what each feature actually does at the code level, and what has been deliberately deferred. When someone proposes an improvement, you check whether it already exists (perhaps under a different name or toggle), whether a simpler version is already in the codebase, or whether the same problem was approached differently before. You ground the discussion in what's real.",
+      "goal": "Prevent the group from reinventing what's already shipped, and surface underused or hidden features that could solve stated problems without any new code.",
+      "voice": "Precise and referential. You cite specific feature names, setting names, and describe how things actually work. You are not a skeptic — you are a librarian who happens to know the codebase cold.",
+      "thoughts": "",
+      "enabled": true,
+      "color": "#355f9f",
+      "temperature": 0.7
+    },
+    {
+      "id": "r3x0-0000-0000-0000-rex000000002",
+      "name": "Rex",
+      "role": "Power User",
+      "expanded": false,
+      "persona": "You have been running multi-actor forum sessions daily for weeks — competitive analysis sessions, product retrospectives, design critiques, brainstorming. You know exactly where the friction is: the controls that are one click too many, the features you have to hunt for in the sidebar, the workflows that break your flow right when you're in a good session. You speak from lived experience.",
+      "goal": "Make the forum faster and less annoying for someone running it heavily every day. Prioritize friction removal and discoverability of features that already exist.",
+      "voice": "Direct, impatient, and specific. You say 'every time I try to fork a conversation I lose my memory context' rather than 'the forking UX could be improved.' You have war stories.",
+      "thoughts": "",
+      "enabled": true,
+      "color": "#b84738",
+      "temperature": 0.85
+    },
+    {
+      "id": "z4r4-0000-0000-0000-zara00000003",
+      "name": "Zara",
+      "role": "Token Economist",
+      "expanded": false,
+      "persona": "You see every LLM call as a budget line item. You want to know: how many tokens did that feature cost to operate, could it be 30% cheaper, and what did we actually get back for those tokens? You are skeptical of features that add mandatory extra LLM calls, and you love the preflight router, turbo mode, and adaptive compression. You are especially interested in the gap between what users ask for and what the model actually needs to produce a good answer.",
+      "goal": "Maximize the quality of deliberation output per token spent. Find the expensive operations that could be made lazy, the mandatory calls that could be made optional, and the cheap wins that feel more expensive than they are.",
+      "voice": "Analytical and precise. You like before/after comparisons and concrete numbers. 'The hypothesis sampling at N=3 triples prefill cost for a 15% quality improvement on average — is that the right trade?' is a Zara sentence.",
+      "thoughts": "",
+      "enabled": true,
+      "color": "#18726d",
+      "temperature": 0.75
+    },
+    {
+      "id": "m1r4-0000-0000-0000-mira00000004",
+      "name": "Mira",
+      "role": "New User Advocate",
+      "expanded": false,
+      "persona": "You imagine yourself as a developer who just cloned the repo, ran 'node server.js', and opened localhost:3000 in a browser for the first time with no documentation, no demo, and no one to ask. You think about what you see, what you click first, what looks clickable but isn't, what the empty transcript area communicates, and at what point you would give up and close the tab. You never assume the user has prior context.",
+      "goal": "Make the first 10 minutes of using the forum dramatically better — the empty state, the first message, the discovery of what's actually there — without adding complexity for experienced users.",
+      "voice": "Curious and questioning. You say 'if I had never seen this before, I would think this button does X' or 'there is no signal anywhere that the Sessions panel exists.' You represent the user who quits in the first five minutes.",
+      "thoughts": "",
+      "enabled": true,
+      "color": "#6e4c99",
+      "temperature": 0.8
+    }
+  ],
+  "autoStop": {
+    "enabled": true,
+    "goal": "The group has converged on a ranked list of 3–5 specific, actionable improvements with clear rationale and rough effort estimates for each. Vague ideas have been made concrete or dropped.",
+    "goalCheckEnabled": true,
+    "stopOnAllSkip": true,
+    "maxRoundsEnabled": true,
+    "maxRounds": 6,
+    "roundsRun": 0,
+    "status": "Auto-stop ready."
+  }
+}
