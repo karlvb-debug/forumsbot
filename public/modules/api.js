@@ -29,6 +29,28 @@ function extractStreamingMessage(accumulated) {
   }
   return result;
 }
+function extractStreamingMessage(accumulated) {
+  return extractJsonField(accumulated, "message");
+}
+
+// Show the best available streaming text:
+// - If "message" has started → show that (the final visible response)
+// - Else if "thought" has started → show live word-count progress so user sees activity
+// - Else → return empty string so the cursor stays alive
+function extractStreamingDisplay(accumulated) {
+  if (/"message"\s*:\s*"/.test(accumulated)) {
+    return extractJsonField(accumulated, "message") ?? "";
+  }
+  if (/"thought"\s*:\s*"/.test(accumulated)) {
+    const thought = extractJsonField(accumulated, "thought") ?? "";
+    if (state.settings.showThoughts) {
+      return thought || "💭 Thinking\u2026";
+    }
+    const wordCount = thought.split(/\s+/).filter(Boolean).length;
+    return wordCount > 5 ? `💭 Thinking\u2026 (${wordCount}w)` : "💭 Thinking\u2026";
+  }
+  return ""; // preamble — keep cursor blinking
+}
 
 // els reference — set via initApi() called from main.js
 let els = null;
@@ -329,9 +351,11 @@ export async function getEmbeddingsBatch(texts) {
 }
 
 export async function chatJson(system, user, temperature, signal, onStream = null) {
-  // Use streaming when: a callback is provided, tools won't be active, and streaming is enabled.
+  // Stream when a callback is provided and streaming is enabled.
+  // Previously !isToolMode blocked streaming for most users (toolsEnabled=true by default).
+  // Tool calls are now detected post-stream; the vast majority of turns have none.
   const isToolMode = state.settings.toolsEnabled && state.scenario.mode !== "story";
-  const canStream = onStream && !isToolMode && state.settings.streamingEnabled !== false;
+  const canStream = onStream && state.settings.streamingEnabled !== false;
 
   let content;
   if (canStream) {
@@ -340,9 +364,39 @@ export async function chatJson(system, user, temperature, signal, onStream = nul
       maxTokens: state.settings.maxTokens,
       signal
     }, (_delta, accumulated) => {
-      const msg = extractStreamingMessage(accumulated);
-      if (msg !== null) onStream(msg);
+      onStream(extractStreamingDisplay(accumulated));
     });
+
+    // After streaming, check for text-based tool calls in the completed response.
+    // Native tool_calls don't appear in LM Studio streams, so only prompt-based
+    // [SEARCH:] / [READ:] patterns need handling here.
+    if (isToolMode && !signal?.aborted) {
+      const textCalls = parseTextToolCalls(content);
+      if (textCalls.length) {
+        let toolResults = "";
+        for (const tc of textCalls) {
+          const result = await executeToolCall(tc.tool, JSON.stringify(tc.args), signal);
+          toolResults += `
+
+--- ${tc.tool} result ---
+${result}
+--- end ---`;
+        }
+        const cleanedContent = stripTextToolCalls(content);
+        const followUpUser = [
+          `Here are the tool results you requested:${toolResults}`,
+          "",
+          "Incorporate these results into your response. If you need more detail from another URL, use [READ: https://exact-url] in your thought field.",
+          "Return valid JSON with thought, action, and message fields."
+        ].join("\n");
+        content = await chatCompletion(system, followUpUser, {
+          temperature,
+          maxTokens: state.settings.maxTokens,
+          signal,
+          useTools: false
+        });
+      }
+    }
   } else {
     content = await chatCompletion(system, user, {
       temperature,
