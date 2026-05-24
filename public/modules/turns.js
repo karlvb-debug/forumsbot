@@ -297,6 +297,7 @@ export async function runNextTurn(options = {}) {
       const msg = lastError.message || "Generation failed.";
       const label = attempt > 1 ? `${msg} (failed after ${attempt} attempts)` : msg;
       setStatus(label, "error");
+      document.dispatchEvent(new CustomEvent("generationError", { detail: { message: label } }));
       await addMessage({
         type: "system",
         speaker: "System",

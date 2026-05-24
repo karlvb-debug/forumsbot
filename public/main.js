@@ -28,7 +28,9 @@ import {
   prevSearchMatch,
   renderSessionsList,
   renderPendingAnchors,
-  renderAnchors
+  renderAnchors,
+  showToast,
+  renderStageMemoryHint
 } from './modules/render.js';
 import {
   loadModels,
@@ -608,6 +610,11 @@ function wireEvents() {
       }, 2000);
     });
   }
+
+  // Listen for generation errors and show toast
+  document.addEventListener("generationError", (e) => {
+    showToast(e.detail?.message || "Generation failed.", "error");
+  });
 
   // Listen for telemetry updates to refresh the dial
   document.addEventListener("telemetryUpdated", () => {

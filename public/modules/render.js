@@ -255,6 +255,9 @@ export function setBusy(value) {
   els.auto.disabled = value && !state.autoRunning;
   els.stop.disabled = !value && !state.autoRunning;
   els.userInput.disabled = value;
+  if (els.stop) {
+    els.stop.classList.toggle("stop-active", value || !!state.autoRunning);
+  }
 }
 
 export function renderTurboState() {
@@ -270,6 +273,7 @@ export function renderTurboState() {
 
 export function render() {
   renderStageHeader();
+  renderStageMemoryHint();
   renderActors();
   renderConversationSummary();
   renderDocument();
@@ -522,6 +526,11 @@ export function renderAutoStop() {
   els.maxRounds.disabled = !state.autoStop.maxRoundsEnabled;
   els.checkGoalNow.disabled = isGenerating || !state.autoStop.goal.trim();
   els.autoStopStatus.textContent = state.autoStop.status || "Auto-stop ready.";
+  const syncHint = document.getElementById("objectiveSyncHint");
+  if (syncHint) {
+    const goalMatchesObjective = state.autoStop.goal && state.autoStop.goal === state.scenario.objective;
+    syncHint.style.display = goalMatchesObjective ? "" : "none";
+  }
 }
 
 
@@ -807,6 +816,7 @@ export function renderMemory() {
   renderPendingFacts();
   renderRecentDeltas();
   renderCycleBadge();
+  renderStageMemoryHint();
   const storageText = storageAvailable ? "IndexedDB" : "in-memory";
   const warning = storageWarning ? ` ${storageWarning}` : "";
   els.memoryStatus.textContent = `${storageText} memory. ${state.memory.archivedCount} archived chunk${state.memory.archivedCount === 1 ? "" : "s"}.${warning}`;
@@ -1019,6 +1029,22 @@ export function renderStageHeader() {
   els.stageTitle.textContent = state.scenario.title || "Untitled forum";
 }
 
+export function renderStageMemoryHint() {
+  const el = document.getElementById("stageMemoryHint");
+  if (!el) return;
+  if (!state.memory?.enabled) { el.style.display = "none"; return; }
+  const factCount = Array.isArray(state.memory.pinnedFacts) ? state.memory.pinnedFacts.filter(Boolean).length : 0;
+  const questionCount = Array.isArray(state.memory.openQuestions) ? state.memory.openQuestions.filter(Boolean).length : 0;
+  const archived = state.memory.archivedCount || 0;
+  if (factCount === 0 && questionCount === 0 && archived === 0) { el.style.display = "none"; return; }
+  const parts = [];
+  if (factCount > 0) parts.push(`${factCount} fact${factCount !== 1 ? "s" : ""}`);
+  if (questionCount > 0) parts.push(`${questionCount} question${questionCount !== 1 ? "s" : ""}`);
+  if (archived > 0) parts.push(`${archived} archived`);
+  el.textContent = `🧠 ${parts.join(" · ")}`;
+  el.style.display = "";
+}
+
 export function labelForMode(mode) {
   if (mode === "story") return "Story";
   if (mode === "freeform") return "Freeform";
@@ -1045,6 +1071,11 @@ export function renderActors() {
     $(".actor-swatch", node).style.background = actor.color;
     $(".actor-name-display", node).textContent = actor.name || `Actor ${index + 1}`;
     $(".role-badge", node).textContent = actor.role || "Participant";
+    // One-line preview shown in collapsed state
+    const preview = $(".actor-card-preview", node);
+    if (preview) {
+      preview.textContent = [actor.role, !actor.enabled ? "disabled" : ""].filter(Boolean).join(" · ");
+    }
     $(".actor-name", node).value = actor.name;
     $(".actor-role", node).value = actor.role;
     $(".actor-persona", node).value = actor.persona;
@@ -1100,6 +1131,8 @@ export function renderActors() {
       // Sync display elements
       $(".actor-name-display", node).textContent = actor.name;
       $(".role-badge", node).textContent = actor.role || "Participant";
+      const prevEl = $(".actor-card-preview", node);
+      if (prevEl) prevEl.textContent = [actor.role, !actor.enabled ? "disabled" : ""].filter(Boolean).join(" · ");
       $(".researcher-badge", node).style.display = actor.isResearcher ? "" : "none";
       node.classList.toggle("researcher-agent", actor.isResearcher);
       $(".actor-temperature-display", node).textContent = actor.temperature.toFixed(2);
@@ -1122,6 +1155,46 @@ export function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text || "";
   return div.innerHTML;
+}
+
+// ── Toast notifications ───────────────────────────────────────────────────────
+let _toastContainer = null;
+function getToastContainer() {
+  if (!_toastContainer) {
+    _toastContainer = document.createElement("div");
+    _toastContainer.className = "toast-container";
+    document.body.appendChild(_toastContainer);
+  }
+  return _toastContainer;
+}
+
+export function showToast(message, type = "info", duration = 5000) {
+  const container = getToastContainer();
+  const toast = document.createElement("div");
+  toast.className = `toast toast--${type}`;
+  toast.innerHTML = `<span class="toast-msg">${escapeHtml(message)}</span><button class="toast-close" type="button" aria-label="Dismiss">✕</button>`;
+  toast.querySelector(".toast-close").addEventListener("click", () => dismissToast(toast));
+  container.appendChild(toast);
+  // Animate in
+  requestAnimationFrame(() => toast.classList.add("toast--visible"));
+  if (duration > 0) setTimeout(() => dismissToast(toast), duration);
+  return toast;
+}
+
+function dismissToast(toast) {
+  toast.classList.remove("toast--visible");
+  toast.addEventListener("transitionend", () => toast.remove(), { once: true });
+}
+
+// Auto-save flash
+if (typeof document !== "undefined") {
+  document.addEventListener("stateSaved", () => {
+    const el = document.getElementById("saveFlash");
+    if (!el) return;
+    el.classList.remove("save-flash-active");
+    void el.offsetWidth; // reflow to restart animation
+    el.classList.add("save-flash-active");
+  });
 }
 
 export function formatMessageHtml(text, color) {
@@ -1163,9 +1236,30 @@ export function renderTranscript() {
   const frag = document.createDocumentFragment();
 
   if (!state.messages.length) {
+    const connected = document.getElementById("connectionStatus")?.classList.contains("connected");
+    const hasModel = !!state.settings.model;
+    const step1Done = connected && hasModel;
+    const step2Done = step1Done && (state.scenario.title && state.scenario.title !== "Design council" || state.actors.length > 3);
     const empty = document.createElement("div");
-    empty.className = "empty-state";
-    empty.innerHTML = "<div><strong>No turns yet</strong><span>Waiting for the opening move.</span></div>";
+    empty.className = "empty-state onboarding-state";
+    empty.innerHTML = `
+      <div class="onboarding-card">
+        <h3 class="onboarding-title">Getting started</h3>
+        <ol class="onboarding-steps">
+          <li class="${step1Done ? 'step-done' : 'step-todo'}">
+            <span class="step-icon">${step1Done ? '✓' : '1'}</span>
+            <span>Start LM Studio, load a model, then click <strong>Refresh</strong> in Setup → Connection and select your model</span>
+          </li>
+          <li class="${step2Done ? 'step-done' : (step1Done ? 'step-todo' : 'step-pending')}">
+            <span class="step-icon">${step2Done ? '✓' : '2'}</span>
+            <span>Describe your forum in <strong>Quick Setup</strong> (or edit the scenario and actors manually)</span>
+          </li>
+          <li class="step-todo ${step2Done ? '' : 'step-pending'}">
+            <span class="step-icon">3</span>
+            <span>Type a message below and press <strong>Send</strong>, or click <strong>Next AI</strong> to let the actors open the discussion</span>
+          </li>
+        </ol>
+      </div>`;
     frag.append(empty);
     el.innerHTML = "";
     el.appendChild(frag);

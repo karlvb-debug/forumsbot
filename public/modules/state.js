@@ -135,6 +135,7 @@ export function setState(newState) {
 export function saveState() {
   const { messages, autoRunning, ...persisted } = state;
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...persisted, messages: [] }));
+  document.dispatchEvent(new CustomEvent("stateSaved"));
 }
 
 export function logTransition(type, detail = {}) {
