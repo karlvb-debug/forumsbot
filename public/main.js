@@ -63,7 +63,8 @@ import {
   applyQuickStartConfig,
   discardQuickStartConfig,
   saveCurrentSession,
-  loadSession
+  loadSession,
+  generateActorFromDescription
 } from './modules/session.js';
 import { initializeMemoryStorage, getAllChunks, getAllSessions, deleteSession } from './modules/db.js';
 import { startTensionGridAnimation, stopTensionGridAnimation } from './modules/telemetry.js';
@@ -465,6 +466,7 @@ function wireEvents() {
   els.discardQuickStart.addEventListener("click", discardQuickStartConfig);
   els.addActor.addEventListener("click", () => addActor(false));
   els.addResearcher.addEventListener("click", () => addActor(true));
+  document.getElementById("addActorFromDescBtn")?.addEventListener("click", generateActorFromDescription);
   els.savePreset.addEventListener("click", savePreset);
   els.loadPreset.addEventListener("click", () => els.presetFile.click());
   els.exportSession.addEventListener("click", () => exportSession());

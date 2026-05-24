@@ -807,6 +807,19 @@ export function renderTokenGauge() {
     ctxWarning = `⚠️ Only ${fmt(headroom)} tokens left for completion (${fmt(maxTokens)} needed) — responses may be truncated.`;
   }
 
+  // Show context window size and warn if maxTokens setting is too high
+  const ctxHint = document.getElementById("modelContextInfo");
+  if (ctxHint) {
+    const maxTok = state.settings?.maxTokens || 0;
+    const isExcessive = maxTok > 0 && maxTok > maxContextLength * 0.8;
+    const ctxFmt = maxContextLength >= 1000 ? `${Math.round(maxContextLength / 1000)}K` : String(maxContextLength);
+    ctxHint.textContent = isExcessive
+      ? `Context: ${ctxFmt} ⚠ maxTokens (${maxTok}) exceeds 80% — reduce or responses may be cut short`
+      : `Context: ${ctxFmt}`;
+    ctxHint.dataset.level = isExcessive ? "warn" : "ok";
+    ctxHint.style.display = "";
+  }
+
   // Find or create the context warning element
   let ctxWarnEl = els.tokenGauge.parentElement?.querySelector(".ctx-window-warning");
   if (ctxWarning) {

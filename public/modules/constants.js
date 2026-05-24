@@ -85,7 +85,9 @@ export const defaultState = {
     // Streaming: show tokens as they arrive for actor/DM turns
     streamingEnabled: true,
     // Turbo Mode: skip memory cycles, thoughts, alignment, and cross-session memory
-    turboMode: false
+    turboMode: false,
+    // Adaptive compression: LLM micro-summarize private memory when prompt is over budget
+    enableAdaptiveCompression: true
   },
   ui: {
     activeTab: "",

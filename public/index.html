@@ -116,6 +116,7 @@
                       Model
                       <input id="modelInput" list="modelOptions" autocomplete="off" spellcheck="false" placeholder="Select a model…">
                       <datalist id="modelOptions"></datalist>
+                      <span id="modelContextInfo" class="model-ctx-hint" style="display:none"></span>
                     </label>
                     <button class="soft-button" id="loadModelsButton" type="button" style="align-self:end">Refresh</button>
                   </div>
@@ -307,6 +308,7 @@
                   <div style="display:flex;gap:8px">
                     <button class="soft-button" id="addActorButton" type="button">+ Add</button>
                     <button class="soft-button" id="addResearcherButton" type="button" title="Add Specialized Research Agent">+ Add Researcher</button>
+                    <button class="soft-button" id="addActorFromDescBtn" type="button" title="Describe an actor and let AI fill in the details">+ From description…</button>
                   </div>
                 </div>
                 <div class="actor-list" id="actorList"></div>

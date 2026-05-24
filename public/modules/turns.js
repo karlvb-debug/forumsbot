@@ -945,14 +945,14 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   }
 
   // Build sections and enforce token budget with graceful degradation.
-  const buildSections = (chunks, msgs) => [
+  const buildSections = (chunks, msgs, memOverride = null) => [
     scenarioBlock(),
     state.memory.enabled ? memoryBlock(chunks) : "",
     state.document.enabled
       ? `### Shared Document: "${state.document.title}"\n---\n${state.document.content || "(Empty — start drafting.)" }\n---`
       : "",
     crossSessionBlock,
-    participantMemory,
+    memOverride || participantMemory,
     privateThoughts,
     `### Recent transcript\n${formatTranscript(msgs, WORD_LIMITS.recentTranscript)}`,
     periodicReminder,
@@ -992,6 +992,32 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   if (estimateTokens(assembled) > PROMPT_TOKEN_BUDGET && recallChunks.length > 0) {
     recallChunks = [];
     assembled = buildSections(recallChunks, recentMessages);
+  }
+
+  // Stage 4: LLM micro-compress private actor memory (never mutates state)
+  if (
+    estimateTokens(assembled) > PROMPT_TOKEN_BUDGET &&
+    kind === "actor" &&
+    state.settings.enableAdaptiveCompression !== false &&
+    !state.settings.turboMode
+  ) {
+    const rawThoughts = actor.thoughts || "";
+    if (rawThoughts.split(/\s+/).length > 30) {
+      try {
+        const compressed = await chatCompletion(
+          "Compress character memory. Output ONLY the compressed text, nothing else. Maximum 80 words.",
+          rawThoughts.slice(0, 800),
+          { temperature: 0.1, maxTokens: 130 }
+        );
+        if (compressed?.trim()) {
+          const compressedMem = `Your private actor memory (compressed):\n${compressed.trim()}`;
+          assembled = buildSections([], recentMessages, compressedMem);
+          logTransition("adaptive_compression", { actor: actor.name, before: rawThoughts.length, after: compressed.length });
+        }
+      } catch {
+        // Silently continue with existing prompt
+      }
+    }
   }
 
   const finalTokens = estimateTokens(assembled);

@@ -341,6 +341,52 @@ export function addActor(isResearcher = false) {
   render();
 }
 
+export async function generateActorFromDescription() {
+  if (!state.settings.model) {
+    setStatus("Choose or type a model first.", "warn");
+    return;
+  }
+  const description = window.prompt("Describe the actor you want (one line):", "");
+  if (!description?.trim()) return;
+
+  setStatus("Generating actor…", "ok");
+  const system = [
+    "You generate a single forum actor configuration from a one-line description.",
+    "Return ONLY valid JSON with this exact shape (no markdown, no commentary):",
+    '{"name":"","role":"","persona":"","goal":"","voice":""}'
+  ].join("\n");
+  const user = [
+    `Description: ${description.trim()}`,
+    `Forum scenario: ${state.scenario.title || "general discussion"}`,
+    "Keep each field concise (1-2 sentences). Make name creative and specific to the context."
+  ].join("\n");
+
+  try {
+    const raw = await chatCompletion(system, user, { temperature: 0.8, maxTokens: 400 });
+    const cleaned = sanitizeJsonString(stripCodeFence(raw));
+    const parsed = JSON.parse(cleaned);
+    if (!parsed?.name) throw new Error("Invalid actor JSON returned.");
+    const index = state.actors.length;
+    state.actors.push({
+      id: crypto.randomUUID(),
+      name: String(parsed.name || `Actor ${index + 1}`).slice(0, 50),
+      role: String(parsed.role || "Participant").slice(0, 80),
+      persona: String(parsed.persona || "").slice(0, 400),
+      goal: String(parsed.goal || "").slice(0, 200),
+      voice: String(parsed.voice || "").slice(0, 200),
+      thoughts: "",
+      enabled: true,
+      expanded: true,
+      color: colors[index % colors.length]
+    });
+    saveState();
+    render();
+    setStatus(`Actor "${parsed.name}" created.`, "ok");
+  } catch (err) {
+    setStatus(`Actor generation failed: ${err.message}`, "error");
+  }
+}
+
 export async function generateQuickStart() {
   if (!state.settings.model) {
     setQuickStartStatus("Choose or type a model first.", "warn");

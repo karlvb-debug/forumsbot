@@ -1708,6 +1708,13 @@ summary {
   cursor: help;
 }
 
+.model-ctx-hint {
+  display: block;
+  font-size: 0.72rem;
+  margin-top: 3px;
+  color: var(--dim);
+}
+.model-ctx-hint[data-level="warn"] { color: var(--gold, #e9a825); }
 .ctx-window-warning {
   font-size: 0.7rem;
   padding: 3px 8px;
