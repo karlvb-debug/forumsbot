@@ -442,7 +442,20 @@ function wireEvents() {
     els.userInput.value = "";
   });
 
-  // Keyboard shortcuts
+  // Enter in the chat textarea: send if text is present, trigger next AI turn if empty.
+  // Shift+Enter inserts a newline as normal.
+  els.userInput.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    e.preventDefault();
+    const content = els.userInput.value.trim();
+    if (content) {
+      els.composer.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    } else if (!getIsGenerating()) {
+      runNextTurn().then(ok => { if (ok) saveCurrentSession().catch(console.warn); });
+    }
+  });
+
+  // Global keyboard shortcuts (non-conflicting with browser defaults)
   document.addEventListener("keydown", (e) => {
     // Escape — close search bar or stop generation
     if (e.key === "Escape") {
@@ -452,7 +465,6 @@ function wireEvents() {
         hideTranscriptSearch();
         return;
       }
-      // Stop generation if running
       if (getIsGenerating()) {
         e.preventDefault();
         stopGeneration();
@@ -463,15 +475,8 @@ function wireEvents() {
     const mod = e.metaKey || e.ctrlKey;
     if (!mod) return;
 
-    // Cmd/Ctrl+F — open transcript search
-    if (e.key === "f" || e.key === "F") {
-      e.preventDefault();
-      showTranscriptSearch();
-      return;
-    }
-
-    // Cmd/Ctrl+Enter — send message or trigger next turn
-    // Guard: don't fire when typing in a sidebar form field
+    // Ctrl+Enter — global fallback: send or trigger next AI turn
+    // Guards: not when focus is in a sidebar field; Ctrl+F/N/R left to the browser
     if (e.key === "Enter" && !e.shiftKey) {
       const focused = document.activeElement;
       const inSidebarInput = focused &&
@@ -479,33 +484,20 @@ function wireEvents() {
         focused !== els.userInput;
       if (!inSidebarInput) {
         const content = els.userInput.value.trim();
+        e.preventDefault();
         if (content) {
-          e.preventDefault();
           els.composer.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
-        } else {
-          e.preventDefault();
+        } else if (!getIsGenerating()) {
           runNextTurn().then(ok => { if (ok) saveCurrentSession().catch(console.warn); });
         }
       }
     }
-
-    // Cmd/Ctrl+Shift+N — next AI turn
-    if (e.key === "N" && e.shiftKey) {
-      e.preventDefault();
-      runNextTurn().then(ok => { if (ok) saveCurrentSession().catch(console.warn); });
-    }
-
-    // Cmd/Ctrl+Shift+R — run a round
-    if (e.key === "R" && e.shiftKey) {
-      e.preventDefault();
-      runRound().then(ok => { if (ok) saveCurrentSession().catch(console.warn); });
-    }
   });
 
-  // Bare Space / Enter — run next turn when no input is focused and not busy
+  // Bare Enter — run next AI turn when no input field is focused
   document.addEventListener("keydown", (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
-    if (e.key !== " " && e.key !== "Enter") return;
+    if (e.key !== "Enter") return;
     const focused = document.activeElement;
     const inInput = focused &&
       (focused.tagName === "TEXTAREA" || focused.tagName === "INPUT" ||
