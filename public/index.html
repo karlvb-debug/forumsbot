@@ -96,6 +96,9 @@
             </div>
           </div>
 
+          <!-- Scrollable panel body — tabs stay pinned above -->
+          <div class="sidebar-scroll-body">
+
           <!-- ── Setup panel ──────────────────────────────────────────── -->
           <div class="sidebar-panel" data-sidebar-panel="setup">
             <div class="setup-grid sidebar-setup-grid">
@@ -290,7 +293,7 @@
                   </div>
                   <label class="toggle-row">
                     <input id="showThoughtsInput" type="checkbox">
-                    <span>Show private thoughts in transcript</span>
+                    <span>Auto-expand private thoughts</span>
                   </label>
                   <label class="toggle-row">
                     <input id="toolsEnabledInput" type="checkbox">
@@ -578,6 +581,7 @@
             </div>
           </div><!-- /sidebar-panel sessions -->
 
+          </div><!-- /sidebar-scroll-body -->
         </aside>
       </div><!-- /conversation-layout -->
 
@@ -594,17 +598,22 @@
           <strong></strong>
           <span class="actor-role-label"></span>
           <span class="message-time"></span>
-          <div class="message-feedback" style="display:none; margin-left: auto; display: flex; gap: 6px; align-items: center;">
-            <button class="feedback-btn feedback-thumbs-up" type="button" title="Helpful contribution" style="background: none; border: none; cursor: pointer; padding: 2px; font-size: 14px;">👍</button>
-            <button class="feedback-btn feedback-thumbs-down" type="button" title="Unhelpful/Off-topic" style="background: none; border: none; cursor: pointer; padding: 2px; font-size: 14px;">👎</button>
-            <select class="feedback-tag-select" aria-label="Feedback reason" style="display:none; font-size: 11px; padding: 2px; border-radius: 4px; background: var(--bg-card); color: var(--text); border: 1px solid var(--border);">
-              <option value="" disabled selected>Reason...</option>
-              <option value="hallucination">Hallucination</option>
-              <option value="off-topic">Off-topic</option>
-              <option value="repetitive">Repetitive</option>
-              <option value="poor-quality">Poor quality</option>
-            </select>
+          <!-- Action bar sits right-aligned inside the meta row -->
+          <div class="msg-action-bar" hidden>
+            <button class="msg-btn feedback-thumbs-up" type="button" title="Helpful contribution">👍</button>
+            <button class="msg-btn feedback-thumbs-down" type="button" title="Unhelpful / off-topic">👎</button>
+            <button class="msg-btn anchor-btn" type="button" title="Anchor this claim">⚓</button>
+            <button class="msg-btn fork-btn" type="button" title="Fork conversation from here">⑂</button>
           </div>
+        </div>
+        <div class="feedback-reason-row" hidden>
+          <select class="feedback-tag-select" aria-label="Feedback reason">
+            <option value="" disabled selected>Tag reason…</option>
+            <option value="hallucination">Hallucination</option>
+            <option value="off-topic">Off-topic</option>
+            <option value="repetitive">Repetitive</option>
+            <option value="poor-quality">Poor quality</option>
+          </select>
         </div>
         <p class="message-content"></p>
         <div class="tool-calls" style="display:none"></div>

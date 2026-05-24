@@ -126,19 +126,16 @@ function wireEvents() {
     if (isInitialized) validateEmbeddingModel(els.embeddingModel.value.trim());
   });
 
-  // Mirror toggles in composer bar — sync back to setup-tab checkboxes
-  const mirrorHandler = () => {
-    if (!isInitialized) return;
-    state.settings.showThoughts = els.showThoughtsMirror.checked;
-    state.settings.toolsEnabled = els.toolsEnabledMirror.checked;
-    els.showThoughts.checked = state.settings.showThoughts;
-    els.toolsEnabled.checked = state.settings.toolsEnabled;
-    saveState();
-    renderTranscript();
-    renderConversationSummary();
-  };
-  if (els.showThoughtsMirror) els.showThoughtsMirror.addEventListener("change", mirrorHandler);
-  if (els.toolsEnabledMirror) els.toolsEnabledMirror.addEventListener("change", mirrorHandler);
+  // 💭 composer toggle — UI-only: expand/collapse thought blocks, no AI behavior change
+  if (els.showThoughtsMirror) {
+    els.showThoughtsMirror.addEventListener("change", () => {
+      if (!isInitialized) return;
+      state.settings.showThoughts = els.showThoughtsMirror.checked;
+      els.showThoughts.checked = state.settings.showThoughts;
+      saveState();
+      renderTranscript();
+    });
+  }
 
   // Sidebar tabs (Setup / Telemetry / Document)
   els.sidebarTabs.forEach((tab) => {

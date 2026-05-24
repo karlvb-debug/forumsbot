@@ -155,7 +155,8 @@ button:disabled, textarea:disabled, input:disabled, select:disabled {
 }
 
 /* ── Sidebar setup/memory single-column overrides ─────────── */
-.sidebar-setup-grid {
+/* Use double-class selector for higher specificity than .setup-grid alone */
+.setup-grid.sidebar-setup-grid {
   grid-template-columns: 1fr;
 }
 .memory-sidebar-grid {
@@ -163,6 +164,46 @@ button:disabled, textarea:disabled, input:disabled, select:disabled {
   gap: 16px;
   grid-template-columns: 1fr;
   align-items: start;
+}
+
+/* All sidebar panels: force single-column on elements that
+   assume a wide layout. Scoped to .sidebar-panel so these
+   overrides don't bleed into the main conversation area.    */
+.sidebar-panel .two-column {
+  grid-template-columns: 1fr;
+}
+/* Model + Refresh: keep refresh button full-width but on same row —
+   re-establish 2-col only for the connection section's model row
+   so Refresh stays inline with the model input.              */
+.sidebar-panel .section--connection .two-column {
+  grid-template-columns: 1fr auto;
+}
+/* Actor card name/role + temp/color: stack vertically in sidebar */
+.sidebar-panel .actor-card .two-column {
+  grid-template-columns: 1fr;
+}
+/* Max-rounds split row: keep 1fr + fixed number input (fine at any width) */
+.sidebar-panel .split-row {
+  grid-template-columns: 1fr 80px;
+}
+/* Section titles: allow wrapping so status pills / toggles don't overflow */
+.sidebar-panel .section-title {
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+/* Telemetry dial: stack SVG above text on narrow panels */
+.sidebar-panel .telemetry-dial-container {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+/* Session buttons: 2×2 grid is fine at sidebar width */
+.sidebar-panel .session-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+/* Quick-start actions: 2-col fits fine */
+.sidebar-panel .quick-start-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 /* ============================================================
@@ -182,10 +223,12 @@ button:disabled, textarea:disabled, input:disabled, select:disabled {
 .panel-section {
   display: grid;
   gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--line);
+  padding: 12px;
   border-radius: 10px;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
   background: var(--panel);
+  min-width: 0;             /* prevent sections from overflowing sidebar */
   position: relative;
   overflow: hidden;
 }
@@ -405,6 +448,10 @@ input[type=range]::-webkit-slider-thumb {
   font-size: 0.9rem;
   color: var(--ink);
   flex: 1;
+  min-width: 0;             /* allow shrinking in flex row */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .role-badge {
   font-size: 0.7rem;
@@ -415,6 +462,10 @@ input[type=range]::-webkit-slider-thumb {
   border: 1px solid var(--line);
   color: var(--muted);
   white-space: nowrap;
+  max-width: 120px;         /* truncate at narrow widths */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
 }
 .researcher-badge {
   font-size: 0.7rem;
@@ -591,7 +642,7 @@ input:focus, textarea:focus, select:focus {
 }
 .conversation-layout {
   display: grid;
-  grid-template-columns: minmax(400px, 1fr) 6px minmax(260px, 360px);
+  grid-template-columns: minmax(0, 1fr) 6px minmax(220px, 360px);
   gap: 0 0;
   height: 100%;
   min-height: 0;
@@ -602,19 +653,30 @@ input:focus, textarea:focus, select:focus {
 
 /* ── Stage header ────────────────────────────────────────────── */
 .stage-header {
-  padding: 14px 16px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
   background: var(--panel-strong);
-  gap: 12px;
+  gap: 8px 12px;
+  flex-wrap: wrap;        /* let title row and toolbar wrap to second line */
 }
 .stage-header h2 {
   margin: 0;
-  font-size: clamp(1.1rem, 2vw, 1.5rem);
+  font-size: clamp(0.95rem, 2vw, 1.4rem);
   line-height: 1.2;
   font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
-.turn-toolbar { display: flex; align-items: center; gap: 8px; }
+.turn-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;        /* buttons wrap rather than overflow */
+  flex-shrink: 0;
+}
 
 /* ── Mode badge ─────────────────────────────────────────────── */
 .mode-badge {
@@ -738,8 +800,6 @@ input:focus, textarea:focus, select:focus {
   background: var(--panel-strong);
   padding: 12px 14px;
   border-left-width: 3px;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 150px;
   transition: box-shadow 0.15s;
 }
 .message-card.user {
@@ -824,9 +884,12 @@ input:focus, textarea:focus, select:focus {
   margin: 8px 0 0;
   line-height: 1.55;
   white-space: pre-wrap;
+  overflow-wrap: break-word;  /* break long unbroken strings (URLs, JSON) */
+  word-break: break-word;
+  min-width: 0;
 }
 .message-content,
-.thought-block p { white-space: pre-wrap; }
+.thought-block p { white-space: pre-wrap; overflow-wrap: break-word; }
 .rp-action { font-style: italic; color: var(--rp-color, var(--muted)); }
 
 /* ── Thought / notes blocks ─────────────────────────────────── */
@@ -894,8 +957,13 @@ summary {
   background: var(--panel-strong);
 }
 .composer textarea { width: 100%; min-height: 44px; max-height: 140px; }
-.composer-actions { display: flex; align-items: center; gap: 6px; }
-.composer-actions .spacer { flex: 1; }
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;     /* buttons wrap to second row at narrow widths */
+}
+.composer-actions .spacer { flex: 1; min-width: 8px; }
 
 /* Compact emoji toggles in composer bar */
 .composer-toggle {
@@ -936,11 +1004,10 @@ summary {
   align-self: stretch;
   height: 100%;
   max-height: 100%;
-  overflow-y: auto;
-  display: grid;
-  gap: 10px;
-  grid-template-rows: auto 1fr;
-  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;           /* sidebar itself never scrolls */
+  min-width: 0;
 }
 .panel-section.conversation-sidebar { border-radius: 10px; }
 
@@ -956,23 +1023,46 @@ summary {
   background: var(--accent);
 }
 
-/* Sidebar header with compact tab switcher */
 .sidebar-header {
-  display: flex; align-items: center; justify-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;            /* never collapse */
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.sidebar-scroll-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;             /* required for flex overflow to work */
 }
 .sidebar-tabs {
-  display: inline-flex; gap: 2px;
-  padding: 3px; border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;       /* tabs wrap to next row instead of overflowing */
+  justify-content: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--panel-strong);
+  width: 100%;           /* fill available width */
 }
 .sidebar-tab {
-  padding: 4px 14px; min-height: 26px;
-  border-radius: 6px; border: none;
-  background: transparent; color: var(--muted);
-  font-weight: 700; font-size: 0.75rem;
-  cursor: pointer; transition: all 0.15s;
+  padding: 4px 10px;
+  min-height: 26px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all 0.15s;
   white-space: nowrap;
+  flex: 1;               /* tabs share available width equally */
+  text-align: center;
 }
 .sidebar-tab.active { background: var(--accent); color: white; }
 .sidebar-tab:hover:not(.active) { background: rgba(255,255,255,0.05); }
@@ -986,8 +1076,12 @@ summary {
 
 /* Document panel header */
 .doc-header {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 8px; margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;           /* wrap title + controls at narrow widths */
+  gap: 8px;
+  margin-bottom: 8px;
 }
 .doc-view-toggle {
   display: inline-flex; gap: 2px; padding: 2px;
@@ -1803,70 +1897,87 @@ summary {
 }
 
 /* ── Feedback thumbs buttons ─────────────────────────────────── */
-.message-feedback {
+/* ── Message action bar ─────────────────────────────────────── */
+/* Lives inside .message-meta, pushed right via margin-left:auto */
+.msg-action-bar {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 1px;
   margin-left: auto;
   opacity: 0;
   transition: opacity 0.15s ease;
 }
-
-.message-card:hover .message-feedback,
-.message-card:focus-within .message-feedback {
+.msg-action-bar[hidden] { display: none; }
+.message-card:hover .msg-action-bar,
+.message-card:focus-within .msg-action-bar {
+  opacity: 1;
+}
+/* Stay visible when a button has an active state */
+.message-card:has(.msg-btn.active-up) .msg-action-bar,
+.message-card:has(.msg-btn.active-down) .msg-action-bar,
+.message-card:has(.anchor-btn.is-anchored) .msg-action-bar {
   opacity: 1;
 }
 
-.fork-btn {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  opacity: 0;
-  transition: opacity 0.15s;
+.msg-btn {
   background: none;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  color: var(--dim);
-  font-size: 0.72rem;
-  padding: 2px 7px;
+  border: none;
   cursor: pointer;
-  white-space: nowrap;
-}
-.fork-btn:hover { background: var(--panel-strong); color: var(--text); border-color: var(--accent); }
-.message-card { position: relative; }
-.message-card:hover .fork-btn,
-.message-card:focus-within .fork-btn { opacity: 1; }
-
-.feedback-btn {
-  background: none !important;
-  border: none !important;
-  cursor: pointer;
-  padding: 3px 5px;
-  border-radius: 6px;
-  font-size: 14px;
+  padding: 3px 6px;
+  border-radius: 5px;
   line-height: 1;
-  transition: background 0.15s ease, transform 0.1s ease;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.1s ease;
+}
+/* Thumbs — emoji, look fine at default size */
+.msg-btn.feedback-thumbs-up,
+.msg-btn.feedback-thumbs-down {
+  font-size: 0.85rem;
+  color: var(--muted);
+  opacity: 0.7;
+}
+/* Anchor — gold tint so it reads clearly in dark mode */
+.msg-btn.anchor-btn {
+  font-size: 1rem;
+  color: #c9a84c;
+  opacity: 0.75;
+}
+/* Fork — accent tint, larger so ⑂ is actually legible */
+.msg-btn.fork-btn {
+  font-size: 1.1rem;
+  color: var(--accent);
+  opacity: 0.7;
+}
+.msg-btn:hover {
+  background: var(--panel-strong);
+  transform: scale(1.15);
+  opacity: 1 !important;
+}
+.msg-btn.active-up {
+  background: rgba(46, 160, 67, 0.15);
+  color: #4ade80;
+  opacity: 1 !important;
+}
+.msg-btn.active-down {
+  background: rgba(224, 92, 75, 0.15);
+  color: var(--coral);
+  opacity: 1 !important;
+}
+.anchor-btn.is-anchored {
+  color: var(--gold);
+  background: rgba(212, 175, 55, 0.15);
+  opacity: 1 !important;
 }
 
-.feedback-btn:hover {
-  background: rgba(255, 255, 255, 0.08) !important;
-  transform: scale(1.2);
+.feedback-reason-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 4px;
 }
-
-.feedback-btn.active-up {
-  background: rgba(46, 160, 67, 0.2) !important;
-  box-shadow: 0 0 0 1px rgba(46, 160, 67, 0.4);
-}
-
-.feedback-btn.active-down {
-  background: rgba(224, 92, 75, 0.2) !important;
-  box-shadow: 0 0 0 1px rgba(224, 92, 75, 0.4);
-}
-
+.feedback-reason-row[hidden] { display: none; }
 .feedback-tag-select {
-  font-size: 11px;
-  padding: 2px 4px;
-  border-radius: 4px;
+  font-size: 0.75rem;
+  padding: 3px 6px;
+  border-radius: 5px;
   background: var(--panel-strong);
   color: var(--ink);
   border: 1px solid var(--line);
@@ -2104,34 +2215,6 @@ summary {
    ══════════════════════════════════════════════════════════════════ */
 
 /* ⚓ Anchor button on message cards */
-.anchor-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  cursor: pointer;
-  opacity: 0.35;
-  transition: opacity 0.2s, background 0.2s, transform 0.15s;
-  flex-shrink: 0;
-  margin-left: 4px;
-}
-.anchor-btn:hover {
-  opacity: 0.85;
-  background: rgba(212, 175, 55, 0.15);
-  transform: scale(1.15);
-}
-.anchor-btn.is-anchored {
-  opacity: 1;
-  color: var(--gold);
-  background: rgba(212, 175, 55, 0.12);
-  box-shadow: 0 0 6px rgba(212, 175, 55, 0.3);
-}
-
 /* Anchored message card — gold left border overrides actor color */
 .anchored-card {
   border-left-color: var(--gold) !important;

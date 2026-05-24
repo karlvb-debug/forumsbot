@@ -115,7 +115,6 @@ export const els = {
   tokenGaugeBar: $("#tokenGaugeBar"),
   tokenGaugeLabel: $("#tokenGaugeLabel"),
   showThoughtsMirror: $("#showThoughtsMirror"),
-  toolsEnabledMirror: $("#toolsEnabledMirror"),
   // Document panel
   documentEnabled: $("#documentEnabledInput"),
   documentTitle: $("#documentTitleInput"),
@@ -180,7 +179,7 @@ let _streamingBubble = null;
 let _streamingMessageEl = null;
 
 export function showStreamingBubble(speaker, color, type = "actor") {
-  removeStreamingBubble();
+  forceRemoveStreamingBubble();
   const wasAtBottom = els.transcript.scrollHeight - els.transcript.scrollTop - els.transcript.clientHeight < 80;
   const template = document.getElementById("messageTemplate");
   if (!template) return;
@@ -214,12 +213,21 @@ export function updateStreamingBubble(text) {
   if (wasAtBottom) els.transcript.scrollTop = els.transcript.scrollHeight;
 }
 
+// Called by renderTranscript() — only nullifies refs.
+// The DOM element gets wiped by innerHTML="" in the same tick.
 export function removeStreamingBubble() {
+  _streamingBubble = null;
+  _streamingMessageEl = null;
+}
+
+// Called by error/abort paths where renderTranscript() won't fire.
+// Actually removes the DOM element.
+export function forceRemoveStreamingBubble() {
   if (_streamingBubble) {
     _streamingBubble.remove();
-    _streamingBubble = null;
-    _streamingMessageEl = null;
   }
+  _streamingBubble = null;
+  _streamingMessageEl = null;
 }
 
 export let isInitialized = false;
@@ -1047,17 +1055,42 @@ export function formatMessageHtml(text, color) {
 }
 
 export function renderTranscript() {
-  // Snapshot whether the user was already pinned to the bottom before we touch the DOM.
-  // 80px threshold accounts for the last message being partially visible.
-  const wasAtBottom = els.transcript.scrollHeight - els.transcript.scrollTop - els.transcript.clientHeight < 80;
+  const el = els.transcript;
 
-  els.transcript.innerHTML = "";
+  // ── Snapshot scroll state BEFORE touching DOM ──────────────────
+  const oldScrollTop  = el.scrollTop;
+  const wasAtBottom   = el.scrollHeight - oldScrollTop - el.clientHeight < 80;
+
+  // Find which message the user is looking at by index.
+  // Walk the existing message cards and find the first one whose top edge
+  // is at or past the current scrollTop (i.e. the topmost visible card).
+  let anchorIndex = -1;
+  let anchorOffset = 0; // how far past the card's top the scroll was
+  if (!wasAtBottom) {
+    const cards = el.querySelectorAll('.message-card:not([data-streaming])');
+    for (let i = 0; i < cards.length; i++) {
+      const cardTop = cards[i].offsetTop;
+      if (cardTop + cards[i].offsetHeight > oldScrollTop) {
+        anchorIndex = i;
+        anchorOffset = oldScrollTop - cardTop;
+        break;
+      }
+    }
+  }
+
+  // Null-out streaming bubble refs (DOM element gets wiped by innerHTML below)
+  removeStreamingBubble();
+
+  // Build all nodes into a fragment before touching the live DOM.
+  const frag = document.createDocumentFragment();
 
   if (!state.messages.length) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
     empty.innerHTML = "<div><strong>No turns yet</strong><span>Waiting for the opening move.</span></div>";
-    els.transcript.append(empty);
+    frag.append(empty);
+    el.innerHTML = "";
+    el.appendChild(frag);
     return;
   }
 
@@ -1088,8 +1121,8 @@ export function renderTranscript() {
     $(".message-time", node).textContent = formatTime(message.createdAt);
     $(".message-content", node).innerHTML = formatMessageHtml(publicMessageContent(message), actorColor);
 
-    // Thought block — always show as collapsible <details> when there's a thought.
-    // showThoughts setting controls whether it renders auto-expanded (open attr).
+    // Thought block — always visible when there's a thought.
+    // showThoughts only controls whether it starts expanded or collapsed.
     const thoughtBlock = $(".thought-block", node);
     if (message.thought) {
       $("p", thoughtBlock).textContent = message.thought;
@@ -1204,89 +1237,106 @@ export function renderTranscript() {
       node.appendChild(section);
     }
 
-    // Feedback thumbs — only shown on actor/dm messages
-    const feedbackBar = $(".message-feedback", node);
-    if (message.type === "actor" || message.type === "dm") {
-      feedbackBar.style.display = "flex";
+    // ── Unified action bar ────────────────────────────────────────
+    // All buttons live in the template's .msg-action-bar.
+    // Wire up handlers and show/hide based on message type.
+    const actionBar   = $('.msg-action-bar', node);
+    const thumbUp     = $('.feedback-thumbs-up', node);
+    const thumbDown   = $('.feedback-thumbs-down', node);
+    const anchorBtn   = $('.anchor-btn', node);
+    const forkBtn     = $('.fork-btn', node);
+    const tagSelect   = $('.feedback-tag-select', node);
+    const reasonRow   = $('.feedback-reason-row', node);
 
-      const thumbUp = $(".feedback-thumbs-up", node);
-      const thumbDown = $(".feedback-thumbs-down", node);
-      const tagSelect = $(".feedback-tag-select", node);
+    const isActorOrDm = message.type === 'actor' || message.type === 'dm';
+    const showFork    = isActorOrDm || message.type === 'user';
 
-      // Restore prior rating
-      if (message.feedback === "up") thumbUp.classList.add("active-up");
-      if (message.feedback === "down") {
-        thumbDown.classList.add("active-down");
-        tagSelect.style.display = "";
-      }
-      if (message.feedbackTag) tagSelect.value = message.feedbackTag;
+    if (actionBar && message.type !== 'skip' && message.type !== 'outcome') {
+      actionBar.removeAttribute('hidden');
 
-      thumbUp.addEventListener("click", () => {
-        message.feedback = message.feedback === "up" ? null : "up";
-        message.feedbackTag = null;
-        thumbUp.classList.toggle("active-up", message.feedback === "up");
-        thumbDown.classList.remove("active-down");
-        tagSelect.style.display = "none";
-        saveState();
-      });
+      // ── Feedback (actor/dm only) ──────────────────────────────
+      if (isActorOrDm) {
+        // Restore saved rating
+        if (message.feedback === 'up')   thumbUp.classList.add('active-up');
+        if (message.feedback === 'down') {
+          thumbDown.classList.add('active-down');
+          if (reasonRow) reasonRow.removeAttribute('hidden');
+        }
+        if (message.feedbackTag && tagSelect) tagSelect.value = message.feedbackTag;
 
-      thumbDown.addEventListener("click", () => {
-        message.feedback = message.feedback === "down" ? null : "down";
-        thumbDown.classList.toggle("active-down", message.feedback === "down");
-        thumbUp.classList.remove("active-up");
-        tagSelect.style.display = message.feedback === "down" ? "" : "none";
-        if (message.feedback !== "down") {
+        thumbUp.addEventListener('click', () => {
+          message.feedback = message.feedback === 'up' ? null : 'up';
           message.feedbackTag = null;
-          tagSelect.value = "";
-        }
-        saveState();
-      });
+          thumbUp.classList.toggle('active-up', message.feedback === 'up');
+          thumbDown.classList.remove('active-down');
+          if (reasonRow) reasonRow.hidden = true;
+          if (tagSelect) tagSelect.value = '';
+          saveState();
+        });
 
-      tagSelect.addEventListener("change", () => {
-        message.feedbackTag = tagSelect.value || null;
-        saveState();
-      });
-    } else {
-      if (feedbackBar) feedbackBar.style.display = "none";
-    }
+        thumbDown.addEventListener('click', () => {
+          message.feedback = message.feedback === 'down' ? null : 'down';
+          thumbDown.classList.toggle('active-down', message.feedback === 'down');
+          thumbUp.classList.remove('active-up');
+          if (reasonRow) reasonRow.hidden = !message.feedback;
+          if (!message.feedback && tagSelect) { message.feedbackTag = null; tagSelect.value = ''; }
+          saveState();
+        });
 
-    // Sprint 7A: Anchor button — shown on actor/dm messages only
-    if (message.type === 'actor' || message.type === 'dm') {
-      const anchorBtn = document.createElement('button');
-      anchorBtn.className = 'anchor-btn';
-      anchorBtn.type = 'button';
-      const isAnchored = Array.isArray(state.anchors) &&
-        state.anchors.some(a => a.messageId === message.id);
-      anchorBtn.title = isAnchored ? 'Remove anchor' : 'Anchor this claim';
-      anchorBtn.textContent = '⚓';
-      if (isAnchored) {
-        anchorBtn.classList.add('is-anchored');
-        node.style.borderLeftColor = 'var(--gold)';
-        node.classList.add('anchored-card');
+        if (tagSelect) tagSelect.addEventListener('change', () => {
+          message.feedbackTag = tagSelect.value || null;
+          saveState();
+        });
+      } else {
+        if (thumbUp)   thumbUp.hidden   = true;
+        if (thumbDown) thumbDown.hidden = true;
+        if (reasonRow) reasonRow.hidden = true;
       }
-      anchorBtn.addEventListener('click', () => {
-        if (!Array.isArray(state.anchors)) state.anchors = [];
-        const existing = state.anchors.findIndex(a => a.messageId === message.id);
-        if (existing >= 0) {
-          state.anchors.splice(existing, 1);
-        } else {
-          state.anchors.push({
-            id: `anchor-${Date.now()}`,
-            text: message.content,
-            speaker: message.speaker,
-            color: message.color,
-            messageId: message.id,
-            createdAt: new Date().toISOString()
-          });
+
+      // ── Anchor (actor/dm only) ───────────────────────────────
+      if (isActorOrDm && anchorBtn) {
+        const isAnchored = Array.isArray(state.anchors) &&
+          state.anchors.some(a => a.messageId === message.id);
+        anchorBtn.title = isAnchored ? 'Remove anchor' : 'Anchor this claim';
+        if (isAnchored) {
+          anchorBtn.classList.add('is-anchored');
+          node.style.borderLeftColor = 'var(--gold)';
+          node.classList.add('anchored-card');
         }
-        saveState();
-        renderTranscript();
-        renderAnchors();
-      });
-      const feedbackOrBottom = $('.message-feedback', node) || node;
-      feedbackOrBottom.parentNode
-        ? feedbackOrBottom.parentNode.insertBefore(anchorBtn, feedbackOrBottom)
-        : node.appendChild(anchorBtn);
+        anchorBtn.addEventListener('click', () => {
+          if (!Array.isArray(state.anchors)) state.anchors = [];
+          const existing = state.anchors.findIndex(a => a.messageId === message.id);
+          if (existing >= 0) {
+            state.anchors.splice(existing, 1);
+          } else {
+            state.anchors.push({
+              id: `anchor-${Date.now()}`,
+              text: message.content,
+              speaker: message.speaker,
+              color: message.color,
+              messageId: message.id,
+              createdAt: new Date().toISOString()
+            });
+          }
+          saveState();
+          renderTranscript();
+          renderAnchors();
+        });
+      } else {
+        if (anchorBtn) anchorBtn.hidden = true;
+      }
+
+      // ── Fork ─────────────────────────────────────────────────
+      if (showFork && forkBtn) {
+        forkBtn.addEventListener('click', async () => {
+          const { forkSessionAtMessage } = await import('./session.js');
+          await forkSessionAtMessage(message.id);
+        });
+      } else {
+        if (forkBtn) forkBtn.hidden = true;
+      }
+    } else {
+      if (actionBar) actionBar.hidden = true;
     }
 
     // Sprint 7B: Influence bar — computed on-the-fly, shown when enabled
@@ -1309,27 +1359,24 @@ export function renderTranscript() {
       }
     }
 
-    // Fork button — appears on hover on every substantive message
-    if (message.type === "actor" || message.type === "dm" || message.type === "user") {
-      const forkBtn = document.createElement("button");
-      forkBtn.className = "fork-btn";
-      forkBtn.type = "button";
-      forkBtn.title = "Fork conversation from this point";
-      forkBtn.textContent = "⑂ Fork";
-      forkBtn.addEventListener("click", async () => {
-        const { forkSessionAtMessage } = await import("./session.js");
-        await forkSessionAtMessage(message.id);
-      });
-      node.appendChild(forkBtn);
-    }
-
-    els.transcript.append(node);
+      frag.append(node);
   });
 
-  // Only jump to the bottom if the user was already there before the render.
-  // If they've scrolled up to read, leave them where they are.
+  // Atomic DOM swap: blank window is as short as possible.
+  el.innerHTML = "";
+  el.appendChild(frag);
+
+  // ── Restore scroll position ────────────────────────────────────
   if (wasAtBottom) {
-    els.transcript.scrollTop = els.transcript.scrollHeight;
+    // Was following the conversation — jump to bottom.
+    el.scrollTop = el.scrollHeight;
+  } else if (anchorIndex >= 0) {
+    // Was reading history — find the same card by index and restore position.
+    const newCards = el.querySelectorAll('.message-card');
+    const target = newCards[Math.min(anchorIndex, newCards.length - 1)];
+    if (target) {
+      el.scrollTop = target.offsetTop + anchorOffset;
+    }
   }
 }
 
@@ -1385,7 +1432,7 @@ export function syncFormFromState() {
   els.showThoughts.checked = state.settings.showThoughts;
   els.toolsEnabled.checked = state.settings.toolsEnabled;
   if (els.showThoughtsMirror) els.showThoughtsMirror.checked = state.settings.showThoughts;
-  if (els.toolsEnabledMirror) els.toolsEnabledMirror.checked = state.settings.toolsEnabled;
+
   renderModePills();
   renderTemperatureDisplay();
   document.documentElement.dataset.theme = state.settings.theme || "dark";
@@ -1435,7 +1482,7 @@ export function readSettingsFromForm() {
   state.settings.toolsEnabled = els.toolsEnabled.checked;
   // Keep mirrors in sync
   if (els.showThoughtsMirror) els.showThoughtsMirror.checked = state.settings.showThoughts;
-  if (els.toolsEnabledMirror) els.toolsEnabledMirror.checked = state.settings.toolsEnabled;
+
   saveState();
   renderStageHeader();
 }

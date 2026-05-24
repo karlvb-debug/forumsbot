@@ -1,7 +1,7 @@
 import { RECENT_MESSAGE_LIMIT, PROMPT_MESSAGE_LIMIT, WORD_LIMITS, ANCHOR_WORD_CAP } from './constants.js';
 import { state, saveState, logTransition, logWarning } from './state.js';
 import { chatCompletion, chatJson, setStatus, setCurrentSpeaker, getLastToolCalls } from './api.js';
-import { render, renderTranscript, renderAutoStop, renderDocument, readSettingsFromForm, readAutoStopFromForm, setBusy, getIsGenerating, els, labelForMode, showStreamingBubble, updateStreamingBubble, removeStreamingBubble } from './render.js';
+import { render, renderTranscript, renderAutoStop, renderDocument, readSettingsFromForm, readAutoStopFromForm, setBusy, getIsGenerating, els, labelForMode, showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble } from './render.js';
 import { putMessage, getAllChunks, getActorMemory, putActorMemory } from './db.js';
 import { summarizeMemory, recallRelevantChunks, formatCurrentOutcomes, parseOutcomeJson, extractOutcomes } from './memory.js';
 import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, checkDrift } from './utils.js';
@@ -144,8 +144,7 @@ export async function runNextTurn(options = {}) {
         ? await askDirector(participant.data, abortController.signal, onStream)
         : await askActor(participant.data, abortController.signal, onStream, twoPhase);
 
-      // Remove the streaming placeholder; renderTranscript() from addMessage will paint the real card.
-      removeStreamingBubble();
+
       const latencyMs = Date.now() - startTime;
 
       result.toolCalls = getLastToolCalls();
@@ -279,7 +278,7 @@ export async function runNextTurn(options = {}) {
     } catch (error) {
       lastError = error;
       setCurrentSpeaker("");
-      removeStreamingBubble();
+      forceRemoveStreamingBubble();
       abortController = null;
 
       if (error.name === "AbortError") {
@@ -661,7 +660,10 @@ export async function distillActorMemory(actorName, thought) {
 }
 
 export async function askActor(actor, signal, onStream = null, twoPhase = false) {
-  const showThoughts = state.settings.showThoughts !== false && !state.settings.turboMode;
+  // showThoughts controls PROMPT behavior (whether AI is told to think).
+  // Decoupled from the UI toggle which only controls expand/collapse.
+  // Only turbo mode suppresses thinking.
+  const showThoughts = !state.settings.turboMode;
   // In two-phase mode, Phase 1 already decided to speak — Phase 2 never re-checks skip.
   // Researchers are exempt: they have their own skip logic and are not simplified.
   const skipAllowed = !twoPhase || !!actor.isResearcher;
@@ -820,7 +822,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
 }
 
 export async function askDirector(dm, signal, onStream = null) {
-  const showThoughts = state.settings.showThoughts !== false && !state.settings.turboMode;
+  const showThoughts = !state.settings.turboMode;
   const privateThoughts = state.dm.seesPrivateThoughts ? privateThoughtDigest() : "";
   const isStoryMode = state.scenario.mode === "story" || state.scenario.mode === "freeform";
   const modeInstruction = isStoryMode

@@ -4,9 +4,9 @@ import { parseAiJson, parseTextToolCalls, stripTextToolCalls, stripCodeFence } f
 
 // Extract the message field content progressively from a streaming JSON buffer.
 // Handles {"thought":"...","action":"...","message":"..."} with proper JSON unescape.
-function extractStreamingMessage(accumulated) {
-  const msgPattern = /"message"\s*:\s*"/;
-  const match = msgPattern.exec(accumulated);
+function extractJsonField(accumulated, fieldName) {
+  const pattern = new RegExp('"' + fieldName + '"\\s*:\\s*"');
+  const match = pattern.exec(accumulated);
   if (!match) return null;
   let result = "";
   let escaped = false;
@@ -28,6 +28,24 @@ function extractStreamingMessage(accumulated) {
     }
   }
   return result;
+}
+function extractStreamingMessage(accumulated) {
+  return extractJsonField(accumulated, "message");
+}
+
+// Show the best available streaming text:
+// - If "message" has started → show that (the final visible response)
+// - Else if "thought" has started → show a stable indicator (not the thought
+//   text itself — showing it caused a jarring collapse when message field began)
+// - Else → return empty string so the cursor stays alive
+function extractStreamingDisplay(accumulated) {
+  if (/"message"\s*:\s*"/.test(accumulated)) {
+    return extractJsonField(accumulated, "message") ?? "";
+  }
+  if (/"thought"\s*:\s*"/.test(accumulated)) {
+    return "💭 Thinking\u2026"; // stable placeholder — no collapse when message starts
+  }
+  return ""; // preamble — keep cursor blinking
 }
 
 // els reference — set via initApi() called from main.js
@@ -340,8 +358,9 @@ export async function chatJson(system, user, temperature, signal, onStream = nul
       maxTokens: state.settings.maxTokens,
       signal
     }, (_delta, accumulated) => {
-      const msg = extractStreamingMessage(accumulated);
-      if (msg !== null) onStream(msg);
+      // Always call onStream so the blinking cursor stays alive.
+      // Shows thought text as interim content before "message" field begins.
+      onStream(extractStreamingDisplay(accumulated));
     });
   } else {
     content = await chatCompletion(system, user, {
