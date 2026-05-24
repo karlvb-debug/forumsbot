@@ -221,6 +221,51 @@ export async function chatCompletion(system, user, { temperature = state.setting
 }
 
 /**
+ * Like chatCompletion but accepts a pre-built messages array (system + history + user).
+ * Used by the conversational Quick Setup to pass full conversation history.
+ */
+export async function chatCompletionMessages(messages, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal } = {}) {
+  _lastToolCalls = [];
+  const payload = {
+    model: state.settings.model,
+    messages,
+    temperature,
+    max_tokens: maxTokens
+  };
+  const startTime = Date.now();
+  let response, data;
+  try {
+    response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ baseUrl: state.settings.baseUrl, apiKey: state.settings.apiKey, request: payload }),
+      signal
+    });
+    data = await response.json();
+    if (!response.ok) throw new Error(data.error || "LM Studio request failed.");
+  } catch (err) {
+    if (!state.diagnostics) state.diagnostics = {};
+    if (!Array.isArray(state.diagnostics.apiCallLogs)) state.diagnostics.apiCallLogs = [];
+    state.diagnostics.apiCallLogs.push({ timestamp: new Date().toISOString(), endpoint: "/v1/chat/completions", model: payload.model || "unknown", promptTokens: 0, completionTokens: 0, latencyMs: Date.now() - startTime, tokensPerSecondCompletion: 0, status: "error", error: err.message });
+    throw err;
+  }
+  const latencyMs = Date.now() - startTime;
+  const promptTokens = data?.usage?.prompt_tokens || 0;
+  const completionTokens = data?.usage?.completion_tokens || 0;
+  if (!state.diagnostics) state.diagnostics = {};
+  if (!Array.isArray(state.diagnostics.apiCallLogs)) state.diagnostics.apiCallLogs = [];
+  state.diagnostics.apiCallLogs.push({ timestamp: new Date().toISOString(), endpoint: "/v1/chat/completions", model: payload.model || "unknown", promptTokens, completionTokens, latencyMs, tokensPerSecondCompletion: completionTokens && latencyMs > 0 ? Math.round(completionTokens / (latencyMs / 1000)) : 0, status: "ok", estimatedCostCents: Number(((promptTokens * 0.00015 + completionTokens * 0.0006) / 1000).toFixed(4)) });
+  if (state.diagnostics.apiCallLogs.length > 100) state.diagnostics.apiCallLogs.shift();
+  if (data.usage) {
+    state.contextInfo.lastPromptTokens = promptTokens;
+    state.contextInfo.lastCompletionTokens = completionTokens;
+    document.dispatchEvent(new CustomEvent("tokenUsageUpdated"));
+  }
+  return data?.choices?.[0]?.message?.content || "";
+}
+
+
+/**
  * Stream a single-round chat completion, calling onChunk(delta, accumulated) for each token.
  * No tool-call handling — use chatCompletion for that. Returns the full accumulated text.
  */

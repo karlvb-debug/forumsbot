@@ -169,7 +169,17 @@ export const els = {
   showInfluenceBarsInput: $("#showInfluenceBarsInput"),
   // Turbo mode
   turboButton: $("#turboModeButton"),
-  turboBanner: $("#turboBanner")
+  turboBanner: $("#turboBanner"),
+  // Generation controls (Setup panel)
+  maxTokensInput: $("#maxTokensInput"),
+  maxTokensDisplay: $("#maxTokensDisplay"),
+  streamingEnabledInput: $("#streamingEnabledInput"),
+  enableAdaptiveCompressionInput: $("#enableAdaptiveCompressionInput"),
+  enableCrossSessionMemoryInput: $("#enableCrossSessionMemoryInput"),
+  // Document mirror toggle in Setup panel
+  documentEnabledMirror: $("#documentEnabledMirror"),
+  // Conversational quick setup chat history
+  quickStartChatHistory: $("#quickStartChatHistory")
 };
 
 // ── Streaming bubble ──────────────────────────────────────────────────────────
@@ -737,10 +747,11 @@ export function switchSidebarTab(tabName) {
 
 export function renderQuickStartPreview() {
   const draft = state.ui.quickStartDraft;
-  els.quickStartPrompt.value = state.ui.quickStartPrompt;
-  els.quickStartStatus.textContent = state.ui.quickStartStatus || "No generated setup yet.";
-  els.applyQuickStart.disabled = !draft;
-  els.discardQuickStart.disabled = !draft;
+  if (els.quickStartPrompt) els.quickStartPrompt.value = state.ui.quickStartPrompt || "";
+  if (els.quickStartStatus) els.quickStartStatus.textContent = state.ui.quickStartStatus || "No generated setup yet.";
+  if (els.applyQuickStart) els.applyQuickStart.disabled = !draft;
+  if (els.discardQuickStart) els.discardQuickStart.disabled = !draft;
+  if (!els.quickStartPreview) return; // element removed — preview shown in chat history
   els.quickStartPreview.innerHTML = "";
 
   if (!draft) {
@@ -1499,6 +1510,16 @@ export function syncFormFromState() {
   els.showThoughts.checked = state.settings.showThoughts;
   els.toolsEnabled.checked = state.settings.toolsEnabled;
   if (els.showThoughtsMirror) els.showThoughtsMirror.checked = state.settings.showThoughts;
+  // Generation controls
+  if (els.maxTokensInput) {
+    els.maxTokensInput.value = state.settings.maxTokens ?? 2000;
+    if (els.maxTokensDisplay) els.maxTokensDisplay.textContent = state.settings.maxTokens ?? 2000;
+  }
+  if (els.streamingEnabledInput) els.streamingEnabledInput.checked = state.settings.streamingEnabled !== false;
+  if (els.enableAdaptiveCompressionInput) els.enableAdaptiveCompressionInput.checked = state.settings.enableAdaptiveCompression !== false;
+  if (els.enableCrossSessionMemoryInput) els.enableCrossSessionMemoryInput.checked = state.settings.enableCrossSessionMemory !== false;
+  // Document mirror in Setup panel
+  if (els.documentEnabledMirror) els.documentEnabledMirror.checked = !!state.document?.enabled;
 
   renderModePills();
   renderTemperatureDisplay();
@@ -1547,6 +1568,11 @@ export function readSettingsFromForm() {
   readAutoStopFromForm();
   state.settings.showThoughts = els.showThoughts.checked;
   state.settings.toolsEnabled = els.toolsEnabled.checked;
+  // Generation controls
+  if (els.maxTokensInput) state.settings.maxTokens = Number(els.maxTokensInput.value) || 2000;
+  if (els.streamingEnabledInput) state.settings.streamingEnabled = els.streamingEnabledInput.checked;
+  if (els.enableAdaptiveCompressionInput) state.settings.enableAdaptiveCompression = els.enableAdaptiveCompressionInput.checked;
+  if (els.enableCrossSessionMemoryInput) state.settings.enableCrossSessionMemory = els.enableCrossSessionMemoryInput.checked;
   // Keep mirrors in sync
   if (els.showThoughtsMirror) els.showThoughtsMirror.checked = state.settings.showThoughts;
 

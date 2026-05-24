@@ -64,6 +64,7 @@ import {
   generateQuickStart,
   applyQuickStartConfig,
   discardQuickStartConfig,
+  renderQuickStartChat,
   saveCurrentSession,
   loadSession,
   generateActorFromDescription
@@ -136,6 +137,47 @@ function wireEvents() {
       els.showThoughts.checked = state.settings.showThoughts;
       saveState();
       renderTranscript();
+    });
+  }
+
+  // Generation settings — maxTokens, streaming, adaptive compression, cross-session memory
+  if (els.maxTokensInput) {
+    els.maxTokensInput.addEventListener("input", () => {
+      if (!isInitialized) return;
+      state.settings.maxTokens = Number(els.maxTokensInput.value) || 2000;
+      if (els.maxTokensDisplay) els.maxTokensDisplay.textContent = state.settings.maxTokens;
+      saveState();
+    });
+  }
+  if (els.streamingEnabledInput) {
+    els.streamingEnabledInput.addEventListener("change", () => {
+      if (!isInitialized) return;
+      state.settings.streamingEnabled = els.streamingEnabledInput.checked;
+      saveState();
+    });
+  }
+  if (els.enableAdaptiveCompressionInput) {
+    els.enableAdaptiveCompressionInput.addEventListener("change", () => {
+      if (!isInitialized) return;
+      state.settings.enableAdaptiveCompression = els.enableAdaptiveCompressionInput.checked;
+      saveState();
+    });
+  }
+  if (els.enableCrossSessionMemoryInput) {
+    els.enableCrossSessionMemoryInput.addEventListener("change", () => {
+      if (!isInitialized) return;
+      state.settings.enableCrossSessionMemory = els.enableCrossSessionMemoryInput.checked;
+      saveState();
+    });
+  }
+  // Document mirror toggle in Setup panel — syncs with documentEnabledInput in Doc panel
+  if (els.documentEnabledMirror) {
+    els.documentEnabledMirror.addEventListener("change", () => {
+      if (!isInitialized) return;
+      state.document.enabled = els.documentEnabledMirror.checked;
+      if (els.documentEnabled) els.documentEnabled.checked = state.document.enabled;
+      saveState();
+      renderConversationSummary();
     });
   }
 
@@ -233,6 +275,7 @@ function wireEvents() {
     els.documentEnabled.addEventListener("change", () => {
       if (!isInitialized) return;
       state.document.enabled = els.documentEnabled.checked;
+      if (els.documentEnabledMirror) els.documentEnabledMirror.checked = state.document.enabled;
       saveState();
       renderConversationSummary();
     });
@@ -685,6 +728,7 @@ async function startApp() {
     await initializeMemoryStorage();
     saveState();
     render();
+    renderQuickStartChat();
   } catch (err) {
     console.warn("Memory storage initialization failed, app continues:", err);
   }

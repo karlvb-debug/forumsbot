@@ -96,6 +96,7 @@ export const defaultState = {
     quickStartPrompt: "",
     quickStartDraft: null,
     quickStartStatus: "No generated setup yet.",
+    quickStartHistory: [],
     quickStartTemperature: 0.8
   },
   memory: {

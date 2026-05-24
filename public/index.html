@@ -108,23 +108,27 @@
                 <section class="panel-section section--connection">
                   <div class="section-title">
                     <h2>Connection</h2>
-                    <span class="status-pill" id="connectionStatus" title="Auto-checks every 12s">Not connected</span>
+                    <span class="status-pill" id="connectionStatus" title="Auto-checks every 12s. Shows connected when LM Studio responds.">Not connected</span>
                   </div>
-                  <label>
+                  <label title="Base URL of your LM Studio server (or any OpenAI-compatible endpoint)">
                     Server URL
                     <input id="baseUrlInput" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:1234">
                   </label>
+                  <label title="API key sent with every request. Use 'lm-studio' for local LM Studio — it ignores the value.">
+                    API key
+                    <input id="apiKeyInput" autocomplete="off" spellcheck="false" placeholder="lm-studio">
+                  </label>
                   <div class="two-column">
-                    <label>
+                    <label title="The chat model used for all actor, director, and system turns. Type a name or pick from the list after clicking Refresh.">
                       Model
                       <input id="modelInput" list="modelOptions" autocomplete="off" spellcheck="false" placeholder="Select a model…">
                       <datalist id="modelOptions"></datalist>
                       <span id="modelContextInfo" class="model-ctx-hint" style="display:none"></span>
                     </label>
-                    <button class="soft-button" id="loadModelsButton" type="button" style="align-self:end">Refresh</button>
+                    <button class="soft-button" id="loadModelsButton" type="button" style="align-self:end" title="Fetch the list of available models from the server">Refresh</button>
                   </div>
                   <div>
-                    <label>
+                    <label title="A dedicated embedding model for semantic memory search. Leave blank to reuse the chat model (slower, may be less accurate).">
                       Embedding Model
                       <input id="embeddingModelInput" list="modelOptions" autocomplete="off" spellcheck="false" placeholder="Fall back to chat model…">
                     </label>
@@ -133,44 +137,66 @@
                       <span>Non-embedding model selected. Memory query vectorization may fail or be extremely slow.</span>
                     </div>
                   </div>
-                  <label>
+                </section>
+
+                <!-- Generation -->
+                <section class="panel-section section--generation">
+                  <div class="section-title">
+                    <h2>Generation</h2>
+                  </div>
+                  <label title="Default creativity / randomness for actor responses. 0 = deterministic, 1 = balanced, 2 = very creative. Individual actors can override this.">
                     Temperature
                     <div class="slider-row">
                       <input id="temperatureInput" type="range" min="0" max="2" step="0.05">
                       <span class="slider-value" id="temperatureDisplay">0.8</span>
                     </div>
                   </label>
-                  <label>
-                    API key
-                    <input id="apiKeyInput" autocomplete="off" spellcheck="false" placeholder="lm-studio">
+                  <label title="Maximum number of tokens each AI turn can generate. Higher = richer responses but slower and more likely to hit context limits. 1000–2000 is good for most models.">
+                    Max tokens per response
+                    <div class="slider-row">
+                      <input id="maxTokensInput" type="range" min="200" max="8000" step="100">
+                      <span class="slider-value" id="maxTokensDisplay">2000</span>
+                    </div>
+                  </label>
+                  <label class="toggle-row" title="Stream tokens to the screen as they are generated — you see responses appear word-by-word instead of waiting for the full reply. Recommended on.">
+                    <input id="streamingEnabledInput" type="checkbox" checked>
+                    <span>Streaming <span class="toggle-hint">(show tokens as they arrive)</span></span>
+                  </label>
+                  <label class="toggle-row" title="When a prompt is near the context limit, automatically compress the actor's private memory to make room, instead of truncating.">
+                    <input id="enableAdaptiveCompressionInput" type="checkbox" checked>
+                    <span>Adaptive compression <span class="toggle-hint">(compress memory near context limit)</span></span>
+                  </label>
+                  <label class="toggle-row" title="Persist actor memories across separate browser sessions. Actors will remember personalities and relationships from past conversations.">
+                    <input id="enableCrossSessionMemoryInput" type="checkbox" checked>
+                    <span>Cross-session actor memory</span>
                   </label>
                 </section>
 
-                <!-- Quick Setup (collapsible) -->
-                <section class="panel-section section--connection">
+                <!-- Quick Setup (collapsible, conversational) -->
+                <section class="panel-section section--quickstart">
                   <details class="quick-start-details" id="quickStartDetails">
                     <summary>
                       <h2 style="margin:0">Quick Setup</h2>
                       <span class="chevron">▶</span>
                     </summary>
                     <div class="quick-start-body">
-                      <label>
-                        Prompt
-                        <textarea id="quickStartPromptInput" rows="3" placeholder="Describe the forum you want, e.g. 'Three scientists debating climate policy'…"></textarea>
-                      </label>
-                      <label>
-                        Generation Temperature
+                      <p class="qs-hint">Describe the forum you want, then refine it by asking for changes.</p>
+                      <div class="qs-chat-history" id="quickStartChatHistory"></div>
+                      <div class="qs-input-row">
+                        <textarea id="quickStartPromptInput" rows="2" placeholder="e.g. 'Three scientists debating climate policy' — or after generating: 'Add a lawyer and remove the Skeptic'…"></textarea>
+                        <button class="primary-button qs-send-btn" id="generateQuickStartButton" type="button" title="Send your request to the AI setup assistant">Send</button>
+                      </div>
+                      <label class="qs-temp-row" title="Creativity of the Quick Setup AI. Higher = more varied actor names and styles.">
+                        Creativity
                         <div class="slider-row">
                           <input id="quickStartTempInput" type="range" min="0" max="2" step="0.05" value="0.8">
                           <span class="slider-value" id="quickStartTempDisplay">0.8</span>
                         </div>
                       </label>
                       <div class="quick-start-actions">
-                        <button class="soft-button" id="generateQuickStartButton" type="button">Generate</button>
-                        <button class="primary-button" id="applyQuickStartButton" type="button">Apply</button>
+                        <button class="soft-button" id="applyQuickStartButton" type="button" title="Apply the generated setup — replaces current scenario, actors, and director">Apply Setup</button>
+                        <button class="quiet-button" id="discardQuickStartButton" type="button" title="Clear the chat history and discard the generated setup">Clear</button>
                       </div>
-                      <button class="secondary-button" id="discardQuickStartButton" type="button" style="width:100%">Discard</button>
-                      <div class="quick-start-preview" id="quickStartPreview" aria-live="polite"></div>
                       <p class="status-line" id="quickStartStatus">No generated setup yet.</p>
                     </div>
                   </details>
@@ -181,9 +207,9 @@
                   <div class="section-title">
                     <h2>Scenario</h2>
                     <div class="mode-pills" role="group" aria-label="Forum mode">
-                      <button class="mode-pill" data-mode="problem" type="button">Problem</button>
-                      <button class="mode-pill" data-mode="story" type="button">Story</button>
-                      <button class="mode-pill" data-mode="freeform" type="button">Freeform</button>
+                      <button class="mode-pill" data-mode="problem" type="button" title="Collaborative problem-solving — actors analyze, challenge assumptions, and converge on solutions">Problem</button>
+                      <button class="mode-pill" data-mode="story" type="button" title="Narrative roleplay — actors speak in character; web tools are disabled for immersion">Story</button>
+                      <button class="mode-pill" data-mode="freeform" type="button" title="Open-ended discussion — no structured goal, actors explore freely">Freeform</button>
                     </div>
                   </div>
                   <select id="modeSelect" aria-label="Forum mode" class="hidden-file">
@@ -191,15 +217,15 @@
                     <option value="story">Story</option>
                     <option value="freeform">Freeform</option>
                   </select>
-                  <label>
+                  <label title="Short name for this session — shown in the page header">
                     Title
                     <input id="titleInput" maxlength="80" placeholder="Untitled forum">
                   </label>
-                  <label>
+                  <label title="The backstory and context all actors are placed in. Sets the scene.">
                     Premise
                     <textarea id="premiseInput" rows="3" placeholder="What's the situation?"></textarea>
                   </label>
-                  <label>
+                  <label title="What the group should achieve. Used for alignment scoring and the goal judge.">
                     Objective
                     <textarea id="objectiveInput" rows="2" placeholder="What should the group achieve?"></textarea>
                   </label>
@@ -209,64 +235,83 @@
                 <section class="panel-section section--director">
                   <div class="section-title">
                     <h2>Director</h2>
-                    <label class="toggle-row compact">
+                    <label class="toggle-row compact" title="Enable the Director (moderator AI) who guides pacing, summarizes progress, and invites quieter actors">
                       <input id="dmEnabledInput" type="checkbox">
-                      <span>DM enabled</span>
+                      <span>Enabled</span>
                     </label>
                   </div>
                   <div class="director-fields">
                     <div style="display:grid;gap:10px">
-                      <label>
+                      <label title="The Director's display name in the transcript">
                         Name
                         <input id="dmNameInput" maxlength="50" placeholder="Director">
                       </label>
-                      <label>
+                      <label title="How the Director should moderate — their style, priorities, and personality">
                         Style
                         <textarea id="dmPersonaInput" rows="2" placeholder="Describe the director's moderation style…"></textarea>
                       </label>
-                      <label class="toggle-row">
+                      <label class="toggle-row" title="When enabled, the Director can see actors' private thoughts before deciding how to respond — useful for guiding stuck discussions">
                         <input id="dmPrivateInput" type="checkbox">
-                        <span>DM sees private thoughts</span>
+                        <span>Director sees private thoughts</span>
                       </label>
                     </div>
                   </div>
+                </section>
+
+                <!-- Behavior -->
+                <section class="panel-section section--behavior">
+                  <div class="section-title">
+                    <h2>Behavior</h2>
+                  </div>
+                  <label class="toggle-row" title="Allow actors to search the web and read web pages using [SEARCH: query] and [READ: url] patterns in their private thoughts. Adds latency but enables research.">
+                    <input id="toolsEnabledInput" type="checkbox">
+                    <span>Web tools <span class="toggle-hint">(actors can search &amp; read pages)</span></span>
+                  </label>
+                  <label class="toggle-row" title="Auto-expand the '💭 Private thought' section on every message in the transcript. Can also be toggled per-message.">
+                    <input id="showThoughtsInput" type="checkbox">
+                    <span>Auto-expand private thoughts</span>
+                  </label>
+                  <label class="toggle-row" title="Enable a shared document that actors can collaboratively write and edit during the session. Switch to the Doc tab to view and edit it.">
+                    <input id="documentEnabledMirror" type="checkbox">
+                    <span>Document writing mode <span class="toggle-hint">(actors draft a shared doc)</span></span>
+                  </label>
                 </section>
 
                 <!-- Auto-stop / Goal -->
                 <section class="panel-section section--goal">
                   <div class="section-title">
                     <h2>Goal &amp; Auto-stop</h2>
-                    <label class="toggle-row compact" style="margin:0">
+                    <label class="toggle-row compact" style="margin:0" title="Automatically stop the forum when the goal is met, all actors skip, or the round limit is reached">
                       <input id="autoStopEnabledInput" type="checkbox">
                       <span>On</span>
                     </label>
                   </div>
-                  <label>
+                  <label title="What the group should finish or decide. The AI judge checks whether this is met after each round.">
                     Goal
                     <textarea id="autoGoalInput" rows="3" placeholder="What should the group finish or decide?"></textarea>
                   </label>
                   <div class="goal-options">
-                    <label class="toggle-row">
+                    <label class="toggle-row" title="After each round, run a cheap AI call to check whether the goal has been achieved">
                       <input id="goalCheckEnabledInput" type="checkbox">
                       <span>Judge goal after each round</span>
                     </label>
-                    <label class="toggle-row">
+                    <label class="toggle-row" title="If every actor chooses to skip in the same round, treat the discussion as exhausted and stop">
                       <input id="stopOnAllSkipInput" type="checkbox">
                       <span>Stop when everyone skips</span>
                     </label>
                     <div class="split-row">
-                      <label class="toggle-row">
+                      <label class="toggle-row" title="Stop automatically after a fixed number of rounds">
                         <input id="maxRoundsEnabledInput" type="checkbox">
                         <span>Max rounds</span>
                       </label>
-                      <label>
+                      <label title="Maximum number of full rounds to run before stopping">
                         Rounds
                         <input id="maxRoundsInput" type="number" min="1" max="50" step="1">
                       </label>
                     </div>
                   </div>
                   <div class="goal-actions">
-                    <button class="soft-button" id="checkGoalNowButton" type="button">Check Goal Now</button>
+                    <button class="soft-button" id="checkGoalNowButton" type="button" title="Run the AI goal judge right now against the current transcript">Check Goal Now</button>
                   </div>
                   <p class="status-line" id="autoStopStatus">Auto-stop ready.</p>
                 </section>
@@ -276,7 +321,7 @@
                   <div class="section-title">
                     <h2>Session</h2>
                   </div>
-                  <label style="margin-bottom: 8px; display: block;">
+                  <label style="margin-bottom: 8px; display: block;" title="Choose what information is included in the export file">
                     Export Mode
                     <select id="exportModeSelect" style="width: 100%; margin-top: 4px; padding: 6px; border-radius: 4px; background: var(--bg-card); color: var(--text); border: 1px solid var(--border);">
                       <option value="debug" selected>Debug Export (All Traces &amp; Metrics)</option>
@@ -286,19 +331,11 @@
                     </select>
                   </label>
                   <div class="session-grid">
-                    <button class="secondary-button" id="savePresetButton" type="button">Save</button>
-                    <button class="secondary-button" id="loadPresetButton" type="button">Load</button>
-                    <button class="secondary-button" id="exportButton" type="button">Export</button>
-                    <button class="danger-button" id="resetButton" type="button">Reset</button>
+                    <button class="secondary-button" id="savePresetButton" type="button" title="Save the current setup (actors, scenario, settings) as a reusable preset JSON file">Save</button>
+                    <button class="secondary-button" id="loadPresetButton" type="button" title="Load a previously saved preset file">Load</button>
+                    <button class="secondary-button" id="exportButton" type="button" title="Export the session using the selected export mode">Export</button>
+                    <button class="danger-button" id="resetButton" type="button" title="Reset all settings and clear the conversation — cannot be undone">Reset</button>
                   </div>
-                  <label class="toggle-row">
-                    <input id="showThoughtsInput" type="checkbox">
-                    <span>Auto-expand private thoughts</span>
-                  </label>
-                  <label class="toggle-row">
-                    <input id="toolsEnabledInput" type="checkbox">
-                    <span>Enable web tools (search &amp; read pages)</span>
-                  </label>
                   <input class="hidden-file" id="presetFileInput" type="file" accept="application/json">
                 </section>
 
@@ -309,9 +346,9 @@
                 <div class="section-title">
                   <h2>Actors</h2>
                   <div style="display:flex;gap:8px">
-                    <button class="soft-button" id="addActorButton" type="button">+ Add</button>
-                    <button class="soft-button" id="addResearcherButton" type="button" title="Add Specialized Research Agent">+ Add Researcher</button>
-                    <button class="soft-button" id="addActorFromDescBtn" type="button" title="Describe an actor and let AI fill in the details">+ From description…</button>
+                    <button class="soft-button" id="addActorButton" type="button" title="Add a new blank actor">+ Add</button>
+                    <button class="soft-button" id="addResearcherButton" type="button" title="Add a specialized Research Agent that can search the web and synthesize findings">+ Researcher</button>
+                    <button class="soft-button" id="addActorFromDescBtn" type="button" title="Describe an actor in plain English and let AI fill in the name, persona, goal, and voice">+ From description…</button>
                   </div>
                 </div>
                 <div class="actor-list" id="actorList"></div>

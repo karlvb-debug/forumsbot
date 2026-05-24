@@ -2396,3 +2396,67 @@ summary {
   border-radius: 50%;
   flex-shrink: 0;
 }
+
+/* ── Section colors — Generation and Behavior ──────────────── */
+:root {
+  --color-generation: #1a8fa0;
+  --color-behavior:   #4a7fd4;
+  --color-quickstart: #6b8e23;
+}
+.panel-section.section--generation::before { background: var(--color-generation); }
+.panel-section.section--behavior::before   { background: var(--color-behavior); }
+.panel-section.section--quickstart::before { background: var(--color-quickstart); }
+.section--generation h2 { color: var(--color-generation); }
+.section--behavior h2   { color: var(--color-behavior); }
+.section--quickstart h2 { color: var(--color-quickstart); }
+
+/* ── Conversational Quick Setup ─────────────────────────────── */
+.qs-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+.qs-chat-history {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.qs-chat-history:empty { display: none; }
+.qs-msg {
+  font-size: 0.82rem;
+  padding: 6px 10px;
+  border-radius: 8px;
+  line-height: 1.4;
+}
+.qs-msg--user {
+  background: color-mix(in srgb, var(--color-user) 15%, var(--panel));
+  border-left: 2px solid var(--color-user);
+  color: var(--text);
+}
+.qs-msg--assistant {
+  background: color-mix(in srgb, var(--color-quickstart) 12%, var(--panel));
+  border-left: 2px solid var(--color-quickstart);
+  color: var(--text);
+}
+.qs-msg-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.qs-msg-summary { white-space: pre-wrap; }
+.qs-input-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  align-items: end;
+}
+.qs-send-btn { align-self: end; white-space: nowrap; }
+.qs-temp-row {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
