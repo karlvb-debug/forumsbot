@@ -21,7 +21,9 @@ import { trimWords } from './utils.js';
  * @param {object} scenario     – state.scenario
  * @returns {Promise<{ shouldSkip: boolean, confidence: number, reason: string }>}
  */
-export async function preflightSkipCheck(actor, messages, scenario) {
+export async function preflightSkipCheck(actor, messages, scenario, opts = {}) {
+  const { directlyAddressed = false, speakingMap = {}, actorCount = 1 } = opts;
+
   // Passthrough: router disabled or not enough context
   if (!state.settings.enablePreflightRouter) {
     return { shouldSkip: false, confidence: 1.0, reason: 'router disabled' };
@@ -33,7 +35,26 @@ export async function preflightSkipCheck(actor, messages, scenario) {
     return { shouldSkip: false, confidence: 1.0, reason: 'too early to route' };
   }
 
-  const threshold = state.settings.preflightThreshold ?? 0.35;
+  // Directly addressed actors always speak — skip preflight entirely
+  if (directlyAddressed) {
+    return { shouldSkip: false, confidence: 1.0, reason: 'directly addressed' };
+  }
+
+  // Base threshold adjusted by speaking-time share vs fair share.
+  // Over-represented actors (talked too much) get a higher threshold → skip more easily.
+  // Under-represented actors get a lower threshold → harder to skip.
+  let threshold = state.settings.preflightThreshold ?? 0.35;
+  if (actorCount > 1) {
+    const totalWords = Object.values(speakingMap).reduce((a, b) => a + b, 0);
+    if (totalWords > 0) {
+      const actorWords = speakingMap[actor.id] || 0;
+      const share = actorWords / totalWords;
+      const fairShare = 1 / actorCount;
+      // Scale factor: ±0.15 at ±20% deviation from fair share
+      const adjustment = (share - fairShare) * 0.75;
+      threshold = Math.max(0.10, Math.min(0.65, threshold + adjustment));
+    }
+  }
 
   // Build a stripped-down context: last 3 messages + objective + actor name
   const recentLines = messages

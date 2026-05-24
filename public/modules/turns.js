@@ -18,6 +18,10 @@ let _lastPromptParts = null;
 // the live transcript.
 let _roundSnapshot = null;
 
+// Per-actor cumulative word count for speaking-time balance (runtime-only).
+// Keyed by actor.id. Passed to preflightSkipCheck to bias the skip threshold.
+const _speakingTimeMap = {};
+
 export async function addMessage(message) {
   const storedMessage = cleanStoredMessage({
     id: crypto.randomUUID(),
@@ -105,10 +109,17 @@ export async function runNextTurn(options = {}) {
       // skips the action/skip instruction and focuses Phase 2 purely on content.
       let twoPhase = false;
       if (participant.kind === 'actor') {
+        // Detect if the previous visible speaker explicitly called on this actor
+        const msgSource = _roundSnapshot || state.messages;
+        const lastVisibleMsg = msgSource.slice().reverse().find(m => m.type === 'actor' || m.type === 'dm' || m.type === 'user');
+        const directlyAddressed = !!(lastVisibleMsg && lastVisibleMsg.nextSpeaker &&
+          lastVisibleMsg.nextSpeaker.trim().toLowerCase() === participant.data.name.trim().toLowerCase());
+
         const preflight = await preflightSkipCheck(
           participant.data,
-          _roundSnapshot || state.messages,
-          state.scenario
+          msgSource,
+          state.scenario,
+          { directlyAddressed, speakingMap: _speakingTimeMap, actorCount: state.actors.filter(a => a.enabled).length }
         );
         if (preflight.shouldSkip) {
           setCurrentSpeaker('');
@@ -973,6 +984,16 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
     logTransition("manual_nudge_consumed", { actor: actor.name });
   }
 
+  // Direct-address note: injected when the previous speaker explicitly called on this actor
+  let directAddressNote = "";
+  if (kind === "actor") {
+    const lastVisible = messageSource.slice().reverse().find(m => m.type === 'actor' || m.type === 'dm' || m.type === 'user');
+    if (lastVisible && lastVisible.nextSpeaker &&
+        lastVisible.nextSpeaker.trim().toLowerCase() === actor.name.trim().toLowerCase()) {
+      directAddressNote = `[${lastVisible.speaker} specifically addressed you. Respond directly to their point before anything else.]`;
+    }
+  }
+
   // Build sections and enforce token budget with graceful degradation.
   const buildSections = (chunks, msgs, memOverride = null) => [
     scenarioBlock(),
@@ -987,6 +1008,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
     periodicReminder,
     gravityWarning,
     nudgeReminder,
+    directAddressNote,
     roleReminder,
     kind === "actor"
       ? (actor.isResearcher
@@ -1173,6 +1195,18 @@ export async function applyAiResult(participant, result) {
   const actor = participant.data;
   actor.thoughts = appendMemory(actor.thoughts, result.thought);
 
+  // Actor-driven next-speaker routing (mirrors the DM handler above)
+  if (result.nextSpeaker) {
+    const targetName = String(result.nextSpeaker).trim().toLowerCase();
+    const targetActor = state.actors.find(a => a.enabled && a.name.toLowerCase() === targetName);
+    if (targetActor) {
+      console.log(`[turns] Actor ${actor.name} routed next turn to: ${targetActor.name}`);
+      state.turnQueue = state.turnQueue.filter(id => id !== targetActor.id);
+      state.turnQueue.unshift(targetActor.id);
+      saveState();
+    }
+  }
+
   // Repetition safeguard for actors
   const speakerMessages = state.messages.filter(m => m.speaker === speakerName && m.type !== "skip");
   if (result.action !== "skip" && result.message && speakerMessages.length > 0) {
@@ -1185,9 +1219,16 @@ export async function applyAiResult(participant, result) {
 
   if (result.action === "skip") {
     logTransition("skip_decision", { speaker: speakerName, reason: result.thought });
-    return addMessage({ type: "skip", actorId: actor.id, speaker: actor.name, content: "Skipped.", thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, metrics: result.metrics });
+    return addMessage({ type: "skip", actorId: actor.id, speaker: actor.name, content: "Skipped.", thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, metrics: result.metrics, nextSpeaker: result.nextSpeaker || "" });
   }
-  return addMessage({ type: "actor", actorId: actor.id, speaker: actor.name, content: result.message, thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, metrics: result.metrics });
+
+  // Track cumulative words for speaking-time balance
+  if (result.message) {
+    const wc = result.message.trim().split(/\s+/).filter(Boolean).length;
+    _speakingTimeMap[actor.id] = (_speakingTimeMap[actor.id] || 0) + wc;
+  }
+
+  return addMessage({ type: "actor", actorId: actor.id, speaker: actor.name, content: result.message, thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, metrics: result.metrics, nextSpeaker: result.nextSpeaker || "" });
 }
 
 function applyDocumentEdit(author, editText) {
