@@ -63,6 +63,7 @@ import {
   confirmAndResetSession,
   confirmAndFullReset,
   addActor,
+  addManager,
   generateQuickStart,
   applyQuickStartConfig,
   discardQuickStartConfig,
@@ -545,6 +546,7 @@ function wireEvents() {
   els.discardQuickStart.addEventListener("click", discardQuickStartConfig);
   els.addActor.addEventListener("click", () => addActor(false));
   els.addResearcher.addEventListener("click", () => addActor(true));
+  document.getElementById("addManagerButton")?.addEventListener("click", addManager);
   document.getElementById("addActorFromDescBtn")?.addEventListener("click", generateActorFromDescription);
   els.savePreset.addEventListener("click", savePreset);
   els.loadPreset.addEventListener("click", () => els.presetFile.click());

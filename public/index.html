@@ -377,6 +377,7 @@
                   <div style="display:flex;gap:8px">
                     <button class="soft-button" id="addActorButton" type="button" title="Add a new blank actor">+ Add</button>
                     <button class="soft-button" id="addResearcherButton" type="button" title="Add a specialized Research Agent that can search the web and synthesize findings">+ Researcher</button>
+                    <button class="soft-button" id="addManagerButton" type="button" title="Add a Manager AI that can create specialized actors and silence or resume actors as the discussion evolves">+ Manager</button>
                     <button class="soft-button" id="addActorFromDescBtn" type="button" title="Describe an actor in plain English and let AI fill in the name, persona, goal, and voice">+ From description…</button>
                   </div>
                 </div>
@@ -708,6 +709,7 @@
           <span class="actor-name-display"></span>
           <span class="role-badge"></span>
           <span class="researcher-badge" style="display:none">🔍 Researcher</span>
+          <span class="manager-badge" style="display:none">⚙ Manager</span>
           <span class="actor-card-preview"></span>
           <button class="actor-expand-toggle" type="button" aria-label="Expand actor details" title="Expand">▼</button>
           <button class="icon-button remove-actor" type="button" aria-label="Remove actor" title="Remove actor">
@@ -728,6 +730,10 @@
           <label class="toggle-row" style="margin:8px 0 0 0;text-transform:none">
             <input class="actor-is-researcher" type="checkbox">
             <span>Research Specialist mode</span>
+          </label>
+          <label class="toggle-row" style="margin:4px 0 0 0;text-transform:none">
+            <input class="actor-is-manager" type="checkbox">
+            <span title="Manager can create new actors and silence or resume existing ones mid-session">Orchestrator / Manager mode</span>
           </label>
           <label>
             Persona

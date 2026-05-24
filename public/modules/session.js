@@ -341,6 +341,23 @@ export function addActor(isResearcher = false) {
   render();
 }
 
+export function addManager() {
+  state.actors.push({
+    id: crypto.randomUUID(),
+    name: "Manager",
+    role: "Orchestrator",
+    persona: "Observe the discussion and the current roster. Create specialized actors when the conversation needs expertise that isn't present. Silence actors who have finished contributing. Resume actors when they become relevant again.",
+    goal: "Ensure the right perspectives are in the room at the right time.",
+    voice: "Decisive and brief. State what you're doing and why in one sentence.",
+    thoughts: "",
+    enabled: true,
+    isManager: true,
+    color: "#1a7a6e"
+  });
+  saveState();
+  render();
+}
+
 export async function generateActorFromDescription() {
   if (!state.settings.model) {
     setStatus("Choose or type a model first.", "warn");

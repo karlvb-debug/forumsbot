@@ -1,4 +1,4 @@
-import { RECENT_MESSAGE_LIMIT, PROMPT_MESSAGE_LIMIT, WORD_LIMITS, ANCHOR_WORD_CAP } from './constants.js';
+import { RECENT_MESSAGE_LIMIT, PROMPT_MESSAGE_LIMIT, WORD_LIMITS, ANCHOR_WORD_CAP, colors } from './constants.js';
 import { state, saveState, logTransition, logWarning } from './state.js';
 import { chatCompletion, chatJson, setStatus, setCurrentSpeaker, getLastToolCalls } from './api.js';
 import { render, renderTranscript, renderAutoStop, renderDocument, readSettingsFromForm, readAutoStopFromForm, setBusy, getIsGenerating, els, labelForMode, showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble } from './render.js';
@@ -682,8 +682,38 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
   // Only turbo mode suppresses thinking.
   const showThoughts = !state.settings.turboMode;
   // In two-phase mode, Phase 1 already decided to speak — Phase 2 never re-checks skip.
-  // Researchers are exempt: they have their own skip logic and are not simplified.
-  const skipAllowed = !twoPhase || !!actor.isResearcher;
+  // Researchers and Managers are exempt: they have their own skip logic.
+  const skipAllowed = !twoPhase || !!actor.isResearcher || !!actor.isManager;
+
+  if (actor.isManager) {
+    const rosterLines = state.actors
+      .map(a => `- ${a.name} (${a.role || "Participant"})${a.enabled ? "" : " [SILENCED]"}`)
+      .join("\n");
+
+    const system = [
+      `You are ${actor.name}, the Manager of this forum.`,
+      actor.persona ? `Persona: ${actor.persona}` : "",
+      actor.goal ? `Goal: ${actor.goal}` : "",
+      "Your job is to keep the right expertise in the room at the right time.",
+      "Each turn, observe the discussion and decide whether the current roster needs adjustment:",
+      "  CREATE a new actor when the conversation needs a skill or perspective that nobody present can provide.",
+      "  SILENCE an actor when they have exhausted their contribution and are no longer adding value.",
+      "  RESUME a silenced actor when the topic swings back into their area.",
+      "CREATION RULES: Be sparing. Create at most 2 actors per turn. Provide a realistic name, a one-line role, a focused persona, a clear goal, and a brief voice description.",
+      "SILENCE RULES: You may not silence yourself or the Director. Silenced actors are disabled but not deleted; you can resume them.",
+      "SKIP RULE: If the current roster is appropriate and you have nothing useful to say publicly, set action to 'skip'.",
+      "You may also contribute a brief public message explaining your decisions.",
+      showThoughts
+        ? `Return only valid JSON: {"thought":"private analysis of what the room needs","action":"speak or skip","message":"(optional) brief public explanation","manageActors":{"create":[{"name":"...","role":"...","persona":"...","goal":"...","voice":"..."}],"silence":["ActorName"],"resume":["ActorName"]}}`
+        : `Return only valid JSON: {"thought":"","action":"speak or skip","message":"(optional) brief public explanation","manageActors":{"create":[{"name":"...","role":"...","persona":"...","goal":"...","voice":"..."}],"silence":["ActorName"],"resume":["ActorName"]}}`,
+      "All manageActors sub-arrays are optional — omit any you don't need. The JSON is transport only; put natural dialogue only inside message.",
+      (!showThoughts) ? "IMPORTANT: Keep the JSON \"thought\" field empty (\"\") to save tokens." : ""
+    ].filter(Boolean).join("\n");
+
+    const baseContext = await buildPromptContext({ kind: "actor", actor });
+    const user = `${baseContext}\n\n### Current actor roster\n${rosterLines}`;
+    return chatJson(system, user, actor.temperature ?? state.settings.temperature, signal, onStream);
+  }
 
   if (actor.isResearcher) {
     const system = [
@@ -1124,7 +1154,7 @@ export function memoryBlock(recallChunks) {
 export function formatTranscript(messages, wordLimit = WORD_LIMITS.recentTranscript) {
   if (!messages.length) return "No public messages yet.";
   const text = messages
-    .filter((m) => m.type !== "system") // system notices aren't part of the conversation
+    .filter((m) => m.type !== "system" && m.type !== "management") // system/management notices aren't part of the conversation
     .map((message) => {
       const name = message.speaker || state.actors.find((a) => a.id === message.actorId)?.name || "Forum";
       if (message.type === "user")   return `[USER] ${name}: ${publicMessageContent(message)}`;
@@ -1133,6 +1163,62 @@ export function formatTranscript(messages, wordLimit = WORD_LIMITS.recentTranscr
       return `${name}: ${publicMessageContent(message)}`;
     }).join("\n");
   return trimWords(text, wordLimit);
+}
+
+function applyActorManagement(spec, managerName, managerColor) {
+  const log = [];
+  const directorName = state.dm.name?.toLowerCase();
+
+  // Create new actors (max 2 per turn)
+  for (const s of (spec.create || []).slice(0, 2)) {
+    const name = String(s.name || "").trim().slice(0, 50) || `Specialist ${state.actors.length + 1}`;
+    state.actors.push({
+      id: crypto.randomUUID(),
+      name,
+      role: String(s.role || "Specialist").trim().slice(0, 70),
+      persona: String(s.persona || "").trim(),
+      goal: String(s.goal || "").trim(),
+      voice: String(s.voice || "").trim(),
+      thoughts: "",
+      enabled: true,
+      color: colors[state.actors.length % colors.length]
+    });
+    log.push(`Created "${name}"`);
+  }
+
+  // Silence actors (cannot silence self or Director)
+  for (const name of (spec.silence || [])) {
+    const lower = String(name).toLowerCase();
+    if (lower === managerName.toLowerCase() || lower === directorName) continue;
+    const actor = state.actors.find(a => a.enabled && a.name.toLowerCase() === lower);
+    if (actor) {
+      actor.enabled = false;
+      state.turnQueue = state.turnQueue.filter(id => id !== actor.id);
+      log.push(`Silenced "${actor.name}"`);
+    }
+  }
+
+  // Resume silenced actors
+  for (const name of (spec.resume || [])) {
+    const actor = state.actors.find(a => !a.enabled && a.name.toLowerCase() === String(name).toLowerCase());
+    if (actor) {
+      actor.enabled = true;
+      log.push(`Resumed "${actor.name}"`);
+    }
+  }
+
+  if (log.length) {
+    buildTurnQueue();
+    saveState();
+    render();
+    addMessage({
+      type: "management",
+      speaker: managerName,
+      content: log.join(" · "),
+      color: managerColor
+    });
+    logTransition("manager_action", { manager: managerName, actions: log });
+  }
 }
 
 export async function applyAiResult(participant, result) {
@@ -1199,6 +1285,11 @@ export async function applyAiResult(participant, result) {
 
   const actor = participant.data;
   actor.thoughts = appendMemory(actor.thoughts, result.thought);
+
+  // Manager: apply roster changes before next-speaker routing
+  if (actor.isManager && result.manageActors && typeof result.manageActors === "object") {
+    applyActorManagement(result.manageActors, actor.name, actor.color);
+  }
 
   // Actor-driven next-speaker routing (mirrors the DM handler above)
   if (result.nextSpeaker) {

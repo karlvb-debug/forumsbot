@@ -1077,6 +1077,11 @@ export function renderActors() {
     $(".actor-is-researcher", node).checked = !!actor.isResearcher;
     $(".researcher-badge", node).style.display = actor.isResearcher ? "" : "none";
     node.classList.toggle("researcher-agent", !!actor.isResearcher);
+    const managerCheckbox = $(".actor-is-manager", node);
+    if (managerCheckbox) managerCheckbox.checked = !!actor.isManager;
+    const managerBadge = $(".manager-badge", node);
+    if (managerBadge) managerBadge.style.display = actor.isManager ? "" : "none";
+    node.classList.toggle("manager-agent", !!actor.isManager);
     $(".actor-swatch", node).style.background = actor.color;
     $(".actor-name-display", node).textContent = actor.name || `Actor ${index + 1}`;
     $(".role-badge", node).textContent = actor.role || "Participant";
@@ -1130,6 +1135,7 @@ export function renderActors() {
     node.addEventListener("input", () => {
       actor.enabled = $(".actor-enabled", node).checked;
       actor.isResearcher = $(".actor-is-researcher", node).checked;
+      actor.isManager = !!$(".actor-is-manager", node)?.checked;
       actor.name = $(".actor-name", node).value.trim() || `Actor ${index + 1}`;
       actor.role = $(".actor-role", node).value.trim();
       actor.persona = $(".actor-persona", node).value.trim();
@@ -1144,6 +1150,9 @@ export function renderActors() {
       if (prevEl) prevEl.textContent = [actor.role, !actor.enabled ? "disabled" : ""].filter(Boolean).join(" · ");
       $(".researcher-badge", node).style.display = actor.isResearcher ? "" : "none";
       node.classList.toggle("researcher-agent", actor.isResearcher);
+      const mb = $(".manager-badge", node);
+      if (mb) mb.style.display = actor.isManager ? "" : "none";
+      node.classList.toggle("manager-agent", !!actor.isManager);
       $(".actor-temperature-display", node).textContent = actor.temperature.toFixed(2);
       saveState();
       renderTranscript();

@@ -485,6 +485,37 @@ input[type=range]::-webkit-slider-thumb {
   border-color: color-mix(in srgb, var(--purple) 40%, var(--line));
   box-shadow: 0 4px 12px rgba(110, 76, 153, 0.15);
 }
+
+.manager-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: color-mix(in srgb, #1a7a6e 15%, var(--panel));
+  border: 1px solid color-mix(in srgb, #1a7a6e 40%, var(--line));
+  color: #1a7a6e;
+  white-space: nowrap;
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.actor-card.manager-agent {
+  border-color: color-mix(in srgb, #1a7a6e 45%, var(--line));
+  box-shadow: 0 4px 12px rgba(26, 122, 110, 0.15);
+}
+
+/* Management action notices in transcript */
+.message-card.management {
+  background: color-mix(in srgb, #1a7a6e 8%, var(--panel));
+  border-left: 3px solid #1a7a6e !important;
+  padding: 5px 12px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-style: italic;
+}
+.message-card.management strong { color: #1a7a6e; font-style: normal; }
+.message-card.management .message-content { margin-top: 2px; }
 .actor-expand-toggle {
   display: inline-grid;
   place-items: center;
