@@ -876,10 +876,23 @@ export async function askDirector(dm, signal, onStream = null) {
     ? "You are the narrative DM. Describe the environment, atmosphere, sounds, and consequences of the characters' actions using rich descriptive narration wrapped in asterisks. Frame scene beats, introduce complications, and advance the story. Do NOT speak for the characters—react to what they do and set the stage for their next moves."
     : "Help move the exchange forward. Surface decisions, conflicts, and next questions. Summarize when useful and invite quieter actors in without taking over.";
 
+  // In story mode the DM controls the cast — they can introduce new characters or
+  // retire ones who have left the scene, exactly like the Manager role in problem mode.
+  const castManagementBlock = isStoryMode
+    ? [
+        "CAST MANAGEMENT: As the narrative DM you control who is in the scene.",
+        "To introduce a new character, include an optional \"manageActors\" field in your JSON with a \"create\" array — give each character a name, role (character archetype), persona, goal, and voice.",
+        "To retire a character who has left the scene or is no longer relevant, add their name to \"silence\". To bring a retired character back, add them to \"resume\".",
+        "Maximum 2 new characters per turn. You cannot silence yourself.",
+        "Example: \"manageActors\":{\"create\":[{\"name\":\"Old Mirren\",\"role\":\"Village elder\",\"persona\":\"Weathered and cryptic. Knows the forest's secrets.\",\"goal\":\"Protect the village at any cost.\",\"voice\":\"Slow, deliberate, speaks in half-riddles.\"}],\"silence\":[\"Guard Captain\"]}"
+      ].join("\n")
+    : "";
+
   const system = [
     `You are ${dm.name}, the DM/director for a local AI forum.`,
     dm.persona ? `Style: ${dm.persona}` : "",
     modeInstruction,
+    castManagementBlock,
     "Messages labelled [USER] in the transcript are from the human facilitator. Acknowledge and act on their instructions.",
     "Do not dominate the forum. You may skip if the actors are already progressing.",
     "CRITICAL SKIP RULE: If you have no new guidance, summaries, or questions to introduce, you MUST set action to \"skip\" and leave message empty. This keeps the debate focused on the active actors.",
@@ -930,7 +943,10 @@ export async function askDirector(dm, signal, onStream = null) {
       : ""
   ].filter(Boolean).join("\n");
 
-  const user = await buildPromptContext({ kind: "dm", dm, privateThoughts });
+  const baseUser = await buildPromptContext({ kind: "dm", dm, privateThoughts });
+  const user = isStoryMode
+    ? `${baseUser}\n\n### Current cast\n${state.actors.map(a => `- ${a.name} (${a.role || "Character"})${a.enabled ? "" : " [offstage]"}`).join("\n")}`
+    : baseUser;
   const promptParts = {
     ..._lastPromptParts,
     system,
@@ -1252,6 +1268,11 @@ export async function applyAiResult(participant, result) {
         document.dispatchEvent(new CustomEvent("anchorSuggested", { detail: pendingAnchor }));
         logTransition("anchor_suggested", { text: anchorText });
       }
+    }
+
+    // Director cast management (story mode) — create/silence/resume characters
+    if (result.manageActors && typeof result.manageActors === "object") {
+      applyActorManagement(result.manageActors, state.dm.name, "var(--gold)");
     }
 
     // Director-guided dynamic turn routing
