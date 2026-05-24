@@ -115,6 +115,28 @@ async function proxyChat(req, res) {
       },
       body: JSON.stringify(request)
     });
+
+    // Streaming: pipe SSE events directly to the browser instead of buffering.
+    if (request?.stream) {
+      if (!response.ok) {
+        const errText = await response.text();
+        let errPayload;
+        try { errPayload = errText ? JSON.parse(errText) : {}; } catch { errPayload = { raw: errText }; }
+        const message = errPayload?.error?.message || errPayload?.error || errPayload?.raw || "LM Studio returned an error.";
+        return sendJson(res, response.status, toLmStudioError(new Error(String(message)), response.status));
+      }
+      res.writeHead(200, {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-store",
+        "x-accel-buffering": "no"
+      });
+      for await (const chunk of response.body) {
+        if (!res.writableEnded) res.write(chunk);
+      }
+      if (!res.writableEnded) res.end();
+      return;
+    }
+
     const text = await response.text();
     let payload;
     try {

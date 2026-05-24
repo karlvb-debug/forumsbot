@@ -16,10 +16,17 @@ import {
   renderTelemetry,
   switchSidebarTab,
   switchDocView,
-  switchTab,
   isInitialized,
   setInitialized,
-  validateEmbeddingModel
+  getIsGenerating,
+  validateEmbeddingModel,
+  renderTurboState,
+  showTranscriptSearch,
+  hideTranscriptSearch,
+  runTranscriptSearch,
+  nextSearchMatch,
+  prevSearchMatch,
+  renderSessionsList
 } from './modules/render.js';
 import {
   loadModels,
@@ -54,9 +61,13 @@ import {
   addActor,
   generateQuickStart,
   applyQuickStartConfig,
-  discardQuickStartConfig
+  discardQuickStartConfig,
+  saveCurrentSession,
+  loadSession,
+  generateActorFromDescription
 } from './modules/session.js';
-import { initializeMemoryStorage, getAllChunks } from './modules/db.js';
+import { initializeMemoryStorage, getAllChunks, getAllSessions, deleteSession } from './modules/db.js';
+import { startTensionGridAnimation, stopTensionGridAnimation } from './modules/telemetry.js';
 
 // Wire the els reference into api.js so setStatus, loadModels, etc. can access DOM elements
 initApi(els);
@@ -139,6 +150,9 @@ function wireEvents() {
         startTensionGridAnimation(els.tensionGridCanvas);
       } else {
         stopTensionGridAnimation();
+      }
+      if (name === "sessions") {
+        getAllSessions().then(sessions => renderSessionsList(sessions));
       }
     });
   });
@@ -312,16 +326,6 @@ function wireEvents() {
     });
   }
 
-  els.tabButtons.forEach((button) => {
-    button.addEventListener("click", () => switchTab(button.dataset.tab));
-  });
-  els.mobileNavBtns.forEach((button) => {
-    button.addEventListener("click", () => switchTab(button.dataset.tab));
-  });
-  els.tabJumps.forEach((button) => {
-    button.addEventListener("click", () => switchTab(button.dataset.tabJump));
-  });
-
   // Mode pill buttons
   els.modePills.forEach((pill) => {
     pill.addEventListener("click", () => {
@@ -362,20 +366,47 @@ function wireEvents() {
 
   // Keyboard shortcuts
   document.addEventListener("keydown", (e) => {
+    // Escape — close search bar or stop generation
+    if (e.key === "Escape") {
+      const bar = document.getElementById("transcriptSearchBar");
+      if (bar && bar.style.display !== "none") {
+        e.preventDefault();
+        hideTranscriptSearch();
+        return;
+      }
+      // Stop generation if running
+      if (getIsGenerating()) {
+        e.preventDefault();
+        stopGeneration();
+        return;
+      }
+    }
+
     const mod = e.metaKey || e.ctrlKey;
     if (!mod) return;
 
+    // Cmd/Ctrl+F — open transcript search
+    if (e.key === "f" || e.key === "F") {
+      e.preventDefault();
+      showTranscriptSearch();
+      return;
+    }
+
     // Cmd/Ctrl+Enter — send message or trigger next turn
+    // Guard: don't fire when typing in a sidebar form field
     if (e.key === "Enter" && !e.shiftKey) {
-      const activePanel = state.ui.activeTab;
-      if (activePanel === "conversation") {
+      const focused = document.activeElement;
+      const inSidebarInput = focused &&
+        (focused.tagName === "TEXTAREA" || focused.tagName === "INPUT") &&
+        focused !== els.userInput;
+      if (!inSidebarInput) {
         const content = els.userInput.value.trim();
         if (content) {
           e.preventDefault();
           els.composer.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
         } else {
           e.preventDefault();
-          runNextTurn();
+          runNextTurn().then(ok => { if (ok) saveCurrentSession().catch(console.warn); });
         }
       }
     }
@@ -383,19 +414,49 @@ function wireEvents() {
     // Cmd/Ctrl+Shift+N — next AI turn
     if (e.key === "N" && e.shiftKey) {
       e.preventDefault();
-      runNextTurn();
+      runNextTurn().then(ok => { if (ok) saveCurrentSession().catch(console.warn); });
     }
 
     // Cmd/Ctrl+Shift+R — run a round
     if (e.key === "R" && e.shiftKey) {
       e.preventDefault();
-      runRound();
+      runRound().then(ok => { if (ok) saveCurrentSession().catch(console.warn); });
     }
   });
 
+  // Bare Space / Enter — run next turn when no input is focused and not busy
+  document.addEventListener("keydown", (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+    if (e.key !== " " && e.key !== "Enter") return;
+    const focused = document.activeElement;
+    const inInput = focused &&
+      (focused.tagName === "TEXTAREA" || focused.tagName === "INPUT" ||
+       focused.tagName === "SELECT" || focused.isContentEditable);
+    if (inInput) return;
+    if (getIsGenerating()) return;
+    e.preventDefault();
+    runNextTurn().then(ok => { if (ok) saveCurrentSession().catch(console.warn); });
+  });
+
+  // Transcript search bar events
+  const transcriptSearchInput = document.getElementById("transcriptSearchInput");
+  const transcriptSearchPrev = document.getElementById("transcriptSearchPrev");
+  const transcriptSearchNext = document.getElementById("transcriptSearchNext");
+  const transcriptSearchClose = document.getElementById("transcriptSearchClose");
+  if (transcriptSearchInput) {
+    transcriptSearchInput.addEventListener("input", () => runTranscriptSearch(transcriptSearchInput.value));
+    transcriptSearchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.shiftKey ? prevSearchMatch() : nextSearchMatch(); }
+      if (e.key === "Escape") hideTranscriptSearch();
+    });
+  }
+  if (transcriptSearchPrev) transcriptSearchPrev.addEventListener("click", prevSearchMatch);
+  if (transcriptSearchNext) transcriptSearchNext.addEventListener("click", nextSearchMatch);
+  if (transcriptSearchClose) transcriptSearchClose.addEventListener("click", hideTranscriptSearch);
+
   els.loadModels.addEventListener("click", loadModels);
-  els.nextTurn.addEventListener("click", runNextTurn);
-  els.round.addEventListener("click", () => runRound());
+  els.nextTurn.addEventListener("click", () => runNextTurn().then(ok => { if (ok) saveCurrentSession().catch(console.warn); }));
+  els.round.addEventListener("click", () => runRound().then(ok => { if (ok) saveCurrentSession().catch(console.warn); }));
   els.auto.addEventListener("click", runAutoLoop);
   els.clearConversation.addEventListener("click", confirmAndResetSession);
   els.copySession.addEventListener("click", copySessionToClipboard);
@@ -405,9 +466,32 @@ function wireEvents() {
   els.discardQuickStart.addEventListener("click", discardQuickStartConfig);
   els.addActor.addEventListener("click", () => addActor(false));
   els.addResearcher.addEventListener("click", () => addActor(true));
+  document.getElementById("addActorFromDescBtn")?.addEventListener("click", generateActorFromDescription);
   els.savePreset.addEventListener("click", savePreset);
   els.loadPreset.addEventListener("click", () => els.presetFile.click());
   els.exportSession.addEventListener("click", () => exportSession());
+
+  // Sessions panel
+  document.getElementById("saveSessionBtn")?.addEventListener("click", async () => {
+    await saveCurrentSession();
+    const sessions = await getAllSessions();
+    renderSessionsList(sessions);
+  });
+  document.getElementById("sessionsList")?.addEventListener("click", async (e) => {
+    const loadBtn = e.target.closest(".session-load-btn");
+    const delBtn = e.target.closest(".session-delete-btn");
+    if (loadBtn) {
+      const id = loadBtn.dataset.sessionId;
+      const sessions = await getAllSessions();
+      const session = sessions.find(s => s.id === id);
+      if (session) await loadSession(session);
+    } else if (delBtn) {
+      const id = delBtn.dataset.sessionId;
+      await deleteSession(id);
+      const sessions = await getAllSessions();
+      renderSessionsList(sessions);
+    }
+  });
   els.reset.addEventListener("click", confirmAndFullReset);
   els.summarizeNow.addEventListener("click", () => summarizeMemory("manual"));
   els.rebuildMemory.addEventListener("click", () => summarizeMemory("rebuild", state.messages.slice(-24), { reset: true }));
@@ -443,6 +527,14 @@ function wireEvents() {
     document.documentElement.dataset.theme = state.settings.theme;
     saveState();
   });
+
+  if (els.turboButton) {
+    els.turboButton.addEventListener("click", () => {
+      state.settings.turboMode = !state.settings.turboMode;
+      saveState();
+      renderTurboState();
+    });
+  }
 
   // ── Telemetry controls ────────────────────────────────────────
   if (els.gravitySensitivityInput) {
@@ -480,6 +572,19 @@ function wireEvents() {
     renderTelemetry();
   });
 
+  // Actor turn indicator — highlight the active speaker's card in the roster
+  document.addEventListener("speakerChanged", ({ detail: { name } }) => {
+    document.querySelectorAll(".actor-card").forEach(card => {
+      const actor = state.actors.find(a => a.id === card.dataset.actorId);
+      card.classList.toggle("is-speaking", !!name && !!actor && actor.name === name);
+    });
+    // DM section
+    const dmSection = document.querySelector(".section--director");
+    if (dmSection) {
+      dmSection.classList.toggle("is-speaking", !!name && name === state.dm.name);
+    }
+  });
+
   // Show/hide the embedding warning banner based on live probe results
   document.addEventListener("embeddingProbeResult", (e) => {
     const { ok, reason } = e.detail || {};
@@ -498,6 +603,17 @@ function wireEvents() {
     els.enablePreflightRouterInput.addEventListener("change", () => {
       if (!isInitialized) return;
       state.settings.enablePreflightRouter = els.enablePreflightRouterInput.checked;
+      saveState();
+    });
+  }
+
+  // Round Snapshot (KV cache prefix stability)
+  const roundSnapshotInput = document.getElementById("roundSnapshotInput");
+  if (roundSnapshotInput) {
+    roundSnapshotInput.checked = state.settings.roundSnapshotEnabled !== false;
+    roundSnapshotInput.addEventListener("change", () => {
+      if (!isInitialized) return;
+      state.settings.roundSnapshotEnabled = roundSnapshotInput.checked;
       saveState();
     });
   }
@@ -554,11 +670,6 @@ async function startApp() {
   syncFormFromState();
   setInitialized(true);
 
-  // On narrow screens, start with the summary collapsed
-  if (window.matchMedia("(max-width: 1120px)").matches) {
-    const collapse = document.querySelector(".summary-collapse");
-    if (collapse) collapse.removeAttribute("open");
-  }
   // Update token gauge whenever a chat response returns usage data or context length is fetched
   document.addEventListener("tokenUsageUpdated", renderTokenGauge);
   try {

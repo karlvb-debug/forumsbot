@@ -1,10 +1,11 @@
 export const STORAGE_KEY = "forum-state-v1";
 export const PRESET_VERSION = 1;
 export const DB_NAME = "forum-memory";
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 export const MESSAGE_STORE = "messages";
 export const CHUNK_STORE = "chunks";
 export const ACTOR_MEMORY_STORE = "actor-memory";
+export const SESSION_STORE = "sessions";
 export const RECENT_MESSAGE_LIMIT = 80;
 export const PROMPT_MESSAGE_LIMIT = 20;
 export const RECALLED_CHUNK_LIMIT = 6;
@@ -80,7 +81,15 @@ export const defaultState = {
     // Sprint 6: Cross-Session Actor Memory
     enableCrossSessionMemory: true,
     // Sprint 7: Influence Budget
-    showInfluenceBars: false
+    showInfluenceBars: false,
+    // Streaming: show tokens as they arrive for actor/DM turns
+    streamingEnabled: true,
+    // Turbo Mode: skip memory cycles, thoughts, alignment, and cross-session memory
+    turboMode: false,
+    // Adaptive compression: LLM micro-summarize private memory when prompt is over budget
+    enableAdaptiveCompression: true,
+    // KV cache: freeze transcript at round start so all actors share a byte-identical prefix
+    roundSnapshotEnabled: true
   },
   ui: {
     activeTab: "",

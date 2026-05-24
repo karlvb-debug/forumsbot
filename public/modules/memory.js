@@ -1,6 +1,6 @@
 import { WORD_LIMITS, PROMPT_MESSAGE_LIMIT, RECALLED_CHUNK_LIMIT, PINNED_FACTS_WORD_CAP, DELTA_REWRITE_EVERY } from './constants.js';
 import { state, saveState, logTransition } from './state.js';
-import { chatCompletion, getEmbedding, setStatus } from './api.js';
+import { chatCompletion, getEmbedding, getEmbeddingsBatch, setStatus } from './api.js';
 import { render, renderMemory, renderPendingFacts, renderActors, setBusy, getIsGenerating, els } from './render.js';
 import { getAllChunks, putChunk, clearChunks, countChunks, getAllMessages } from './db.js';
 import { trimWords, stringifyList, normalizeStringArray, extractKeywords, stringifyBullets, stripCodeFence, extractBalancedObjects, sanitizeJsonString } from './utils.js';
@@ -407,31 +407,54 @@ async function getFactVector(factText) {
 
 async function applyPinnedFactSuggestions(suggestions) {
   const embeddingModel = state.settings.embeddingModel || state.settings.model || "";
-  for (const fact of (suggestions || [])) {
-    if (!fact) continue;
+  const newFacts = (suggestions || []).filter(Boolean);
+  if (!newFacts.length) return;
 
-    const allExisting = [...state.memory.pinnedFacts, ...state.memory.pendingPinnedFacts];
+  const allExisting = [...state.memory.pinnedFacts, ...state.memory.pendingPinnedFacts];
+
+  // Pre-embed all new facts + all existing facts in two batched calls to minimize round trips.
+  let newVecs = null;
+  let existingVecs = null;
+  if (embeddingModel && allExisting.length > 0) {
+    try {
+      // Only embed texts not already in the cache
+      const newTexts = newFacts.filter(f => !_factVectorCache.has(f.toLowerCase().trim()));
+      const existingTexts = allExisting.filter(f => !_factVectorCache.has(f.toLowerCase().trim()));
+
+      const batchTexts = [...newTexts, ...existingTexts];
+      if (batchTexts.length > 0) {
+        const batchVecs = await getEmbeddingsBatch(batchTexts);
+        batchTexts.forEach((text, i) => {
+          if (Array.isArray(batchVecs[i]) && batchVecs[i].length > 0) {
+            _factVectorCache.set(text.toLowerCase().trim(), batchVecs[i]);
+          }
+        });
+      }
+      newVecs = newFacts.map(f => _factVectorCache.get(f.toLowerCase().trim()) ?? null);
+      existingVecs = allExisting.map(f => _factVectorCache.get(f.toLowerCase().trim()) ?? null);
+    } catch {
+      // Batch embedding failed — fall back to exact-match dedup only
+    }
+  }
+
+  for (let ni = 0; ni < newFacts.length; ni++) {
+    const fact = newFacts[ni];
 
     // Fast path: exact lowercase match
-    const exactDup = allExisting.some(f => f.toLowerCase() === fact.toLowerCase());
-    if (exactDup) continue;
+    if (allExisting.some(f => f.toLowerCase() === fact.toLowerCase())) continue;
 
-    // Semantic path: embedding cosine similarity (only when a model is configured)
-    if (embeddingModel) {
-      const factVec = await getFactVector(fact);
-      if (factVec) {
-        let maxSim = 0;
-        for (const existing of allExisting) {
-          const existingVec = await getFactVector(existing);
-          if (existingVec) {
-            const sim = cosineSimilarity(factVec, existingVec);
-            if (sim > maxSim) maxSim = sim;
-          }
+    // Semantic path: cosine similarity using pre-computed vectors
+    if (embeddingModel && newVecs?.[ni] && existingVecs) {
+      let maxSim = 0;
+      for (let ei = 0; ei < allExisting.length; ei++) {
+        if (existingVecs[ei]) {
+          const sim = cosineSimilarity(newVecs[ni], existingVecs[ei]);
+          if (sim > maxSim) maxSim = sim;
         }
-        if (maxSim > 0.88) {
-          console.debug(`[memory] Dedup: skipping near-duplicate fact (sim=${maxSim.toFixed(3)}): "${fact}"`);
-          continue;
-        }
+      }
+      if (maxSim > 0.88) {
+        console.debug(`[memory] Dedup: skipping near-duplicate fact (sim=${maxSim.toFixed(3)}): "${fact}"`);
+        continue;
       }
     }
 

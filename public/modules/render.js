@@ -1,4 +1,4 @@
-import { VALID_TABS, defaultState, DELTA_REWRITE_EVERY } from './constants.js';
+import { defaultState, DELTA_REWRITE_EVERY } from './constants.js';
 import { state, saveState, logWarning } from './state.js';
 import { calculateInfluenceBudget } from './telemetry.js';
 import { storageAvailable, storageWarning } from './db.js';
@@ -28,10 +28,6 @@ function safeString(value) {
 }
 
 export const els = {
-  tabButtons: $$("[data-tab]").filter(el => el.closest(".mobile-nav") === null),
-  mobileNavBtns: $$("[data-tab]").filter(el => el.closest(".mobile-nav") !== null),
-  tabPanels: $$("[data-tab-panel]"),
-  tabJumps: $$("[data-tab-jump]"),
   modePills: $$("[data-mode]"),
   temperatureDisplay: $("#temperatureDisplay"),
   baseUrl: $("#baseUrlInput"),
@@ -171,8 +167,60 @@ export const els = {
   // Export mode
   exportModeSelect: $("#exportModeSelect"),
   // Sprint 7: Influence bars toggle
-  showInfluenceBarsInput: $("#showInfluenceBarsInput")
+  showInfluenceBarsInput: $("#showInfluenceBarsInput"),
+  // Turbo mode
+  turboButton: $("#turboModeButton"),
+  turboBanner: $("#turboBanner")
 };
+
+// ── Streaming bubble ──────────────────────────────────────────────────────────
+// A live placeholder card that shows tokens as they arrive, removed once
+// the real message card is painted by renderTranscript().
+let _streamingBubble = null;
+let _streamingMessageEl = null;
+
+export function showStreamingBubble(speaker, color, type = "actor") {
+  removeStreamingBubble();
+  const wasAtBottom = els.transcript.scrollHeight - els.transcript.scrollTop - els.transcript.clientHeight < 80;
+  const template = document.getElementById("messageTemplate");
+  if (!template) return;
+  const node = template.content.firstElementChild.cloneNode(true);
+  node.classList.add(type || "actor");
+  node.classList.add("streaming");
+  node.dataset.streaming = "true";
+  if (type !== "user" && type !== "skip") node.style.borderLeftColor = color;
+  const dotEl = node.querySelector(".speaker-dot");
+  if (dotEl) dotEl.style.background = color;
+  const nameEl = node.querySelector(".message-meta strong");
+  if (nameEl) nameEl.textContent = speaker;
+  const timeEl = node.querySelector(".message-time");
+  if (timeEl) timeEl.textContent = "generating…";
+  const contentEl = node.querySelector(".message-content");
+  if (contentEl) contentEl.innerHTML = '<span class="streaming-cursor">▌</span>';
+  [".thought-block", ".tool-calls", ".message-feedback", ".doc-edit-badge"].forEach((sel) => {
+    const el = node.querySelector(sel);
+    if (el) el.style.display = "none";
+  });
+  els.transcript.append(node);
+  _streamingBubble = node;
+  _streamingMessageEl = contentEl ?? null;
+  if (wasAtBottom) els.transcript.scrollTop = els.transcript.scrollHeight;
+}
+
+export function updateStreamingBubble(text) {
+  if (!_streamingMessageEl) return;
+  const wasAtBottom = els.transcript.scrollHeight - els.transcript.scrollTop - els.transcript.clientHeight < 120;
+  _streamingMessageEl.innerHTML = escapeHtml(text ?? '') + '<span class="streaming-cursor">▌</span>';
+  if (wasAtBottom) els.transcript.scrollTop = els.transcript.scrollHeight;
+}
+
+export function removeStreamingBubble() {
+  if (_streamingBubble) {
+    _streamingBubble.remove();
+    _streamingBubble = null;
+    _streamingMessageEl = null;
+  }
+}
 
 export let isInitialized = false;
 export function setInitialized(v) { isInitialized = v; }
@@ -191,8 +239,18 @@ export function setBusy(value) {
   els.userInput.disabled = value;
 }
 
+export function renderTurboState() {
+  const on = !!state.settings?.turboMode;
+  if (els.turboButton) {
+    els.turboButton.classList.toggle("turbo-active", on);
+    els.turboButton.title = on
+      ? "Turbo Mode ON — click to disable (memory, thoughts, alignment suspended)"
+      : "Turbo Mode OFF — click to enable for faster turns (disables memory, thoughts, alignment)";
+  }
+  if (els.turboBanner) els.turboBanner.style.display = on ? "" : "none";
+}
+
 export function render() {
-  renderTabs();
   renderStageHeader();
   renderActors();
   renderConversationSummary();
@@ -204,6 +262,7 @@ export function render() {
   renderAutoStop();
   renderTranscript();
   renderTelemetry();
+  renderTurboState();
   els.auto.textContent = state.autoRunning ? "Pause" : "Auto";
 }
 
@@ -399,40 +458,6 @@ export function renderAutoStop() {
   els.autoStopStatus.textContent = state.autoStop.status || "Auto-stop ready.";
 }
 
-export function switchTab(tabName) {
-  if (!VALID_TABS.includes(tabName)) return;
-
-  const update = () => {
-    state.ui.activeTab = tabName;
-    saveState();
-    renderTabs();
-    renderMemory();
-    renderAutoStop();
-  };
-
-  if (document.startViewTransition) {
-    document.startViewTransition(update);
-  } else {
-    update();
-  }
-}
-
-export function renderTabs() {
-  const activeTab = VALID_TABS.includes(state.ui.activeTab) ? state.ui.activeTab : "setup";
-  els.tabButtons.forEach((button) => {
-    const isActive = button.dataset.tab === activeTab;
-    button.classList.toggle("active", isActive);
-    button.setAttribute("aria-selected", String(isActive));
-    button.tabIndex = 0;
-  });
-  els.mobileNavBtns.forEach((button) => {
-    button.classList.toggle("active", button.dataset.tab === activeTab);
-  });
-  els.tabPanels.forEach((panel) => {
-    const isActive = panel.dataset.tabPanel === activeTab;
-    panel.hidden = !isActive;
-  });
-}
 
 export function renderModePills() {
   const mode = state.scenario.mode || "problem";
@@ -453,6 +478,7 @@ export function renderTemperatureDisplay() {
 }
 
 export function renderConversationSummary() {
+  if (!els.conversationSummary) return;
   els.conversationSummary.innerHTML = "";
   const scenario = document.createElement("div");
   scenario.className = "summary-block";
@@ -779,6 +805,19 @@ export function renderTokenGauge() {
     ctxWarning = `⚠️ Context window is only ${fmt(maxContextLength)} tokens — too small for reliable sessions. Recommend 8K+.`;
   } else if (headroom < maxTokens && used > 0) {
     ctxWarning = `⚠️ Only ${fmt(headroom)} tokens left for completion (${fmt(maxTokens)} needed) — responses may be truncated.`;
+  }
+
+  // Show context window size and warn if maxTokens setting is too high
+  const ctxHint = document.getElementById("modelContextInfo");
+  if (ctxHint) {
+    const maxTok = state.settings?.maxTokens || 0;
+    const isExcessive = maxTok > 0 && maxTok > maxContextLength * 0.8;
+    const ctxFmt = maxContextLength >= 1000 ? `${Math.round(maxContextLength / 1000)}K` : String(maxContextLength);
+    ctxHint.textContent = isExcessive
+      ? `Context: ${ctxFmt} ⚠ maxTokens (${maxTok}) exceeds 80% — reduce or responses may be cut short`
+      : `Context: ${ctxFmt}`;
+    ctxHint.dataset.level = isExcessive ? "warn" : "ok";
+    ctxHint.style.display = "";
   }
 
   // Find or create the context warning element
@@ -1270,6 +1309,20 @@ export function renderTranscript() {
       }
     }
 
+    // Fork button — appears on hover on every substantive message
+    if (message.type === "actor" || message.type === "dm" || message.type === "user") {
+      const forkBtn = document.createElement("button");
+      forkBtn.className = "fork-btn";
+      forkBtn.type = "button";
+      forkBtn.title = "Fork conversation from this point";
+      forkBtn.textContent = "⑂ Fork";
+      forkBtn.addEventListener("click", async () => {
+        const { forkSessionAtMessage } = await import("./session.js");
+        await forkSessionAtMessage(message.id);
+      });
+      node.appendChild(forkBtn);
+    }
+
     els.transcript.append(node);
   });
 
@@ -1339,6 +1392,9 @@ export function syncFormFromState() {
   validateEmbeddingModel(state.settings.embeddingModel);
   // Sprint 7: Influence bars
   if (els.showInfluenceBarsInput) els.showInfluenceBarsInput.checked = !!state.settings.showInfluenceBars;
+  // Round snapshot / KV cache toggle
+  const roundSnapshotInput = document.getElementById("roundSnapshotInput");
+  if (roundSnapshotInput) roundSnapshotInput.checked = state.settings.roundSnapshotEnabled !== false;
 }
 
 export function readSettingsFromForm() {
@@ -1462,4 +1518,121 @@ export async function validateEmbeddingModel(modelName) {
       els.embeddingWarning.querySelector("span:last-child").textContent = "Embedding test request failed. Check connection or settings.";
     }
   }
+}
+
+// ── Session history list ──────────────────────────────────────────────────────
+
+function esc(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+export function renderSessionsList(sessions) {
+  const container = document.getElementById('sessionsList');
+  if (!container) return;
+  if (!sessions?.length) {
+    container.innerHTML = '<p class="sessions-empty">No saved sessions yet.</p>';
+    return;
+  }
+  container.innerHTML = sessions.map(s => {
+    const date = s.timestamp
+      ? new Date(s.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+      : 'Unknown date';
+    return `<div class="session-card">
+      <div class="session-card-title">${esc(s.scenarioTitle || 'Untitled')}</div>
+      <div class="session-card-meta">${esc(date)} · ${s.actorCount || 0} actors · ${s.messageCount || 0} msgs</div>
+      <div class="session-card-actions">
+        <button class="secondary-button session-load-btn" data-session-id="${esc(s.id)}" type="button">Load</button>
+        <button class="danger-button session-delete-btn" data-session-id="${esc(s.id)}" type="button">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── In-transcript search ──────────────────────────────────────────────────────
+let _searchMatches = [];
+let _searchIndex = -1;
+
+export function showTranscriptSearch() {
+  const bar = document.getElementById("transcriptSearchBar");
+  const input = document.getElementById("transcriptSearchInput");
+  if (!bar || !input) return;
+  bar.style.display = "flex";
+  input.focus();
+  input.select();
+}
+
+export function hideTranscriptSearch() {
+  const bar = document.getElementById("transcriptSearchBar");
+  const input = document.getElementById("transcriptSearchInput");
+  if (bar) bar.style.display = "none";
+  if (input) input.value = "";
+  clearSearchHighlights();
+  _searchMatches = [];
+  _searchIndex = -1;
+  updateSearchCount();
+}
+
+function clearSearchHighlights() {
+  els.transcript?.querySelectorAll(".search-match, .search-current").forEach(el => {
+    el.classList.remove("search-match", "search-current");
+  });
+}
+
+export function runTranscriptSearch(query) {
+  clearSearchHighlights();
+  _searchMatches = [];
+  _searchIndex = -1;
+
+  if (!query || !query.trim()) {
+    updateSearchCount();
+    return;
+  }
+
+  const lower = query.toLowerCase();
+  const cards = els.transcript ? Array.from(els.transcript.querySelectorAll(".message-card")) : [];
+  cards.forEach(card => {
+    const content = card.textContent || "";
+    if (content.toLowerCase().includes(lower)) {
+      card.classList.add("search-match");
+      _searchMatches.push(card);
+    }
+  });
+
+  if (_searchMatches.length > 0) {
+    _searchIndex = 0;
+    scrollToMatch(0);
+  }
+  updateSearchCount();
+}
+
+export function nextSearchMatch() {
+  if (!_searchMatches.length) return;
+  _searchIndex = (_searchIndex + 1) % _searchMatches.length;
+  scrollToMatch(_searchIndex);
+  updateSearchCount();
+}
+
+export function prevSearchMatch() {
+  if (!_searchMatches.length) return;
+  _searchIndex = (_searchIndex - 1 + _searchMatches.length) % _searchMatches.length;
+  scrollToMatch(_searchIndex);
+  updateSearchCount();
+}
+
+function scrollToMatch(index) {
+  _searchMatches.forEach((el, i) => {
+    el.classList.toggle("search-current", i === index);
+    el.classList.toggle("search-match", i !== index);
+  });
+  _searchMatches[index]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function updateSearchCount() {
+  const el = document.getElementById("transcriptSearchCount");
+  if (!el) return;
+  if (!_searchMatches.length) {
+    el.textContent = "";
+    return;
+  }
+  el.textContent = `${_searchIndex + 1} / ${_searchMatches.length}`;
 }

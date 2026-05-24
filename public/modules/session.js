@@ -1,8 +1,8 @@
 import { PRESET_VERSION, RECENT_MESSAGE_LIMIT, defaultState } from './constants.js';
 import { state, setState, normalizeState, saveState } from './state.js';
-import { render, syncFormFromState, els, switchTab, renderQuickStartPreview } from './render.js';
+import { render, syncFormFromState, els, switchSidebarTab, renderQuickStartPreview } from './render.js';
 import { setStatus } from './api.js';
-import { clearMessages, clearChunks, putMessages, putChunk, countChunks, getRecentMessages, getAllMessages, getAllChunks } from './db.js';
+import { clearMessages, clearChunks, putMessages, putChunk, countChunks, getRecentMessages, getAllMessages, getAllChunks, putSession, getAllSessions, deleteSession } from './db.js';
 import { chatCompletion } from './api.js';
 import { colors } from './constants.js';
 import {
@@ -50,6 +50,58 @@ export async function exportSession() {
   const mode = modeEl ? modeEl.value : 'debug';
 
   let payload;
+
+  if (mode === 'markdown') {
+    const lines = [
+      `# ${state.scenario.title || 'Forum Session'}`,
+      state.scenario.premise ? `**Premise:** ${state.scenario.premise}` : '',
+      state.scenario.objective ? `**Objective:** ${state.scenario.objective}` : '',
+      '---'
+    ].filter(Boolean);
+
+    let turnNum = 0;
+    for (const msg of messages) {
+      if (msg.type === 'system') continue;
+      if (msg.type === 'skip') {
+        lines.push(`\n*[${msg.speaker} passed]*`);
+        continue;
+      }
+      turnNum++;
+      const timeStr = msg.createdAt
+        ? new Date(msg.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+        : '';
+      const speakerLabel = msg.type === 'dm' ? `${msg.speaker} (Director)` : (msg.speaker || 'Unknown');
+      lines.push(`\n## ${speakerLabel} — Turn ${turnNum}${timeStr ? ` *(${timeStr})*` : ''}`);
+      if (state.settings.showThoughts && msg.thought) {
+        lines.push(`> ${msg.thought.replace(/\n/g, '\n> ')}`);
+        lines.push('');
+      }
+      if (msg.content) lines.push(msg.content);
+    }
+
+    if (Array.isArray(state.anchors) && state.anchors.length) {
+      lines.push('\n---\n## Anchored Agreements');
+      state.anchors.forEach(a => lines.push(`- **[${a.speaker}]** ${a.text}`));
+    }
+    if (state.outcomes?.finalRecommendation) {
+      lines.push('\n---\n## Outcomes');
+      lines.push(`**Recommendation:** ${state.outcomes.finalRecommendation}`);
+      if (Array.isArray(state.outcomes.actionItems) && state.outcomes.actionItems.length) {
+        lines.push('\n**Action Items:**');
+        state.outcomes.actionItems.forEach(item => lines.push(`- ${item}`));
+      }
+    }
+
+    const mdText = lines.join('\n');
+    const blob = new Blob([mdText], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `forum-session-${slugDate()}.md`;
+    link.click();
+    URL.revokeObjectURL(url);
+    return;
+  }
 
   if (mode === 'eval') {
     // Eval mode: metrics, settings, scenario, and diagnostics only — no message content
@@ -204,7 +256,7 @@ export async function resetSession(fullReset = false) {
   saveState();
   syncFormFromState();
   render();
-  switchTab(fullReset ? "setup" : "conversation");
+  switchSidebarTab("setup");
   setStatus(fullReset ? "Everything reset to defaults." : "Conversation cleared.", "ok");
 }
 
@@ -287,6 +339,52 @@ export function addActor(isResearcher = false) {
   }
   saveState();
   render();
+}
+
+export async function generateActorFromDescription() {
+  if (!state.settings.model) {
+    setStatus("Choose or type a model first.", "warn");
+    return;
+  }
+  const description = window.prompt("Describe the actor you want (one line):", "");
+  if (!description?.trim()) return;
+
+  setStatus("Generating actor…", "ok");
+  const system = [
+    "You generate a single forum actor configuration from a one-line description.",
+    "Return ONLY valid JSON with this exact shape (no markdown, no commentary):",
+    '{"name":"","role":"","persona":"","goal":"","voice":""}'
+  ].join("\n");
+  const user = [
+    `Description: ${description.trim()}`,
+    `Forum scenario: ${state.scenario.title || "general discussion"}`,
+    "Keep each field concise (1-2 sentences). Make name creative and specific to the context."
+  ].join("\n");
+
+  try {
+    const raw = await chatCompletion(system, user, { temperature: 0.8, maxTokens: 400 });
+    const cleaned = sanitizeJsonString(stripCodeFence(raw));
+    const parsed = JSON.parse(cleaned);
+    if (!parsed?.name) throw new Error("Invalid actor JSON returned.");
+    const index = state.actors.length;
+    state.actors.push({
+      id: crypto.randomUUID(),
+      name: String(parsed.name || `Actor ${index + 1}`).slice(0, 50),
+      role: String(parsed.role || "Participant").slice(0, 80),
+      persona: String(parsed.persona || "").slice(0, 400),
+      goal: String(parsed.goal || "").slice(0, 200),
+      voice: String(parsed.voice || "").slice(0, 200),
+      thoughts: "",
+      enabled: true,
+      expanded: true,
+      color: colors[index % colors.length]
+    });
+    saveState();
+    render();
+    setStatus(`Actor "${parsed.name}" created.`, "ok");
+  } catch (err) {
+    setStatus(`Actor generation failed: ${err.message}`, "error");
+  }
 }
 
 export async function generateQuickStart() {
@@ -395,7 +493,7 @@ export async function applyQuickStartConfig() {
       color: "var(--coral)"
     });
   }
-  switchTab("conversation");
+  switchSidebarTab("setup");
 }
 
 export function discardQuickStartConfig() {
@@ -415,4 +513,106 @@ export function setQuickStartStatus(message) {
   state.ui.quickStartStatus = message;
   els.quickStartStatus.textContent = message;
   saveState();
+}
+
+// ─── Session History ────────────────────────────────────────────────────────
+
+export async function saveCurrentSession() {
+  if (!state.messages.length) return;
+
+  if (!state._currentSessionId) {
+    state._currentSessionId = crypto.randomUUID();
+  }
+
+  const session = {
+    id: state._currentSessionId,
+    timestamp: new Date().toISOString(),
+    scenarioTitle: state.scenario.title || 'Untitled',
+    actorCount: state.actors.filter(a => a.enabled).length,
+    messageCount: state.messages.length,
+    messages: state.messages,
+    scenario: { ...state.scenario },
+    memory: { ...state.memory },
+    actors: state.actors,
+    dm: { ...state.dm }
+  };
+
+  // Keep at most 20 sessions; remove oldest others if over limit
+  const existing = await getAllSessions();
+  const others = existing.filter(s => s.id !== state._currentSessionId);
+  for (const old of others.slice(19)) {
+    await deleteSession(old.id);
+  }
+
+  await putSession(session);
+}
+
+export async function loadSession(session) {
+  if (!session) return;
+
+  await clearMessages();
+  if (Array.isArray(session.messages) && session.messages.length) {
+    await putMessages(session.messages.map(cleanStoredMessage));
+    state.messages = await getRecentMessages(RECENT_MESSAGE_LIMIT);
+  } else {
+    state.messages = [];
+  }
+
+  if (session.scenario) state.scenario = { ...state.scenario, ...session.scenario };
+  if (session.memory) state.memory = { ...state.memory, ...session.memory };
+  if (Array.isArray(session.actors)) state.actors = session.actors;
+  if (session.dm) state.dm = { ...state.dm, ...session.dm };
+
+  state._currentSessionId = session.id;
+
+  saveState();
+  syncFormFromState();
+  render();
+  setStatus(`Session "${session.scenarioTitle}" loaded.`, 'ok');
+}
+
+export async function forkSessionAtMessage(messageId) {
+  const idx = state.messages.findIndex(m => m.id === messageId);
+  if (idx < 0) return;
+
+  const confirmed = window.confirm(
+    `Fork conversation from message ${idx + 1} of ${state.messages.length}?\n\nHistory up to this point will be kept. Future turns will diverge into a new branch.`
+  );
+  if (!confirmed) return;
+
+  // Save the current session before forking so it can be resumed
+  await saveCurrentSession();
+
+  // Truncate messages to include this message and all before it
+  const truncated = state.messages.slice(0, idx + 1);
+
+  // Write truncated messages and clear orphaned memory chunks
+  await clearMessages();
+  await clearChunks();
+  await putMessages(truncated.map(cleanStoredMessage));
+  state.messages = await getRecentMessages(RECENT_MESSAGE_LIMIT);
+
+  // New session ID for the fork
+  state._currentSessionId = crypto.randomUUID();
+
+  // Reset memory state so summarizer starts fresh from the truncated transcript
+  state.memory.sharedSummary = "";
+  state.memory.openQuestions = [];
+  state.memory.recentDeltas = [];
+  state.memory.cycleCount = 0;
+  state.memory.turnsSinceSummary = 0;
+  state.memory.lastSummaryMessageId = "";
+  state.memory.isSummarizing = false;
+
+  // Clear private thoughts that reference pre-fork context
+  state.actors.forEach(a => { a.thoughts = ""; });
+  state.dm.thoughts = "";
+
+  // Reset turn-related ephemeral state
+  state.turnQueue = [];
+  state.autoRunning = false;
+
+  saveState();
+  render();
+  setStatus(`Forked from message ${idx + 1}. ${truncated.length} messages kept.`, 'ok');
 }

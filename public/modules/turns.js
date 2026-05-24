@@ -1,7 +1,7 @@
 import { RECENT_MESSAGE_LIMIT, PROMPT_MESSAGE_LIMIT, WORD_LIMITS, ANCHOR_WORD_CAP } from './constants.js';
 import { state, saveState, logTransition, logWarning } from './state.js';
 import { chatCompletion, chatJson, setStatus, setCurrentSpeaker, getLastToolCalls } from './api.js';
-import { render, renderTranscript, renderAutoStop, renderDocument, readSettingsFromForm, readAutoStopFromForm, setBusy, getIsGenerating, els, labelForMode } from './render.js';
+import { render, renderTranscript, renderAutoStop, renderDocument, readSettingsFromForm, readAutoStopFromForm, setBusy, getIsGenerating, els, labelForMode, showStreamingBubble, updateStreamingBubble, removeStreamingBubble } from './render.js';
 import { putMessage, getAllChunks, getActorMemory, putActorMemory } from './db.js';
 import { summarizeMemory, recallRelevantChunks, formatCurrentOutcomes, parseOutcomeJson, extractOutcomes } from './memory.js';
 import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, checkDrift } from './utils.js';
@@ -10,6 +10,13 @@ import { preflightSkipCheck } from './preflight.js';
 
 export let abortController = null;
 let _lastPromptParts = null;
+// Round-start transcript snapshot for KV-cache prefix stability.
+// Set by runRound() before the actor loop; cleared after. When set,
+// all actors in the same round see the same transcript so their prompts
+// share a long byte-identical prefix — the runtime can cache those tokens.
+// runNextTurn() called standalone leaves this null so actors always see
+// the live transcript.
+let _roundSnapshot = null;
 
 export async function addMessage(message) {
   const storedMessage = cleanStoredMessage({
@@ -92,12 +99,15 @@ export async function runNextTurn(options = {}) {
 
       const startTime = Date.now();
 
-      // ── Preflight Skip Router ─────────────────────────────────────
-      // Only runs for actor turns (not DM), bails immediately when disabled
+      // ── Phase 1: Skip/Speak decision ─────────────────────────────
+      // preflightSkipCheck returns {shouldSkip: false} when enablePreflightRouter is off.
+      // When router is on and Phase 1 says "speak", set twoPhase=true so askActor()
+      // skips the action/skip instruction and focuses Phase 2 purely on content.
+      let twoPhase = false;
       if (participant.kind === 'actor') {
         const preflight = await preflightSkipCheck(
           participant.data,
-          state.messages,
+          _roundSnapshot || state.messages,
           state.scenario
         );
         if (preflight.shouldSkip) {
@@ -120,11 +130,22 @@ export async function runNextTurn(options = {}) {
           abortController = null;
           return true;
         }
+        // Phase 1 committed to speak — Phase 2 focuses on content only (no skip re-check)
+        if (state.settings.enablePreflightRouter) twoPhase = true;
       }
 
+      // Show a streaming bubble so the user sees activity immediately.
+      // updateStreamingBubble() fills in message text as tokens arrive.
+      const streamingColor = participant.kind === "dm" ? "var(--gold)" : (participant.data.color || "var(--accent)");
+      showStreamingBubble(participant.data.name, streamingColor, participant.kind === "dm" ? "dm" : "actor");
+      const onStream = (messageText) => updateStreamingBubble(messageText);
+
       const result = participant.kind === "dm"
-        ? await askDirector(participant.data, abortController.signal)
-        : await askActor(participant.data, abortController.signal);
+        ? await askDirector(participant.data, abortController.signal, onStream)
+        : await askActor(participant.data, abortController.signal, onStream, twoPhase);
+
+      // Remove the streaming placeholder; renderTranscript() from addMessage will paint the real card.
+      removeStreamingBubble();
       const latencyMs = Date.now() - startTime;
 
       result.toolCalls = getLastToolCalls();
@@ -177,7 +198,7 @@ export async function runNextTurn(options = {}) {
           // Generate N-1 additional candidates in parallel
           const extras = await Promise.all(
             Array.from({ length: n }, () =>
-              askActor(participant.data, abortController?.signal).catch(() => null)
+              askActor(participant.data, abortController?.signal, null, true).catch(() => null)
             )
           );
 
@@ -237,14 +258,14 @@ export async function runNextTurn(options = {}) {
       }
 
       // Sprint 6: Distill cross-session actor memory (fire-and-forget)
-      if (participant.kind === 'actor' && result.thought && state.settings.enableCrossSessionMemory !== false) {
+      if (participant.kind === 'actor' && result.thought && state.settings.enableCrossSessionMemory !== false && !state.settings.turboMode) {
         distillActorMemory(participant.data.name, result.thought).catch(err =>
           console.warn('[cross-session-memory] distill failed:', err.message)
         );
       }
 
-      await updateSemanticAlignment();
-      if (state.memory.enabled && options.summarizeCycle !== false) {
+      if (!state.settings.turboMode) await updateSemanticAlignment();
+      if (state.memory.enabled && options.summarizeCycle !== false && !state.settings.turboMode) {
         state.memory.turnsSinceSummary += 1;
         const cycleSize = participantCycleCount();
         if (state.memory.turnsSinceSummary >= cycleSize) {
@@ -258,6 +279,7 @@ export async function runNextTurn(options = {}) {
     } catch (error) {
       lastError = error;
       setCurrentSpeaker("");
+      removeStreamingBubble();
       abortController = null;
 
       if (error.name === "AbortError") {
@@ -302,14 +324,27 @@ export async function runRound(options = {}) {
   }
   const startIndex = state.messages.length;
   let completedTurns = 0;
-  for (let index = 0; index < count; index += 1) {
-    if (abortController?.signal.aborted) break;
-    const ok = await runNextTurn({ summarizeCycle: false });
-    if (!ok) break;
-    completedTurns += 1;
+
+  // Freeze the transcript at round start so all actors in this round share a
+  // byte-identical prompt prefix. The runtime's KV cache can then reuse the
+  // prefill computation for actors 2+ instead of re-computing shared tokens.
+  // Only applied when the setting is on (default true).
+  if (state.settings.roundSnapshotEnabled !== false) {
+    _roundSnapshot = state.messages.slice();
   }
+  try {
+    for (let index = 0; index < count; index += 1) {
+      if (abortController?.signal.aborted) break;
+      const ok = await runNextTurn({ summarizeCycle: false });
+      if (!ok) break;
+      completedTurns += 1;
+    }
+  } finally {
+    _roundSnapshot = null;
+  }
+
   const roundMessages = state.messages.slice(startIndex);
-  if (roundMessages.length && state.memory.enabled) {
+  if (roundMessages.length && state.memory.enabled && !state.settings.turboMode) {
     state.memory.turnsSinceSummary = 0;
     summarizeMemory("round", roundMessages);
   }
@@ -334,12 +369,14 @@ export async function runAutoLoop() {
     setAutoStopStatus("Auto paused.");
   }
   render();
+  const { saveCurrentSession } = await import('./session.js');
   while (state.autoRunning) {
     const ok = await runRound({ fromAuto: true });
     if (!ok) {
       state.autoRunning = false;
       break;
     }
+    saveCurrentSession().catch(console.warn);
     await wait(450);
   }
   render();
@@ -623,8 +660,11 @@ export async function distillActorMemory(actorName, thought) {
   }
 }
 
-export async function askActor(actor, signal) {
-  const showThoughts = state.settings.showThoughts !== false;
+export async function askActor(actor, signal, onStream = null, twoPhase = false) {
+  const showThoughts = state.settings.showThoughts !== false && !state.settings.turboMode;
+  // In two-phase mode, Phase 1 already decided to speak — Phase 2 never re-checks skip.
+  // Researchers are exempt: they have their own skip logic and are not simplified.
+  const skipAllowed = !twoPhase || !!actor.isResearcher;
 
   if (actor.isResearcher) {
     const system = [
@@ -661,7 +701,7 @@ export async function askActor(actor, signal) {
     ].filter(Boolean).join("\n");
 
     const user = await buildPromptContext({ kind: "actor", actor });
-    return chatJson(system, user, actor.temperature ?? state.settings.temperature, signal);
+    return chatJson(system, user, actor.temperature ?? state.settings.temperature, signal, onStream);
   }
 
   const isStoryMode = state.scenario.mode === "story" || state.scenario.mode === "freeform";
@@ -690,27 +730,45 @@ export async function askActor(actor, signal) {
     relationships,
     contextLine,
     "Messages labelled [USER] in the transcript are from the human facilitator. Always acknowledge and respond to their instructions directly.",
-    showThoughts
-      ? "For every turn, think privately first, then either speak or skip."
-      : "For every turn, decide whether to speak or skip directly.",
-    showThoughts
-      ? "CRITICAL SKIP RULE: Ask yourself in your thoughts: 'Does my public message add new arguments, data, questions, or proposals?' If the answer is NO (e.g. you are just agreeing, repeating what someone else said, summarizing, or saying you have nothing to add), you MUST set action to \"skip\" and leave message empty. Yielding the floor is a positive, productive contribution that keeps the discussion efficient."
-      : "CRITICAL SKIP RULE: If your public message does not add new arguments, data, questions, or proposals (e.g. you are just agreeing, repeating what someone else said, summarizing, or saying you have nothing to add), you MUST set action to \"skip\" and leave message empty. Yielding the floor is a positive, productive contribution that keeps the discussion efficient.",
+    skipAllowed
+      ? (showThoughts
+          ? "For every turn, think privately first, then either speak or skip."
+          : "For every turn, decide whether to speak or skip directly.")
+      : (showThoughts
+          ? "You have been selected to speak this turn. Think privately, then deliver your message."
+          : "You have been selected to speak this turn. Deliver your message directly."),
+    skipAllowed
+      ? (showThoughts
+          ? "CRITICAL SKIP RULE: Ask yourself in your thoughts: 'Does my public message add new arguments, data, questions, or proposals?' If the answer is NO (e.g. you are just agreeing, repeating what someone else said, summarizing, or saying you have nothing to add), you MUST set action to \"skip\" and leave message empty. Yielding the floor is a positive, productive contribution that keeps the discussion efficient."
+          : "CRITICAL SKIP RULE: If your public message does not add new arguments, data, questions, or proposals (e.g. you are just agreeing, repeating what someone else said, summarizing, or saying you have nothing to add), you MUST set action to \"skip\" and leave message empty. Yielding the floor is a positive, productive contribution that keeps the discussion efficient.")
+      : "",
     "CONCISENESS RULE: Keep your public message brief, direct, and high-density. Avoid conversational filler (e.g. 'I agree with Anya', 'That's a good point', 'As an expert in...'). Speak ONLY to introduce new arguments, data, or questions. If a simple 'Yes' or single-sentence response is sufficient, keep it to exactly that. Do not generate words for the sake of it.",
     (!showThoughts)
       ? "IMPORTANT: Private thoughts display is disabled. You MUST keep your JSON \"thought\" field empty (\"\") to save tokens and minimize latency."
       : "",
     isStoryMode
-      ? (showThoughts
-          ? "Return only valid JSON: {\"thought\":\"your PRIVATE reasoning (not shown to others)\",\"action\":\"speak or skip\",\"message\":\"*actions in asterisks* plus \\\"spoken dialogue in quotes\\\"\"}"
-          : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"*actions in asterisks* plus \\\"spoken dialogue in quotes\\\"\"}")
+      ? (skipAllowed
+          ? (showThoughts
+              ? "Return only valid JSON: {\"thought\":\"your PRIVATE reasoning (not shown to others)\",\"action\":\"speak or skip\",\"message\":\"*actions in asterisks* plus \\\"spoken dialogue in quotes\\\"\"}"
+              : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"*actions in asterisks* plus \\\"spoken dialogue in quotes\\\"\"}")
+          : (showThoughts
+              ? "Return only valid JSON: {\"thought\":\"your PRIVATE reasoning (not shown to others)\",\"message\":\"*actions in asterisks* plus \\\"spoken dialogue in quotes\\\"\"}"
+              : "Return only valid JSON: {\"thought\":\"\",\"message\":\"*actions in asterisks* plus \\\"spoken dialogue in quotes\\\"\"}"))
       : state.document.enabled
-        ? (showThoughts
-            ? "Return only valid JSON: {\"thought\":\"private reasoning\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\"}."
-            : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\"}.")
-        : (showThoughts
-            ? "Return only valid JSON with this exact shape: {\"thought\":\"private reasoning for your memory\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\"}."
-            : "Return only valid JSON with this exact shape: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\"}."),
+        ? (skipAllowed
+            ? (showThoughts
+                ? "Return only valid JSON: {\"thought\":\"private reasoning\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\"}."
+                : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\"}.")
+            : (showThoughts
+                ? "Return only valid JSON: {\"thought\":\"private reasoning\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\"}."
+                : "Return only valid JSON: {\"thought\":\"\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\"}."))
+        : (skipAllowed
+            ? (showThoughts
+                ? "Return only valid JSON with this exact shape: {\"thought\":\"private reasoning for your memory\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\"}."
+                : "Return only valid JSON with this exact shape: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\"}.")
+            : (showThoughts
+                ? "Return only valid JSON with this exact shape: {\"thought\":\"private reasoning for your memory\",\"message\":\"your public message\"}."
+                : "Return only valid JSON with this exact shape: {\"thought\":\"\",\"message\":\"your public message\"}.")),
     "The JSON is transport only. Put natural public dialogue only inside message; do not make message itself JSON. Use plain text — no LaTeX notation (e.g. write 'leads to' not '\\rightarrow'), no markdown outside the message field.",
     state.document.enabled
       ? [
@@ -756,13 +814,13 @@ export async function askActor(actor, signal) {
     system,
     persona: `Name: ${actor.name}\nRole: ${actor.role || ""}\nPersona: ${actor.persona || ""}\nVoice: ${actor.voice || ""}`
   };
-  const result = await chatJson(system, user, actor.temperature ?? state.settings.temperature, signal);
+  const result = await chatJson(system, user, actor.temperature ?? state.settings.temperature, signal, onStream);
   result._promptParts = promptParts;
   return result;
 }
 
-export async function askDirector(dm, signal) {
-  const showThoughts = state.settings.showThoughts !== false;
+export async function askDirector(dm, signal, onStream = null) {
+  const showThoughts = state.settings.showThoughts !== false && !state.settings.turboMode;
   const privateThoughts = state.dm.seesPrivateThoughts ? privateThoughtDigest() : "";
   const isStoryMode = state.scenario.mode === "story" || state.scenario.mode === "freeform";
   const modeInstruction = isStoryMode
@@ -828,7 +886,7 @@ export async function askDirector(dm, signal) {
     system,
     persona: `Name: ${dm.name}\nPersona: ${dm.persona || ""}`
   };
-  const result = await chatJson(system, user, state.settings.temperature, signal);
+  const result = await chatJson(system, user, state.settings.temperature, signal, onStream);
   result._promptParts = promptParts;
   return result;
 }
@@ -863,7 +921,10 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   const participant = kind === "actor" ? actor : dm;
   const PROMPT_TOKEN_BUDGET = getPromptBudget();
   const workingMemoryN = getWorkingMemoryN();
-  let recentMessages = state.messages.slice(-workingMemoryN);
+  // Use the round-start snapshot when inside runRound() so all actors share a
+  // byte-identical transcript prefix that the runtime's KV cache can reuse.
+  const messageSource = _roundSnapshot || state.messages;
+  let recentMessages = messageSource.slice(-workingMemoryN);
   let recallChunks = state.memory.enabled ? await recallRelevantChunks(kind === "actor" ? actor : null) : [];
   const participantMemory = kind === "actor"
     ? `Your private actor memory:\n${trimWords(actor.thoughts || "Empty.", WORD_LIMITS.actorMemory)}`
@@ -909,14 +970,14 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   }
 
   // Build sections and enforce token budget with graceful degradation.
-  const buildSections = (chunks, msgs) => [
+  const buildSections = (chunks, msgs, memOverride = null) => [
     scenarioBlock(),
     state.memory.enabled ? memoryBlock(chunks) : "",
     state.document.enabled
       ? `### Shared Document: "${state.document.title}"\n---\n${state.document.content || "(Empty — start drafting.)" }\n---`
       : "",
     crossSessionBlock,
-    participantMemory,
+    memOverride || participantMemory,
     privateThoughts,
     `### Recent transcript\n${formatTranscript(msgs, WORD_LIMITS.recentTranscript)}`,
     periodicReminder,
@@ -948,7 +1009,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   let transcriptLimit = workingMemoryN;
   while (estimateTokens(assembled) > PROMPT_TOKEN_BUDGET && transcriptLimit > 4) {
     transcriptLimit -= 2;
-    recentMessages = state.messages.slice(-transcriptLimit);
+    recentMessages = messageSource.slice(-transcriptLimit);
     assembled = buildSections(recallChunks, recentMessages);
   }
 
@@ -956,6 +1017,32 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   if (estimateTokens(assembled) > PROMPT_TOKEN_BUDGET && recallChunks.length > 0) {
     recallChunks = [];
     assembled = buildSections(recallChunks, recentMessages);
+  }
+
+  // Stage 4: LLM micro-compress private actor memory (never mutates state)
+  if (
+    estimateTokens(assembled) > PROMPT_TOKEN_BUDGET &&
+    kind === "actor" &&
+    state.settings.enableAdaptiveCompression !== false &&
+    !state.settings.turboMode
+  ) {
+    const rawThoughts = actor.thoughts || "";
+    if (rawThoughts.split(/\s+/).length > 30) {
+      try {
+        const compressed = await chatCompletion(
+          "Compress character memory. Output ONLY the compressed text, nothing else. Maximum 80 words.",
+          rawThoughts.slice(0, 800),
+          { temperature: 0.1, maxTokens: 130 }
+        );
+        if (compressed?.trim()) {
+          const compressedMem = `Your private actor memory (compressed):\n${compressed.trim()}`;
+          assembled = buildSections([], recentMessages, compressedMem);
+          logTransition("adaptive_compression", { actor: actor.name, before: rawThoughts.length, after: compressed.length });
+        }
+      } catch {
+        // Silently continue with existing prompt
+      }
+    }
   }
 
   const finalTokens = estimateTokens(assembled);
