@@ -228,7 +228,8 @@ export async function chatStream(system, user, { temperature = state.settings.te
     ],
     temperature,
     max_tokens: maxTokens,
-    stream: true
+    stream: true,
+    stream_options: { include_usage: true }
   };
 
   const startTime = Date.now();

@@ -26,7 +26,9 @@ import {
   runTranscriptSearch,
   nextSearchMatch,
   prevSearchMatch,
-  renderSessionsList
+  renderSessionsList,
+  renderPendingAnchors,
+  renderAnchors
 } from './modules/render.js';
 import {
   loadModels,
@@ -579,6 +581,16 @@ function wireEvents() {
     const dmSection = document.querySelector(".section--director");
     if (dmSection) {
       dmSection.classList.toggle("is-speaking", !!name && name === state.dm.name);
+    }
+  });
+
+  // Director anchor suggestions — re-render pending anchors panel on each suggestion
+  document.addEventListener("anchorSuggested", () => {
+    renderPendingAnchors();
+    // Switch to memory tab so the user sees the suggestion
+    const memTab = document.querySelector('[data-sidebar="memory"]');
+    if (memTab && !document.getElementById('pendingAnchorsList')?.closest('.sidebar-panel')?.style.display?.includes('none')) {
+      memTab.click();
     }
   });
 

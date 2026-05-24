@@ -407,7 +407,7 @@ export async function evaluateAutoStopAfterRound(roundMessages, options = {}) {
     return promptStopOrContinue(`Reached the ${state.autoStop.maxRounds}-round limit.`, options);
   }
 
-  if (state.autoStop.goalCheckEnabled && state.autoStop.goal.trim()) {
+  if (state.autoStop.goalCheckEnabled && state.autoStop.goal.trim() && state.autoStop.roundsRun % 2 === 0) {
     const verdict = await judgeGoal(roundMessages);
     if (verdict.achieved) {
       const confidence = Number.isFinite(verdict.confidence) ? ` (${Math.round(verdict.confidence * 100)}% confidence)` : "";
@@ -457,8 +457,8 @@ export async function judgeGoal(roundMessages = [], options = {}) {
     `Shared memory summary:\n${state.memory.sharedSummary || "None."}`,
     `Open questions:\n${(Array.isArray(state.memory.openQuestions) ? state.memory.openQuestions.join("\n") : state.memory.openQuestions) || "None."}`,
     `Known outcomes:\n${formatCurrentOutcomes()}`,
-    `Recent transcript:\n${formatTranscript(state.messages.slice(-24), 2200)}`,
-    `Latest round:\n${formatTranscript(roundMessages, 900)}`,
+    `Recent transcript:\n${formatTranscript(state.messages.slice(-8), 1200)}`,
+    `Latest round:\n${formatTranscript(roundMessages, 600)}`,
     `Recent archive summaries:\n${archiveText || "None."}`
   ].join("\n\n");
 
@@ -839,16 +839,17 @@ export async function askDirector(dm, signal, onStream = null) {
     "CONCISENESS RULE: Keep your directions, summaries, and questions brief and high-density. Avoid conversational padding (e.g. 'Excellent points everyone', 'Let's move on'). Aim for the minimum words required to guide the discussion or narrate scene beats. Do not dominate or generate words for the sake of it.",
     "You can describe physical actions, scenery changes, or narrator actions by surrounding them with asterisks, e.g. *the wind howls in the background* or *gestures to the map*.",
     "FLOW CONTROL: You can direct the conversation flow dynamically. If you want a specific actor to respond next, include their name in the optional \"nextSpeaker\" JSON field (case-insensitive, e.g. \"Anya\" or \"Ben\"). If you want the default turn order to continue, omit \"nextSpeaker\" or set it to empty.",
+    "ANCHOR SUGGESTIONS: If the group has just reached a clear, settled agreement worth locking in, include a brief statement of it in the optional \"anchor\" field (max 20 words). The user will be prompted to approve it. Only anchor genuinely settled points — not ongoing debates.",
     (!showThoughts)
       ? "IMPORTANT: Private thoughts display is disabled. You MUST keep your JSON \"thought\" field empty (\"\") to save tokens and minimize latency."
       : "IMPORTANT: Private thoughts display is enabled. You can record private thoughts before outputting your direction.",
     state.document.enabled
       ? (showThoughts
-          ? "Return only valid JSON: {\"thought\":\"private note\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\",\"nextSpeaker\":\"(optional) name of next actor to speak\"}."
-          : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\",\"nextSpeaker\":\"(optional) name of next actor to speak\"}.")
+          ? "Return only valid JSON: {\"thought\":\"private note\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\",\"nextSpeaker\":\"(optional) name of next actor to speak\",\"anchor\":\"(optional) settled agreement to propose as anchor, max 20 words\"}."
+          : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\",\"nextSpeaker\":\"(optional) name of next actor to speak\",\"anchor\":\"(optional) settled agreement to propose as anchor, max 20 words\"}.")
       : (showThoughts
-          ? "Return only valid JSON: {\"thought\":\"private director note\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\",\"nextSpeaker\":\"(optional) name of next actor to speak\"}."
-          : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\",\"nextSpeaker\":\"(optional) name of next actor to speak\"}."),
+          ? "Return only valid JSON: {\"thought\":\"private director note\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\",\"nextSpeaker\":\"(optional) name of next actor to speak\",\"anchor\":\"(optional) settled agreement to propose as anchor, max 20 words\"}."
+          : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\",\"nextSpeaker\":\"(optional) name of next actor to speak\",\"anchor\":\"(optional) settled agreement to propose as anchor, max 20 words\"}."),
     "The JSON is transport only. Put natural public dialogue only inside message; do not make message itself JSON.",
     state.document.enabled
       ? [
@@ -1124,6 +1125,20 @@ export async function applyAiResult(participant, result) {
 
   if (participant.kind === "dm") {
     state.dm.thoughts = appendMemory(state.dm.thoughts, result.thought);
+
+    // Director anchor suggestions — queued for user approval like pending facts
+    if (result.anchor && String(result.anchor).trim()) {
+      const anchorText = String(result.anchor).trim().slice(0, 160);
+      if (!state.anchors) state.anchors = [];
+      const alreadyAnchored = state.anchors.some(a => a.text === anchorText);
+      if (!alreadyAnchored) {
+        const pendingAnchor = { id: crypto.randomUUID(), text: anchorText, speaker: state.dm.name, color: "var(--gold)", suggestedAt: new Date().toISOString() };
+        if (!state.memory.pendingAnchors) state.memory.pendingAnchors = [];
+        state.memory.pendingAnchors.push(pendingAnchor);
+        document.dispatchEvent(new CustomEvent("anchorSuggested", { detail: pendingAnchor }));
+        logTransition("anchor_suggested", { text: anchorText });
+      }
+    }
 
     // Director-guided dynamic turn routing
     if (result.nextSpeaker) {

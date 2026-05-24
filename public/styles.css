@@ -2297,6 +2297,41 @@ summary {
 }
 .anchor-remove:hover { color: var(--coral); }
 
+/* Pending anchor suggestions from DM */
+.pending-anchors-list {
+  margin-bottom: 8px;
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.pending-anchors-header {
+  padding: 5px 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gold);
+  background: rgba(212, 175, 55, 0.08);
+}
+.pending-anchor-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-top: 1px solid rgba(212, 175, 55, 0.15);
+}
+.pending-anchor-text {
+  flex: 1;
+  font-size: 0.82rem;
+  color: var(--ink);
+  line-height: 1.4;
+}
+.pending-anchor-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 /* ══════════════════════════════════════════════════════════════════
    Sprint 7B — Influence Budget
    ══════════════════════════════════════════════════════════════════ */

@@ -267,6 +267,7 @@ export function render() {
   renderMemory();
   renderOutcomes();
   renderAnchors();
+  renderPendingAnchors();
   renderAutoStop();
   renderTranscript();
   renderTelemetry();
@@ -403,6 +404,53 @@ export function renderAnchors() {
       saveState();
       renderAnchors();
       renderTranscript();
+    });
+  });
+}
+
+export function renderPendingAnchors() {
+  const container = document.getElementById('pendingAnchorsList');
+  if (!container) return;
+  const pending = Array.isArray(state.memory?.pendingAnchors) ? state.memory.pendingAnchors : [];
+  if (!pending.length) {
+    container.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+  container.style.display = '';
+  container.innerHTML = `
+    <div class="pending-anchors-header">Director suggests anchoring:</div>
+    ${pending.map(a => `
+      <div class="pending-anchor-item" data-id="${escapeHtml(a.id)}">
+        <span class="pending-anchor-text">${escapeHtml(a.text)}</span>
+        <div class="pending-anchor-actions">
+          <button class="soft-button approve-anchor-btn" data-id="${escapeHtml(a.id)}">Anchor ⚓</button>
+          <button class="quiet-button dismiss-anchor-btn" data-id="${escapeHtml(a.id)}">Dismiss</button>
+        </div>
+      </div>
+    `).join('')}
+  `;
+  container.querySelectorAll('.approve-anchor-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const item = pending.find(a => a.id === id);
+      if (item) {
+        if (!state.anchors) state.anchors = [];
+        state.anchors.push({ ...item, createdAt: new Date().toISOString() });
+      }
+      state.memory.pendingAnchors = (state.memory.pendingAnchors || []).filter(a => a.id !== id);
+      saveState();
+      renderPendingAnchors();
+      renderAnchors();
+      renderTranscript();
+    });
+  });
+  container.querySelectorAll('.dismiss-anchor-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      state.memory.pendingAnchors = (state.memory.pendingAnchors || []).filter(a => a.id !== id);
+      saveState();
+      renderPendingAnchors();
     });
   });
 }
@@ -841,6 +889,25 @@ export function renderTokenGauge() {
     ctxWarnEl.hidden = false;
   } else if (ctxWarnEl) {
     ctxWarnEl.hidden = true;
+  }
+
+  // Warn when a small-context model is used with many actors — risk of overflow/extreme latency
+  const enabledActorCount = Array.isArray(state.actors) ? state.actors.filter(a => a.enabled).length : 0;
+  const smallCtxWarning = maxContextLength > 0 && maxContextLength < 16000 && enabledActorCount > 2
+    ? `⚠ Small context window (${Math.round(maxContextLength / 1000)}K) with ${enabledActorCount} actors — prompts may overflow, causing slow or failed turns. Use a model with ≥16K context or reduce actor count.`
+    : null;
+  let smallCtxEl = els.tokenGauge.parentElement?.querySelector(".small-ctx-warning");
+  if (smallCtxWarning) {
+    if (!smallCtxEl) {
+      smallCtxEl = document.createElement("div");
+      smallCtxEl.className = "small-ctx-warning ctx-window-warning";
+      els.tokenGauge.parentElement.appendChild(smallCtxEl);
+    }
+    smallCtxEl.textContent = smallCtxWarning;
+    smallCtxEl.dataset.level = "critical";
+    smallCtxEl.hidden = false;
+  } else if (smallCtxEl) {
+    smallCtxEl.hidden = true;
   }
 }
 

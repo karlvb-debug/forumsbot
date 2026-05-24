@@ -105,6 +105,7 @@ export const defaultState = {
     openQuestions: [],
     dmState: "",
     pendingPinnedFacts: [],
+    pendingAnchors: [],    // anchor suggestions from DM, pending user approval
     recentDeltas: [],      // short bullet summaries appended each cycle
     cycleCount: 0,         // total cycles since last full summary rewrite
     turnsSinceSummary: 0,

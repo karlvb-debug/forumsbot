@@ -42,19 +42,25 @@ export async function preflightSkipCheck(actor, messages, scenario) {
     .map(m => `${m.speaker}: ${trimWords(m.content, 40)}`)
     .join('\n');
 
+  // Find this actor's most recent message to detect repetition
+  const lastActorMsg = [...messages].reverse().find(m => m.speaker === actor.name && m.type === 'actor');
+  const lastActorLine = lastActorMsg ? trimWords(lastActorMsg.content, 50) : '';
+
   const system = [
     'You classify whether an AI discussion participant has something NEW and USEFUL to add right now.',
     'Answer with a single JSON object: {"skip":true|false,"confidence":0.0-1.0,"reason":"brief reason"}',
     'skip=true means the participant should yield the floor this turn.',
+    'Critically: if the participant\'s last message already covered the same point they would make now, skip=true.',
     'Be concise. Do not add any text outside the JSON.'
   ].join('\n');
 
   const user = [
     `Participant: ${actor.name} (${actor.role || 'Participant'})`,
     `Objective: ${trimWords(scenario?.objective || '', 30)}`,
+    lastActorLine ? `${actor.name}'s last message: "${lastActorLine}"` : '',
     `Recent conversation:\n${recentLines}`,
-    `Does ${actor.name} have something new and substantive to contribute right now?`
-  ].join('\n\n');
+    `Does ${actor.name} have something NEW and DIFFERENT to contribute — not a restatement of their last message?`
+  ].filter(Boolean).join('\n\n');
 
   try {
     const raw = await chatCompletion(system, user, {
