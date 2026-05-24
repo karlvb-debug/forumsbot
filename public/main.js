@@ -18,6 +18,7 @@ import {
   switchDocView,
   isInitialized,
   setInitialized,
+  getIsGenerating,
   validateEmbeddingModel,
   renderTurboState,
   showTranscriptSearch,
@@ -364,12 +365,18 @@ function wireEvents() {
 
   // Keyboard shortcuts
   document.addEventListener("keydown", (e) => {
-    // Escape — close search bar
+    // Escape — close search bar or stop generation
     if (e.key === "Escape") {
       const bar = document.getElementById("transcriptSearchBar");
       if (bar && bar.style.display !== "none") {
         e.preventDefault();
         hideTranscriptSearch();
+        return;
+      }
+      // Stop generation if running
+      if (getIsGenerating()) {
+        e.preventDefault();
+        stopGeneration();
         return;
       }
     }
@@ -414,6 +421,20 @@ function wireEvents() {
       e.preventDefault();
       runRound();
     }
+  });
+
+  // Bare Space / Enter — run next turn when no input is focused and not busy
+  document.addEventListener("keydown", (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+    if (e.key !== " " && e.key !== "Enter") return;
+    const focused = document.activeElement;
+    const inInput = focused &&
+      (focused.tagName === "TEXTAREA" || focused.tagName === "INPUT" ||
+       focused.tagName === "SELECT" || focused.isContentEditable);
+    if (inInput) return;
+    if (getIsGenerating()) return;
+    e.preventDefault();
+    runNextTurn().then(ok => { if (ok) saveCurrentSession().catch(console.warn); });
   });
 
   // Transcript search bar events
@@ -547,6 +568,19 @@ function wireEvents() {
   // Listen for telemetry updates to refresh the dial
   document.addEventListener("telemetryUpdated", () => {
     renderTelemetry();
+  });
+
+  // Actor turn indicator — highlight the active speaker's card in the roster
+  document.addEventListener("speakerChanged", ({ detail: { name } }) => {
+    document.querySelectorAll(".actor-card").forEach(card => {
+      const actor = state.actors.find(a => a.id === card.dataset.actorId);
+      card.classList.toggle("is-speaking", !!name && !!actor && actor.name === name);
+    });
+    // DM section
+    const dmSection = document.querySelector(".section--director");
+    if (dmSection) {
+      dmSection.classList.toggle("is-speaking", !!name && name === state.dm.name);
+    }
   });
 
   // Show/hide the embedding warning banner based on live probe results

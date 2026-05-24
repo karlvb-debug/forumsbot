@@ -367,6 +367,23 @@ input[type=range]::-webkit-slider-thumb {
   transition: opacity 0.2s;
 }
 .actor-card:has(.actor-enabled:not(:checked)) { opacity: 0.45; }
+.actor-card.is-speaking {
+  box-shadow: 0 0 0 2px var(--accent), 0 0 12px color-mix(in srgb, var(--accent) 30%, transparent);
+  animation: speaking-pulse 1.4s ease-in-out infinite;
+}
+.section--director.is-speaking {
+  box-shadow: 0 0 0 2px var(--gold), 0 0 12px color-mix(in srgb, var(--gold) 30%, transparent);
+  border-radius: 10px;
+  animation: speaking-pulse-gold 1.4s ease-in-out infinite;
+}
+@keyframes speaking-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--accent), 0 0 8px color-mix(in srgb, var(--accent) 20%, transparent); }
+  50% { box-shadow: 0 0 0 2px var(--accent), 0 0 18px color-mix(in srgb, var(--accent) 45%, transparent); }
+}
+@keyframes speaking-pulse-gold {
+  0%, 100% { box-shadow: 0 0 0 2px var(--gold), 0 0 8px color-mix(in srgb, var(--gold) 20%, transparent); }
+  50% { box-shadow: 0 0 0 2px var(--gold), 0 0 18px color-mix(in srgb, var(--gold) 45%, transparent); }
+}
 .actor-card-summary {
   display: flex;
   align-items: center;

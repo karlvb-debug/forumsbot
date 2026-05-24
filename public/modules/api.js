@@ -39,7 +39,12 @@ export function initApi(elsRef) {
 // Track which actor/director is currently generating so tool status messages
 // can say "Architect is searching..." rather than a generic message.
 let _currentSpeaker = "";
-export function setCurrentSpeaker(name) { _currentSpeaker = name || ""; }
+export function setCurrentSpeaker(name) {
+  _currentSpeaker = name || "";
+  if (typeof document !== "undefined") {
+    document.dispatchEvent(new CustomEvent("speakerChanged", { detail: { name: _currentSpeaker } }));
+  }
+}
 
 // Accumulate tool calls made during the current chatCompletion so the
 // calling turn can attach them to the message for display in the transcript.
