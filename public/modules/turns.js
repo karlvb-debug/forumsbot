@@ -107,7 +107,7 @@ export async function runNextTurn(options = {}) {
       if (participant.kind === 'actor') {
         const preflight = await preflightSkipCheck(
           participant.data,
-          state.messages,
+          _roundSnapshot || state.messages,
           state.scenario
         );
         if (preflight.shouldSkip) {
@@ -198,7 +198,7 @@ export async function runNextTurn(options = {}) {
           // Generate N-1 additional candidates in parallel
           const extras = await Promise.all(
             Array.from({ length: n }, () =>
-              askActor(participant.data, abortController?.signal).catch(() => null)
+              askActor(participant.data, abortController?.signal, null, true).catch(() => null)
             )
           );
 
@@ -369,12 +369,14 @@ export async function runAutoLoop() {
     setAutoStopStatus("Auto paused.");
   }
   render();
+  const { saveCurrentSession } = await import('./session.js');
   while (state.autoRunning) {
     const ok = await runRound({ fromAuto: true });
     if (!ok) {
       state.autoRunning = false;
       break;
     }
+    saveCurrentSession().catch(console.warn);
     await wait(450);
   }
   render();
@@ -699,7 +701,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
     ].filter(Boolean).join("\n");
 
     const user = await buildPromptContext({ kind: "actor", actor });
-    return chatJson(system, user, actor.temperature ?? state.settings.temperature, signal);
+    return chatJson(system, user, actor.temperature ?? state.settings.temperature, signal, onStream);
   }
 
   const isStoryMode = state.scenario.mode === "story" || state.scenario.mode === "freeform";

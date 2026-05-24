@@ -406,7 +406,7 @@ function wireEvents() {
           els.composer.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
         } else {
           e.preventDefault();
-          runNextTurn();
+          runNextTurn().then(ok => { if (ok) saveCurrentSession().catch(console.warn); });
         }
       }
     }
@@ -414,13 +414,13 @@ function wireEvents() {
     // Cmd/Ctrl+Shift+N — next AI turn
     if (e.key === "N" && e.shiftKey) {
       e.preventDefault();
-      runNextTurn();
+      runNextTurn().then(ok => { if (ok) saveCurrentSession().catch(console.warn); });
     }
 
     // Cmd/Ctrl+Shift+R — run a round
     if (e.key === "R" && e.shiftKey) {
       e.preventDefault();
-      runRound();
+      runRound().then(ok => { if (ok) saveCurrentSession().catch(console.warn); });
     }
   });
 

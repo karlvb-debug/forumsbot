@@ -56,10 +56,8 @@ export function openMemoryDb() {
         database.createObjectStore(ACTOR_MEMORY_STORE, { keyPath: "name" });
       }
       // Sessions history store
-      if (oldVersion < 4) {
-        if (!database.objectStoreNames.contains(SESSION_STORE)) {
-          database.createObjectStore(SESSION_STORE, { keyPath: "id" });
-        }
+      if (!database.objectStoreNames.contains(SESSION_STORE)) {
+        database.createObjectStore(SESSION_STORE, { keyPath: "id" });
       }
     });
     request.addEventListener("blocked", () => {

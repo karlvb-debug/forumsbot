@@ -208,9 +208,9 @@ export function showStreamingBubble(speaker, color, type = "actor") {
 }
 
 export function updateStreamingBubble(text) {
-  if (!_streamingMessageEl || !text) return;
+  if (!_streamingMessageEl) return;
   const wasAtBottom = els.transcript.scrollHeight - els.transcript.scrollTop - els.transcript.clientHeight < 120;
-  _streamingMessageEl.innerHTML = escapeHtml(text) + '<span class="streaming-cursor">▌</span>';
+  _streamingMessageEl.innerHTML = escapeHtml(text ?? '') + '<span class="streaming-cursor">▌</span>';
   if (wasAtBottom) els.transcript.scrollTop = els.transcript.scrollHeight;
 }
 

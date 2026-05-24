@@ -586,13 +586,27 @@ export async function forkSessionAtMessage(messageId) {
   // Truncate messages to include this message and all before it
   const truncated = state.messages.slice(0, idx + 1);
 
-  // Write truncated messages to IndexedDB
+  // Write truncated messages and clear orphaned memory chunks
   await clearMessages();
+  await clearChunks();
   await putMessages(truncated.map(cleanStoredMessage));
   state.messages = await getRecentMessages(RECENT_MESSAGE_LIMIT);
 
   // New session ID for the fork
   state._currentSessionId = crypto.randomUUID();
+
+  // Reset memory state so summarizer starts fresh from the truncated transcript
+  state.memory.sharedSummary = "";
+  state.memory.openQuestions = [];
+  state.memory.recentDeltas = [];
+  state.memory.cycleCount = 0;
+  state.memory.turnsSinceSummary = 0;
+  state.memory.lastSummaryMessageId = "";
+  state.memory.isSummarizing = false;
+
+  // Clear private thoughts that reference pre-fork context
+  state.actors.forEach(a => { a.thoughts = ""; });
+  state.dm.thoughts = "";
 
   // Reset turn-related ephemeral state
   state.turnQueue = [];
