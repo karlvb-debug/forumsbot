@@ -958,15 +958,15 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   const isDrifting = alignment < threshold;
 
   const periodicReminder = (state.scenario.objective && state.messages.length > 0 && state.messages.length % 5 === 0)
-    ? `### Core Objective Anchor\nRemember the council's core objective: "${state.scenario.objective}". Keep your contributions aligned with this objective.`
+    ? `[Reminder: the objective is "${state.scenario.objective}". Stay on track.]`
     : "";
   const gravityWarning = (isDrifting && kind === "actor" && !actor.isResearcher)
-    ? `### CRITICAL Orchestration Warning: Semantic Drift Detected\nThe discussion has drifted from the core objective (semantic alignment: ${alignment}% vs threshold: ${threshold}%). Do NOT express generic agreement or repeat previous comments. You MUST challenge an assumption, raise a critical open question, or propose a concrete next action to steer the forum back to the objective: "${state.scenario.objective || "completing the goal"}".`
+    ? `[The discussion has drifted off-topic (alignment ${alignment}%). Don't repeat what's already been said — challenge an assumption, ask a sharp question, or propose something concrete to get back to: "${state.scenario.objective || "the goal"}"]`
     : "";
 
   let nudgeReminder = "";
   if (state.telemetry?.nudgeTriggered && kind === "actor") {
-    nudgeReminder = `### Facilitator Intervention: Direct Steering Nudge\nThe facilitator has injected a manual steering nudge. Pivot your focus immediately, address the core objective, and resolve any outstanding discrepancies. Objective: "${state.scenario.objective}".`;
+    nudgeReminder = `[Steering nudge from facilitator: pivot now, address the core objective directly. Objective: "${state.scenario.objective}"]`;
     // Consume nudge
     state.telemetry.nudgeTriggered = false;
     logTransition("manual_nudge_consumed", { actor: actor.name });
@@ -990,8 +990,8 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
     kind === "actor"
       ? (actor.isResearcher
           ? "You are the Researcher. Analyze the open questions, run a web search using `[SEARCH: query]` in your thought field if facts are needed, cite your sources, and skip your turn if no further research is required right now."
-          : "Take your next turn now. Be extremely concise. Avoid filler. If a simple 'Yes', 'No', or single-sentence reply suffices, use exactly that.")
-      : "Take the director turn now. Be brief. Keep summaries and guidance concise."
+          : "Take your next turn now. Write as you would speak aloud in a real conversation — plain English, direct, natural rhythm. One to three sentences is usually enough. Do NOT use filler openers (e.g. 'Certainly', 'Absolutely', 'Great point', 'It's worth noting', 'In conclusion', 'I would argue that', 'Building on that'). Do NOT use hedging academic constructions. Say the thing directly.")
+      : "Take the director turn now. Be brief and direct. Keep summaries and guidance to plain conversational English — no formal preamble."
   ].filter(Boolean).join("\n\n");
 
   let assembled = buildSections(recallChunks, recentMessages);
