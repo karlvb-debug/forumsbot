@@ -66,14 +66,35 @@ function toLmStudioError(error, status = 500) {
 async function proxyModels(req, res) {
   try {
     const { baseUrl, apiKey } = await readJson(req);
+    const headers = { authorization: `Bearer ${apiKey || "lm-studio"}` };
+
+    // /v1/models returns chat/LLM models only
     const target = `${cleanBaseUrl(baseUrl)}/models`;
-    const response = await fetch(target, {
-      headers: { authorization: `Bearer ${apiKey || "lm-studio"}` }
-    });
+    const response = await fetch(target, { headers });
     const text = await response.text();
     let payload;
     try { payload = text ? JSON.parse(text) : {}; } catch { payload = { raw: text }; }
     if (!response.ok) return sendJson(res, response.status, toLmStudioError(payload?.error || payload, response.status));
+
+    // /api/v0/models also lists embedding models — merge them in so the
+    // Embedding Model dropdown shows nomic-embed-text etc.
+    try {
+      const base = cleanBaseUrl(baseUrl).replace(/\/v1$/, "");
+      const v0resp = await fetch(`${base}/api/v0/models`, {
+        headers,
+        signal: AbortSignal.timeout(3000)
+      });
+      if (v0resp.ok) {
+        const v0data = await v0resp.json();
+        const embeddingModels = (v0data.data || []).filter(m => m.type === "embeddings");
+        if (embeddingModels.length && Array.isArray(payload.data)) {
+          // Add embedding models that aren't already in the list
+          const existingIds = new Set(payload.data.map(m => m.id));
+          embeddingModels.forEach(m => { if (!existingIds.has(m.id)) payload.data.push(m); });
+        }
+      }
+    } catch { /* non-critical — datalist just won't show embedding models */ }
+
     return sendJson(res, 200, payload);
   } catch (error) {
     return sendJson(res, 502, toLmStudioError(error, 502));
