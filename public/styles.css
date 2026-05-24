@@ -2610,3 +2610,21 @@ summary {
   60%  { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* ── Seed row (lock seed toggle + number input) ─────────────── */
+.seed-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.seed-toggle { flex: 1; margin: 0; }
+.seed-input {
+  width: 100px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+.seed-input:disabled { opacity: 0.4; }

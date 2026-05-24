@@ -74,6 +74,16 @@ export function setCurrentSpeaker(name) {
 let _lastToolCalls = [];
 export function getLastToolCalls() { return [..._lastToolCalls]; }
 
+// Stamp top_p, repeat_penalty, and seed onto a payload object when the user
+// has configured them. Only sends non-default values to keep payloads clean.
+function applySamplingParams(payload) {
+  const s = state.settings;
+  if (s.topP != null && s.topP < 1.0) payload.top_p = Number(s.topP);
+  if (s.repeatPenalty != null && s.repeatPenalty > 1.0) payload.repeat_penalty = Number(s.repeatPenalty);
+  if (s.seedEnabled && s.seed >= 0) payload.seed = Number(s.seed);
+  return payload;
+}
+
 export async function chatCompletion(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, useTools = false, jsonSchema = null } = {}) {
   _lastToolCalls = []; // reset per-call log
   const isToolMode = useTools && state.settings.toolsEnabled && state.scenario.mode !== "story";
@@ -89,6 +99,7 @@ export async function chatCompletion(system, user, { temperature = state.setting
       temperature,
       max_tokens: maxTokens
     };
+    applySamplingParams(payload);
 
     // JSON schema-constrained decoding (LM Studio / llama.cpp grammar support).
     // Dramatically improves structured output reliability on small models.
@@ -232,6 +243,7 @@ export async function chatCompletionMessages(messages, { temperature = state.set
     temperature,
     max_tokens: maxTokens
   };
+  applySamplingParams(payload);
   const startTime = Date.now();
   let response, data;
   try {
@@ -281,6 +293,7 @@ export async function chatStream(system, user, { temperature = state.settings.te
     stream: true,
     stream_options: { include_usage: true }
   };
+  applySamplingParams(payload);
 
   const startTime = Date.now();
   try {

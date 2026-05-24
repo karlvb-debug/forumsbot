@@ -176,6 +176,12 @@ export const els = {
   streamingEnabledInput: $("#streamingEnabledInput"),
   enableAdaptiveCompressionInput: $("#enableAdaptiveCompressionInput"),
   enableCrossSessionMemoryInput: $("#enableCrossSessionMemoryInput"),
+  topPInput: $("#topPInput"),
+  topPDisplay: $("#topPDisplay"),
+  repeatPenaltyInput: $("#repeatPenaltyInput"),
+  repeatPenaltyDisplay: $("#repeatPenaltyDisplay"),
+  seedEnabledInput: $("#seedEnabledInput"),
+  seedInput: $("#seedInput"),
   // Document mirror toggle in Setup panel
   documentEnabledMirror: $("#documentEnabledMirror"),
   // Conversational quick setup chat history
@@ -1612,6 +1618,21 @@ export function syncFormFromState() {
   if (els.streamingEnabledInput) els.streamingEnabledInput.checked = state.settings.streamingEnabled !== false;
   if (els.enableAdaptiveCompressionInput) els.enableAdaptiveCompressionInput.checked = state.settings.enableAdaptiveCompression !== false;
   if (els.enableCrossSessionMemoryInput) els.enableCrossSessionMemoryInput.checked = state.settings.enableCrossSessionMemory !== false;
+  if (els.topPInput) {
+    els.topPInput.value = state.settings.topP ?? 1.0;
+    if (els.topPDisplay) els.topPDisplay.textContent = Number(state.settings.topP ?? 1.0).toFixed(2);
+  }
+  if (els.repeatPenaltyInput) {
+    els.repeatPenaltyInput.value = state.settings.repeatPenalty ?? 1.1;
+    if (els.repeatPenaltyDisplay) els.repeatPenaltyDisplay.textContent = Number(state.settings.repeatPenalty ?? 1.1).toFixed(2);
+  }
+  if (els.seedEnabledInput) {
+    els.seedEnabledInput.checked = !!state.settings.seedEnabled;
+    if (els.seedInput) {
+      els.seedInput.disabled = !state.settings.seedEnabled;
+      els.seedInput.value = state.settings.seed >= 0 ? state.settings.seed : "";
+    }
+  }
   // Document mirror in Setup panel
   if (els.documentEnabledMirror) els.documentEnabledMirror.checked = !!state.document?.enabled;
 
@@ -1667,6 +1688,12 @@ export function readSettingsFromForm() {
   if (els.streamingEnabledInput) state.settings.streamingEnabled = els.streamingEnabledInput.checked;
   if (els.enableAdaptiveCompressionInput) state.settings.enableAdaptiveCompression = els.enableAdaptiveCompressionInput.checked;
   if (els.enableCrossSessionMemoryInput) state.settings.enableCrossSessionMemory = els.enableCrossSessionMemoryInput.checked;
+  if (els.topPInput) state.settings.topP = Number(els.topPInput.value) || 1.0;
+  if (els.repeatPenaltyInput) state.settings.repeatPenalty = Number(els.repeatPenaltyInput.value) || 1.0;
+  if (els.seedEnabledInput) {
+    state.settings.seedEnabled = els.seedEnabledInput.checked;
+    state.settings.seed = els.seedInput ? (Number(els.seedInput.value) >= 0 ? Number(els.seedInput.value) : -1) : -1;
+  }
   // Keep mirrors in sync
   if (els.showThoughtsMirror) els.showThoughtsMirror.checked = state.settings.showThoughts;
 

@@ -172,6 +172,40 @@ function wireEvents() {
       saveState();
     });
   }
+  // Top-P slider
+  if (els.topPInput) {
+    els.topPInput.addEventListener("input", () => {
+      if (!isInitialized) return;
+      state.settings.topP = Number(els.topPInput.value) || 1.0;
+      if (els.topPDisplay) els.topPDisplay.textContent = state.settings.topP.toFixed(2);
+      saveState();
+    });
+  }
+  // Repeat penalty slider
+  if (els.repeatPenaltyInput) {
+    els.repeatPenaltyInput.addEventListener("input", () => {
+      if (!isInitialized) return;
+      state.settings.repeatPenalty = Number(els.repeatPenaltyInput.value) || 1.0;
+      if (els.repeatPenaltyDisplay) els.repeatPenaltyDisplay.textContent = state.settings.repeatPenalty.toFixed(2);
+      saveState();
+    });
+  }
+  // Seed toggle + value
+  if (els.seedEnabledInput) {
+    els.seedEnabledInput.addEventListener("change", () => {
+      if (!isInitialized) return;
+      state.settings.seedEnabled = els.seedEnabledInput.checked;
+      if (els.seedInput) els.seedInput.disabled = !state.settings.seedEnabled;
+      saveState();
+    });
+  }
+  if (els.seedInput) {
+    els.seedInput.addEventListener("input", () => {
+      if (!isInitialized) return;
+      state.settings.seed = Number(els.seedInput.value) >= 0 ? Number(els.seedInput.value) : -1;
+      saveState();
+    });
+  }
   // Document mirror toggle in Setup panel — syncs with documentEnabledInput in Doc panel
   if (els.documentEnabledMirror) {
     els.documentEnabledMirror.addEventListener("change", () => {
