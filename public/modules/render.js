@@ -1392,6 +1392,9 @@ export function syncFormFromState() {
   validateEmbeddingModel(state.settings.embeddingModel);
   // Sprint 7: Influence bars
   if (els.showInfluenceBarsInput) els.showInfluenceBarsInput.checked = !!state.settings.showInfluenceBars;
+  // Round snapshot / KV cache toggle
+  const roundSnapshotInput = document.getElementById("roundSnapshotInput");
+  if (roundSnapshotInput) roundSnapshotInput.checked = state.settings.roundSnapshotEnabled !== false;
 }
 
 export function readSettingsFromForm() {

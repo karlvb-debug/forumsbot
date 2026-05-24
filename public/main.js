@@ -607,6 +607,17 @@ function wireEvents() {
     });
   }
 
+  // Round Snapshot (KV cache prefix stability)
+  const roundSnapshotInput = document.getElementById("roundSnapshotInput");
+  if (roundSnapshotInput) {
+    roundSnapshotInput.checked = state.settings.roundSnapshotEnabled !== false;
+    roundSnapshotInput.addEventListener("change", () => {
+      if (!isInitialized) return;
+      state.settings.roundSnapshotEnabled = roundSnapshotInput.checked;
+      saveState();
+    });
+  }
+
   // ── Sprint 5: Hypothesis Sampling controls ────────────────────
   function syncHypothesisControls() {
     const on = state.settings.enableHypothesisSampling;

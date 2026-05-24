@@ -10,6 +10,13 @@ import { preflightSkipCheck } from './preflight.js';
 
 export let abortController = null;
 let _lastPromptParts = null;
+// Round-start transcript snapshot for KV-cache prefix stability.
+// Set by runRound() before the actor loop; cleared after. When set,
+// all actors in the same round see the same transcript so their prompts
+// share a long byte-identical prefix — the runtime can cache those tokens.
+// runNextTurn() called standalone leaves this null so actors always see
+// the live transcript.
+let _roundSnapshot = null;
 
 export async function addMessage(message) {
   const storedMessage = cleanStoredMessage({
@@ -317,12 +324,25 @@ export async function runRound(options = {}) {
   }
   const startIndex = state.messages.length;
   let completedTurns = 0;
-  for (let index = 0; index < count; index += 1) {
-    if (abortController?.signal.aborted) break;
-    const ok = await runNextTurn({ summarizeCycle: false });
-    if (!ok) break;
-    completedTurns += 1;
+
+  // Freeze the transcript at round start so all actors in this round share a
+  // byte-identical prompt prefix. The runtime's KV cache can then reuse the
+  // prefill computation for actors 2+ instead of re-computing shared tokens.
+  // Only applied when the setting is on (default true).
+  if (state.settings.roundSnapshotEnabled !== false) {
+    _roundSnapshot = state.messages.slice();
   }
+  try {
+    for (let index = 0; index < count; index += 1) {
+      if (abortController?.signal.aborted) break;
+      const ok = await runNextTurn({ summarizeCycle: false });
+      if (!ok) break;
+      completedTurns += 1;
+    }
+  } finally {
+    _roundSnapshot = null;
+  }
+
   const roundMessages = state.messages.slice(startIndex);
   if (roundMessages.length && state.memory.enabled && !state.settings.turboMode) {
     state.memory.turnsSinceSummary = 0;
@@ -899,7 +919,10 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   const participant = kind === "actor" ? actor : dm;
   const PROMPT_TOKEN_BUDGET = getPromptBudget();
   const workingMemoryN = getWorkingMemoryN();
-  let recentMessages = state.messages.slice(-workingMemoryN);
+  // Use the round-start snapshot when inside runRound() so all actors share a
+  // byte-identical transcript prefix that the runtime's KV cache can reuse.
+  const messageSource = _roundSnapshot || state.messages;
+  let recentMessages = messageSource.slice(-workingMemoryN);
   let recallChunks = state.memory.enabled ? await recallRelevantChunks(kind === "actor" ? actor : null) : [];
   const participantMemory = kind === "actor"
     ? `Your private actor memory:\n${trimWords(actor.thoughts || "Empty.", WORD_LIMITS.actorMemory)}`
@@ -984,7 +1007,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   let transcriptLimit = workingMemoryN;
   while (estimateTokens(assembled) > PROMPT_TOKEN_BUDGET && transcriptLimit > 4) {
     transcriptLimit -= 2;
-    recentMessages = state.messages.slice(-transcriptLimit);
+    recentMessages = messageSource.slice(-transcriptLimit);
     assembled = buildSections(recallChunks, recentMessages);
   }
 

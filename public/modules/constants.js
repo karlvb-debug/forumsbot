@@ -87,7 +87,9 @@ export const defaultState = {
     // Turbo Mode: skip memory cycles, thoughts, alignment, and cross-session memory
     turboMode: false,
     // Adaptive compression: LLM micro-summarize private memory when prompt is over budget
-    enableAdaptiveCompression: true
+    enableAdaptiveCompression: true,
+    // KV cache: freeze transcript at round start so all actors share a byte-identical prefix
+    roundSnapshotEnabled: true
   },
   ui: {
     activeTab: "",
