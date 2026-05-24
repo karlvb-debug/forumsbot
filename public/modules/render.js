@@ -1309,6 +1309,20 @@ export function renderTranscript() {
       }
     }
 
+    // Fork button — appears on hover on every substantive message
+    if (message.type === "actor" || message.type === "dm" || message.type === "user") {
+      const forkBtn = document.createElement("button");
+      forkBtn.className = "fork-btn";
+      forkBtn.type = "button";
+      forkBtn.title = "Fork conversation from this point";
+      forkBtn.textContent = "⑂ Fork";
+      forkBtn.addEventListener("click", async () => {
+        const { forkSessionAtMessage } = await import("./session.js");
+        await forkSessionAtMessage(message.id);
+      });
+      node.appendChild(forkBtn);
+    }
+
     els.transcript.append(node);
   });
 

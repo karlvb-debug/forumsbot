@@ -1817,6 +1817,26 @@ summary {
   opacity: 1;
 }
 
+.fork-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--dim);
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fork-btn:hover { background: var(--panel-strong); color: var(--text); border-color: var(--accent); }
+.message-card { position: relative; }
+.message-card:hover .fork-btn,
+.message-card:focus-within .fork-btn { opacity: 1; }
+
 .feedback-btn {
   background: none !important;
   border: none !important;

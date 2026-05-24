@@ -570,3 +570,35 @@ export async function loadSession(session) {
   render();
   setStatus(`Session "${session.scenarioTitle}" loaded.`, 'ok');
 }
+
+export async function forkSessionAtMessage(messageId) {
+  const idx = state.messages.findIndex(m => m.id === messageId);
+  if (idx < 0) return;
+
+  const confirmed = window.confirm(
+    `Fork conversation from message ${idx + 1} of ${state.messages.length}?\n\nHistory up to this point will be kept. Future turns will diverge into a new branch.`
+  );
+  if (!confirmed) return;
+
+  // Save the current session before forking so it can be resumed
+  await saveCurrentSession();
+
+  // Truncate messages to include this message and all before it
+  const truncated = state.messages.slice(0, idx + 1);
+
+  // Write truncated messages to IndexedDB
+  await clearMessages();
+  await putMessages(truncated.map(cleanStoredMessage));
+  state.messages = await getRecentMessages(RECENT_MESSAGE_LIMIT);
+
+  // New session ID for the fork
+  state._currentSessionId = crypto.randomUUID();
+
+  // Reset turn-related ephemeral state
+  state.turnQueue = [];
+  state.autoRunning = false;
+
+  saveState();
+  render();
+  setStatus(`Forked from message ${idx + 1}. ${truncated.length} messages kept.`, 'ok');
+}
