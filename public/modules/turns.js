@@ -22,6 +22,9 @@ let _roundSnapshot = null;
 // Keyed by actor.id. Passed to preflightSkipCheck to bias the skip threshold.
 const _speakingTimeMap = {};
 
+// Rolling window of recent tok/s samples for the speed display.
+const _tokSpeedWindow = [];
+
 export async function addMessage(message) {
   const storedMessage = cleanStoredMessage({
     id: crypto.randomUUID(),
@@ -167,6 +170,14 @@ export async function runNextTurn(options = {}) {
       const promptTokens = result._promptTokens || 0;
       const tokenSpeed = latencyMs > 0 ? Number((completionTokens / (latencyMs / 1000)).toFixed(2)) : 0;
       const cost = Number(((promptTokens * 0.00015 + completionTokens * 0.0006) / 1000).toFixed(4));
+
+      if (tokenSpeed > 0) {
+        _tokSpeedWindow.push(tokenSpeed);
+        if (_tokSpeedWindow.length > 8) _tokSpeedWindow.shift();
+        const avg = Math.round(_tokSpeedWindow.reduce((a, b) => a + b, 0) / _tokSpeedWindow.length);
+        const el = document.getElementById("tokenGaugeSpeed");
+        if (el) { el.textContent = `${avg} tok/s`; el.style.display = ""; }
+      }
 
       result.trace = {
         promptSent: state.settings.includeTraces ? {

@@ -136,6 +136,11 @@ button:disabled, textarea:disabled, input:disabled, select:disabled {
   font-size: 0.68rem; font-weight: 600; color: var(--muted);
   text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.6;
 }
+.token-gauge-speed {
+  font-size: 0.68rem; font-weight: 700; color: var(--muted);
+  letter-spacing: 0.02em; font-variant-numeric: tabular-nums;
+  margin-left: auto; padding-left: 8px;
+}
 
 
 .brand-block h1 {
