@@ -839,7 +839,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
             : (showThoughts
                 ? "Return only valid JSON with this exact shape: {\"thought\":\"private reasoning for your memory\",\"message\":\"your public message\"}."
                 : "Return only valid JSON with this exact shape: {\"thought\":\"\",\"message\":\"your public message\"}.")),
-    "The JSON is transport only. Put natural public dialogue only inside message; do not make message itself JSON. Use plain text — no LaTeX notation (e.g. write 'leads to' not '\\rightarrow'), no markdown outside the message field.",
+    "The JSON is transport only. Your message field is rendered as Markdown in the UI — use formatting to make your output clear and readable: **bold** for emphasis, _italic_ for nuance, `inline code` for terms/values, ```language\\n...``` fenced blocks for multi-line code or data, ## headings to structure long responses, - bullet lists or 1. numbered lists for steps or options, > blockquotes to highlight key points, and | col | col | tables for comparisons. Use formatting purposefully — short conversational replies need no decoration. No LaTeX notation (write 'leads to' not '\\rightarrow').",
     state.document.enabled
       ? [
           "SHARED DOCUMENT: The group is collaborating on a shared document. The current content is shown in your context.",

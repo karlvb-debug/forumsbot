@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useMemo } from 'react';
 import * as Ic from './Icons';
 import { useForumState, mutateState } from '../hooks/useForumState';
 import { useStreaming } from '../hooks/useStreaming';
+import { renderMarkdown } from '../modules/markdown.js';
 
 function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork }) {
   if (!actor) return null;
@@ -54,12 +55,12 @@ function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork })
           </div>
         ))}
 
-        <div className="msg-text">{text}</div>
+        <div className="msg-text md-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }} />
 
         {thought && showThoughts && (
           <div className="thought">
             <span className="thought-label">private</span>
-            {thought}
+            <div className="md-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(thought) }} />
           </div>
         )}
 
@@ -92,9 +93,10 @@ function StreamingBubble({ streaming }) {
           <span className="msg-name">{streaming.speaker}</span>
           <span className="msg-role">generating…</span>
         </div>
-        <div className="msg-text">
-          {streaming.text || <span className="cursor-blink">▊</span>}
-        </div>
+        {streaming.text
+          ? <div className="msg-text md-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(streaming.text) }} />
+          : <div className="msg-text"><span className="cursor-blink">▊</span></div>
+        }
       </div>
     </article>
   );
