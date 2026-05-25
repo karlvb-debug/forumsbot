@@ -812,7 +812,9 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
           ? "CRITICAL SKIP RULE: Ask yourself in your thoughts: 'Does my public message add new arguments, data, questions, or proposals?' If the answer is NO (e.g. you are just agreeing, repeating what someone else said, summarizing, or saying you have nothing to add), you MUST set action to \"skip\" and leave message empty. Yielding the floor is a positive, productive contribution that keeps the discussion efficient."
           : "CRITICAL SKIP RULE: If your public message does not add new arguments, data, questions, or proposals (e.g. you are just agreeing, repeating what someone else said, summarizing, or saying you have nothing to add), you MUST set action to \"skip\" and leave message empty. Yielding the floor is a positive, productive contribution that keeps the discussion efficient.")
       : "",
-    "CONCISENESS RULE: Keep your public message brief, direct, and high-density. Avoid conversational filler (e.g. 'I agree with Anya', 'That's a good point', 'As an expert in...'). Speak ONLY to introduce new arguments, data, or questions. If a simple 'Yes' or single-sentence response is sufficient, keep it to exactly that. Do not generate words for the sake of it.",
+    isStoryMode
+      ? "ROLEPLAY RULE: Stay in character. Let your character's emotions, reactions, and actions breathe naturally — quality over brevity. Avoid meta-commentary or breaking the fourth wall. Actions go in *asterisks*, speech in dialogue. Never summarise the scene; live in it."
+      : "CONCISENESS RULE: Keep your public message brief, direct, and high-density. Avoid conversational filler (e.g. 'I agree with Anya', 'That's a good point', 'As an expert in...'). Speak ONLY to introduce new arguments, data, or questions. If a simple 'Yes' or single-sentence response is sufficient, keep it to exactly that. Do not generate words for the sake of it.",
     (!showThoughts)
       ? "IMPORTANT: Private thoughts display is disabled. You MUST keep your JSON \"thought\" field empty (\"\") to save tokens and minimize latency."
       : "",
@@ -839,7 +841,9 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
             : (showThoughts
                 ? "Return only valid JSON with this exact shape: {\"thought\":\"private reasoning for your memory\",\"message\":\"your public message\"}."
                 : "Return only valid JSON with this exact shape: {\"thought\":\"\",\"message\":\"your public message\"}.")),
-    "The JSON is transport only. Your message field is rendered as Markdown in the UI — use formatting to make your output clear and readable: **bold** for emphasis, _italic_ for nuance, `inline code` for terms/values, ```language\\n...``` fenced blocks for multi-line code or data, ## headings to structure long responses, - bullet lists or 1. numbered lists for steps or options, > blockquotes to highlight key points, and | col | col | tables for comparisons. Use formatting purposefully — short conversational replies need no decoration. No LaTeX notation (write 'leads to' not '\\rightarrow').",
+    isStoryMode
+      ? "The JSON is transport only. Your message is rendered as Markdown. Use *italics* (single asterisks) for physical actions and stage directions, **bold** for dramatic emphasis on a word or phrase. Do NOT use headings, tables, bullet lists, or code blocks — you are speaking in character, not writing a document."
+      : "The JSON is transport only. Your message field is rendered as Markdown in the UI — use formatting to make your output clear and readable: **bold** for emphasis, _italic_ for nuance, `inline code` for terms/values, ```language\\n...``` fenced blocks for multi-line code or data, ## headings to structure long responses, - bullet lists or 1. numbered lists for steps or options, > blockquotes to highlight key points, and | col | col | tables for comparisons. Use formatting purposefully — short conversational replies need no decoration. No LaTeX notation (write 'leads to' not '\\rightarrow').",
     state.document.enabled
       ? [
           "SHARED DOCUMENT: The group is collaborating on a shared document. The current content is shown in your context.",
