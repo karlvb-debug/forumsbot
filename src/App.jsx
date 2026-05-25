@@ -80,18 +80,18 @@ export default function App() {
   useEffect(() => {
     const onKey = (e) => {
       const mod = e.metaKey || e.ctrlKey;
-      // ⌘K — command palette
-      if (mod && e.key === 'k') { e.preventDefault(); setCmdOpen(v => !v); return; }
-      // ⌘⇧N — next turn
-      if (mod && e.shiftKey && e.key.toLowerCase() === 'n') { e.preventDefault(); nextTurn(); return; }
-      // ⌘⇧R — full round
-      if (mod && e.shiftKey && e.key.toLowerCase() === 'r') { e.preventDefault(); runRound(); return; }
-      // ⌘⇧A — toggle auto
-      if (mod && e.shiftKey && e.key.toLowerCase() === 'a') { e.preventDefault(); startAuto(); return; }
-      // ⌘⇧I — toggle AI assistant
-      if (mod && e.shiftKey && e.key.toLowerCase() === 'i') { e.preventDefault(); mutateState(s => { s.ui.assistantOpen = !s.ui.assistantOpen; }); return; }
-      // ⌘S — save session (prevent default browser save)
-      if (mod && !e.shiftKey && e.key === 's') {
+      // Ctrl+K / ⌘K — command palette
+      if (mod && !e.shiftKey && !e.altKey && e.key === 'k') { e.preventDefault(); setCmdOpen(v => !v); return; }
+      // Alt+N — next turn (Ctrl+Shift+N / ⌘+Shift+N opens incognito window)
+      if (e.altKey && !mod && !e.shiftKey && e.code === 'KeyN') { e.preventDefault(); nextTurn(); return; }
+      // Alt+R — run full round (Ctrl+Shift+R / ⌘+Shift+R is hard reload)
+      if (e.altKey && !mod && !e.shiftKey && e.code === 'KeyR') { e.preventDefault(); runRound(); return; }
+      // Alt+A — toggle auto
+      if (e.altKey && !mod && !e.shiftKey && e.code === 'KeyA') { e.preventDefault(); startAuto(); return; }
+      // Alt+I — toggle AI assistant (Ctrl+Shift+I / ⌘+Shift+I opens DevTools)
+      if (e.altKey && !mod && !e.shiftKey && e.code === 'KeyI') { e.preventDefault(); mutateState(s => { s.ui.assistantOpen = !s.ui.assistantOpen; }); return; }
+      // Ctrl+S / ⌘S — save session (prevent default browser save)
+      if (mod && !e.shiftKey && !e.altKey && e.key === 's') {
         e.preventDefault();
         import('./modules/session.js').then(m => m.saveCurrentSession?.());
         return;

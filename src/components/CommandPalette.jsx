@@ -11,12 +11,12 @@ const COMMANDS = [
   { id: 'sessions',   label: 'Open Sessions',       hint: 'L',     kind: 'nav', icon: Ic.Sessions },
   { id: 'kb',         label: 'Open Knowledge Base', hint: '',      kind: 'nav', icon: Ic.Search },
   { id: 'connection', label: 'Open Connection',     hint: 'K',     kind: 'nav', icon: Ic.Plug },
-  { id: 'act:next',   label: 'Run next AI turn',    hint: '⌘⇧N',  kind: 'act', icon: Ic.Step },
-  { id: 'act:round',  label: 'Run a full round',    hint: '⌘⇧R',  kind: 'act', icon: Ic.Round },
-  { id: 'act:auto',   label: 'Toggle auto-run',     hint: '⌘⇧A',  kind: 'act', icon: Ic.Play },
+  { id: 'act:next',   label: 'Run next AI turn',    hint: 'Alt+N', kind: 'act', icon: Ic.Step },
+  { id: 'act:round',  label: 'Run a full round',    hint: 'Alt+R', kind: 'act', icon: Ic.Round },
+  { id: 'act:auto',   label: 'Toggle auto-run',     hint: 'Alt+A', kind: 'act', icon: Ic.Play },
   { id: 'act:stop',   label: 'Stop generation',     hint: 'Esc',   kind: 'act', icon: Ic.Stop },
   { id: 'act:nudge',  label: 'Trigger steering nudge', hint: '',   kind: 'act', icon: Ic.Bolt },
-  { id: 'act:save',   label: 'Save session',        hint: '⌘S',    kind: 'act', icon: Ic.Download },
+  { id: 'act:save',   label: 'Save session',        hint: 'Ctrl+S', kind: 'act', icon: Ic.Download },
   { id: 'act:export', label: 'Export transcript',    hint: '',      kind: 'act', icon: Ic.Download },
 ];
 

@@ -36,10 +36,10 @@ export function Topbar({ onOpenCmd }) {
       </div>
 
       <div className="run-controls" role="group" aria-label="Run">
-        <button onClick={nextTurn} title="Next AI turn (⌘⇧N)">
+        <button onClick={nextTurn} title="Next AI turn (Alt+N)">
           <Ic.Step width={13} height={13} />Next
         </button>
-        <button onClick={runRound} title="Run a full round (⌘⇧R)">
+        <button onClick={runRound} title="Run a full round (Alt+R)">
           <Ic.Round width={13} height={13} />Round
         </button>
         {autoRunning ? (
@@ -47,7 +47,7 @@ export function Topbar({ onOpenCmd }) {
             <Ic.Stop width={11} height={11} />Stop
           </button>
         ) : (
-          <button className="primary" onClick={startAuto} title="Start auto-run (⌘⇧A)">
+          <button className="primary" onClick={startAuto} title="Start auto-run (Alt+A)">
             <Ic.Play width={11} height={11} />Auto
           </button>
         )}
@@ -56,11 +56,11 @@ export function Topbar({ onOpenCmd }) {
       <button
         className={`icon-btn${assistantOpen ? ' active' : ''}`}
         onClick={toggleAssistant}
-        title="AI Assistant · ⌘⇧I"
+        title="AI Assistant · Alt+I"
       >
         <Ic.Bolt width={16} height={16} />
       </button>
-      <button className="icon-btn" onClick={onOpenCmd} title="Command palette · ⌘K">
+      <button className="icon-btn" onClick={onOpenCmd} title="Command palette · Ctrl+K">
         <Ic.Cmd width={16} height={16} />
       </button>
     </header>

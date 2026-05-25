@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as Ic from './Icons';
 import { useForumState, mutateState } from '../hooks/useForumState';
+import { renderMarkdown } from '../modules/markdown.js';
 
 export function AiAssistant() {
   const open = useForumState(s => s.ui?.assistantOpen || false);
@@ -104,7 +105,7 @@ export function AiAssistant() {
                 <div className="ai-bubble ai-bubble-user">{entry.content}</div>
               ) : (
                 <div className="ai-bubble ai-bubble-assistant">
-                  <div className="ai-bubble-text">{entry.message || 'Done.'}</div>
+                  <div className="ai-bubble-text" dangerouslySetInnerHTML={{ __html: renderMarkdown(entry.message || 'Done.') }} />
                   {entry.type && entry.type !== 'chat' && entry.type !== 'error' && (
                     <div className="ai-bubble-badge">
                       {entry.type === 'patch' ? '✎ Changes ready' : entry.type === 'fullSetup' ? '✦ Full setup ready' : null}
