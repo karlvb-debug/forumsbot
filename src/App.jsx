@@ -46,8 +46,8 @@ export default function App() {
   const [activePanel, setActivePanel] = useState('actors');
   const [inspectorPos, setInspectorPos] = useState('right');
   const [ready, setReady] = useState(false);
-  const [showThoughts, setShowThoughts] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
+  const showThoughts = useForumState(s => s.settings?.showThoughts || false);
 
   const { nextTurn, runRound, startAuto, stopGeneration } = useActions();
   const stopModal = useForumState(s => s.ui?.stopModal || null);
@@ -175,7 +175,7 @@ export default function App() {
             </div>
             <Composer
               showThoughts={showThoughts}
-              onToggleThoughts={() => setShowThoughts(v => !v)}
+              onToggleThoughts={() => mutateState(s => { s.settings.showThoughts = !s.settings.showThoughts; })}
             />
           </div>
           {!inspectorOnLeft && (

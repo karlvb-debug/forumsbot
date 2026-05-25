@@ -2,7 +2,7 @@
 
 A multi-actor AI discussion app that runs entirely on your machine using [LM Studio](https://lmstudio.ai). Configure a panel of AI actors with distinct roles, personas, and goals, then watch them deliberate — or join in yourself.
 
-All processing is local. No cloud, no API keys, no data leaving your machine.
+AI inference and session storage are fully local. If web tools are enabled, research-capable actors will send search queries and page requests to external websites (DuckDuckGo and the target URLs). No cloud AI API is used; all LLM calls go to your local LM Studio.
 
 ---
 
