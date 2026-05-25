@@ -522,6 +522,21 @@ textarea { resize: vertical; min-height: 32px; line-height: 1.5; }
 input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
 .field-hint { font-size: 11px; color: var(--fg-faint); }
+.field-hint.hint-warn { color: var(--warn); }
+
+.provider-warning {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  background: oklch(0.55 0.12 65 / 0.12);
+  border: 1px solid oklch(0.55 0.12 65 / 0.35);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: var(--warn);
+  line-height: 1.45;
+  margin: 4px 0 8px;
+}
 
 /* segmented mode pills */
 .seg {

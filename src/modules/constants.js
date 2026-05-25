@@ -61,6 +61,7 @@ export const MAX_TOOL_ROUNDS = 3;
 
 export const defaultState = {
   settings: {
+    provider: "lm-studio",
     baseUrl: "http://127.0.0.1:1234",
     apiKey: "lm-studio",
     model: "",
