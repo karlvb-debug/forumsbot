@@ -1060,6 +1060,15 @@ export function labelForMode(mode) {
   return "Problem";
 }
 
+function actorPreviewText(actor) {
+  const parts = [];
+  const tc = actor.turnCount || 0;
+  const sc = actor.skipCount || 0;
+  if (tc || sc) parts.push(`${tc}t · ${sc}s`);
+  if (!actor.enabled) parts.push("disabled");
+  return parts.join(" · ") || actor.role || "Participant";
+}
+
 export function renderActors() {
   const template = $("#actorTemplate");
   els.actorList.innerHTML = "";
@@ -1088,7 +1097,7 @@ export function renderActors() {
     // One-line preview shown in collapsed state
     const preview = $(".actor-card-preview", node);
     if (preview) {
-      preview.textContent = [actor.role, !actor.enabled ? "disabled" : ""].filter(Boolean).join(" · ");
+      preview.textContent = actorPreviewText(actor);
     }
     $(".actor-name", node).value = actor.name;
     $(".actor-role", node).value = actor.role;
@@ -1147,7 +1156,7 @@ export function renderActors() {
       $(".actor-name-display", node).textContent = actor.name;
       $(".role-badge", node).textContent = actor.role || "Participant";
       const prevEl = $(".actor-card-preview", node);
-      if (prevEl) prevEl.textContent = [actor.role, !actor.enabled ? "disabled" : ""].filter(Boolean).join(" · ");
+      if (prevEl) prevEl.textContent = actorPreviewText(actor);
       $(".researcher-badge", node).style.display = actor.isResearcher ? "" : "none";
       node.classList.toggle("researcher-agent", actor.isResearcher);
       const mb = $(".manager-badge", node);

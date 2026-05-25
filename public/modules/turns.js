@@ -1,7 +1,7 @@
 import { RECENT_MESSAGE_LIMIT, PROMPT_MESSAGE_LIMIT, WORD_LIMITS, ANCHOR_WORD_CAP, colors } from './constants.js';
 import { state, saveState, logTransition, logWarning } from './state.js';
 import { chatCompletion, chatJson, setStatus, setCurrentSpeaker, getLastToolCalls } from './api.js';
-import { render, renderTranscript, renderAutoStop, renderDocument, readSettingsFromForm, readAutoStopFromForm, setBusy, getIsGenerating, els, labelForMode, showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble } from './render.js';
+import { render, renderTranscript, renderActors, renderAutoStop, renderDocument, readSettingsFromForm, readAutoStopFromForm, setBusy, getIsGenerating, els, labelForMode, showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble } from './render.js';
 import { putMessage, getAllChunks, getActorMemory, putActorMemory } from './db.js';
 import { summarizeMemory, recallRelevantChunks, formatCurrentOutcomes, parseOutcomeJson, extractOutcomes } from './memory.js';
 import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, checkDrift } from './utils.js';
@@ -123,6 +123,8 @@ export async function runNextTurn(options = {}) {
         );
         if (preflight.shouldSkip) {
           setCurrentSpeaker('');
+          participant.data.skipCount = (participant.data.skipCount || 0) + 1;
+          renderActors();
           await addMessage({
             type: 'skip',
             speaker: participant.data.name,
@@ -1336,6 +1338,8 @@ export async function applyAiResult(participant, result) {
 
   if (result.action === "skip") {
     logTransition("skip_decision", { speaker: speakerName, reason: result.thought });
+    actor.skipCount = (actor.skipCount || 0) + 1;
+    renderActors();
     return addMessage({ type: "skip", actorId: actor.id, speaker: actor.name, content: "Skipped.", thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, metrics: result.metrics, nextSpeaker: result.nextSpeaker || "" });
   }
 
@@ -1345,6 +1349,8 @@ export async function applyAiResult(participant, result) {
     _speakingTimeMap[actor.id] = (_speakingTimeMap[actor.id] || 0) + wc;
   }
 
+  actor.turnCount = (actor.turnCount || 0) + 1;
+  renderActors();
   return addMessage({ type: "actor", actorId: actor.id, speaker: actor.name, content: result.message, thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, metrics: result.metrics, nextSpeaker: result.nextSpeaker || "" });
 }
 
