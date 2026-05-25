@@ -44,10 +44,6 @@ export const els = {
   title: $("#titleInput"),
   premise: $("#premiseInput"),
   objective: $("#objectiveInput"),
-  dmEnabled: $("#dmEnabledInput"),
-  dmName: $("#dmNameInput"),
-  dmPersona: $("#dmPersonaInput"),
-  dmPrivate: $("#dmPrivateInput"),
   modeLabel: $("#modeLabel"),
   stageTitle: $("#stageTitle"),
   transcript: $("#transcript"),
@@ -1093,6 +1089,70 @@ export function renderActors() {
   const template = $("#actorTemplate");
   els.actorList.innerHTML = "";
   const wordShareMap = buildWordShareMap(state.actors);
+
+  // ── Director card (pinned at top of actor list) ──────────────────
+  const dm = state.dm;
+  const dmCard = document.createElement("article");
+  dmCard.className = `actor-card director-card${dm.expanded ? " expanded" : ""}`;
+  dmCard.style.borderLeftColor = "var(--gold)";
+  dmCard.innerHTML = `
+    <div class="actor-card-summary">
+      <label class="toggle-row compact" style="margin:0" title="Enable the Director (moderator AI)">
+        <input class="dm-enabled-toggle" type="checkbox" ${dm.enabled ? "checked" : ""}>
+      </label>
+      <span class="actor-swatch" style="background:var(--gold)"></span>
+      <span class="actor-name-display">${escapeHtml(dm.name || "Director")}</span>
+      <span class="role-badge">Director</span>
+      <span class="actor-card-preview">${dm.enabled ? "" : "disabled"}</span>
+      <button class="actor-expand-toggle" type="button" aria-label="Expand director details" title="Expand">▼</button>
+    </div>
+    <div class="actor-card-body">
+      <label title="The Director's display name in the transcript">
+        Name
+        <input class="dm-name-input" maxlength="50" placeholder="Director" value="${escapeHtml(dm.name || "")}">
+      </label>
+      <label title="How the Director should moderate — their style, priorities, and personality">
+        Style
+        <textarea class="dm-persona-input" rows="2" placeholder="Describe the director's moderation style…">${escapeHtml(dm.persona || "")}</textarea>
+      </label>
+      <label class="toggle-row" title="When enabled, the Director can see actors' private thoughts">
+        <input class="dm-private-toggle" type="checkbox" ${dm.seesPrivateThoughts ? "checked" : ""}>
+        <span>Sees private thoughts</span>
+      </label>
+    </div>
+  `;
+
+  // Director expand/collapse
+  $(".actor-expand-toggle", dmCard).addEventListener("click", (e) => {
+    e.stopPropagation();
+    dm.expanded = !dm.expanded;
+    dmCard.classList.toggle("expanded", dm.expanded);
+    saveState();
+  });
+  $(".actor-card-summary", dmCard).addEventListener("click", (e) => {
+    if (e.target.closest("input, button")) return;
+    dm.expanded = !dm.expanded;
+    dmCard.classList.toggle("expanded", dm.expanded);
+    saveState();
+  });
+
+  // Director field sync
+  dmCard.addEventListener("input", () => {
+    dm.enabled = $(".dm-enabled-toggle", dmCard).checked;
+    dm.name = $(".dm-name-input", dmCard).value.trim() || "Director";
+    dm.persona = $(".dm-persona-input", dmCard).value.trim();
+    dm.seesPrivateThoughts = $(".dm-private-toggle", dmCard).checked;
+    // Sync display
+    $(".actor-name-display", dmCard).textContent = dm.name;
+    const prev = $(".actor-card-preview", dmCard);
+    if (prev) prev.textContent = dm.enabled ? "" : "disabled";
+    saveState();
+  });
+
+  els.actorList.append(dmCard);
+
+  // ── Regular actor cards ──────────────────────────────────────────
+
   state.actors.forEach((actor, index) => {
     const node = template.content.firstElementChild.cloneNode(true);
     node.dataset.actorId = actor.id;
@@ -1622,10 +1682,7 @@ export function syncFormFromState() {
   els.title.value = state.scenario.title;
   els.premise.value = state.scenario.premise;
   els.objective.value = state.scenario.objective;
-  els.dmEnabled.checked = state.dm.enabled;
-  els.dmName.value = state.dm.name;
-  els.dmPersona.value = state.dm.persona;
-  els.dmPrivate.checked = state.dm.seesPrivateThoughts;
+  // Director state is synced via its card in renderActors()
   if (els.quickStartPrompt) els.quickStartPrompt.value = state.ui.quickStartPrompt;
   if (els.quickStartTemp) {
     els.quickStartTemp.value = state.ui.quickStartTemperature ?? 0.8;
@@ -1721,10 +1778,7 @@ export function readSettingsFromForm() {
     state.autoStop.goal = state.scenario.objective;
     if (els.autoGoal) els.autoGoal.value = state.scenario.objective;
   }
-  state.dm.enabled = els.dmEnabled.checked;
-  state.dm.name = els.dmName.value.trim() || "Director";
-  state.dm.persona = els.dmPersona.value.trim();
-  state.dm.seesPrivateThoughts = els.dmPrivate.checked;
+  // Director state is synced via its card in renderActors()
   if (els.quickStartPrompt) state.ui.quickStartPrompt = els.quickStartPrompt.value.trim();
   if (els.quickStartTemp) {
     state.ui.quickStartTemperature = Number(els.quickStartTemp.value || 0.8);

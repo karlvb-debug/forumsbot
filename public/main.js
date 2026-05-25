@@ -95,10 +95,7 @@ function wireEvents() {
     els.title,
     els.premise,
     els.objective,
-    els.dmEnabled,
-    els.dmName,
-    els.dmPersona,
-    els.dmPrivate,
+    els.quickStartPrompt,
     els.memoryEnabled,
     els.pinnedFacts,
     els.sharedSummary,
@@ -821,14 +818,16 @@ function wireEvents() {
   // Actor turn indicator — highlight the active speaker's card in the roster
   document.addEventListener("speakerChanged", ({ detail: { name } }) => {
     document.querySelectorAll(".actor-card").forEach(card => {
+      // Regular actors: match by dataset actorId
       const actor = state.actors.find(a => a.id === card.dataset.actorId);
-      card.classList.toggle("is-speaking", !!name && !!actor && actor.name === name);
+      if (actor) {
+        card.classList.toggle("is-speaking", !!name && actor.name === name);
+      }
+      // Director card: match by DM name
+      if (card.classList.contains("director-card")) {
+        card.classList.toggle("is-speaking", !!name && name === state.dm.name);
+      }
     });
-    // DM section
-    const dmSection = document.querySelector(".section--director");
-    if (dmSection) {
-      dmSection.classList.toggle("is-speaking", !!name && name === state.dm.name);
-    }
   });
 
   // Director anchor suggestions — re-render pending anchors panel on each suggestion

@@ -247,7 +247,6 @@ button:disabled, textarea:disabled, input:disabled, select:disabled {
 }
 .panel-section.section--connection::before { background: var(--color-connection); }
 .panel-section.section--scenario::before   { background: var(--color-scenario); }
-.panel-section.section--director::before   { background: var(--color-director); }
 .panel-section.section--goal::before       { background: var(--color-goal); }
 .panel-section.section--session::before    { background: var(--line-strong); }
 .panel-section.section--actors             { border-left-color: var(--line); }
@@ -270,7 +269,6 @@ button:disabled, textarea:disabled, input:disabled, select:disabled {
 }
 .section--connection h2 { color: var(--color-connection); }
 .section--scenario h2   { color: var(--color-scenario); }
-.section--director h2   { color: var(--color-director); }
 .section--goal h2       { color: var(--color-goal); }
 
 /* Goal section layout */
@@ -392,16 +390,6 @@ input[type=range]::-webkit-slider-thumb {
 }
 
 /* ============================================================
-   Director — fade when disabled
-   ============================================================ */
-.section--director:has(#dmEnabledInput:not(:checked)) .director-fields {
-  opacity: 0.45;
-  pointer-events: none;
-  transition: opacity 0.2s;
-}
-.section--director .director-fields { transition: opacity 0.2s; }
-
-/* ============================================================
    Actors
    ============================================================ */
 .actors-section { min-height: 0; }
@@ -419,9 +407,8 @@ input[type=range]::-webkit-slider-thumb {
   box-shadow: 0 0 0 2px var(--accent), 0 0 12px color-mix(in srgb, var(--accent) 30%, transparent);
   animation: speaking-pulse 1.4s ease-in-out infinite;
 }
-.section--director.is-speaking {
+.director-card.is-speaking {
   box-shadow: 0 0 0 2px var(--gold), 0 0 12px color-mix(in srgb, var(--gold) 30%, transparent);
-  border-radius: 10px;
   animation: speaking-pulse-gold 1.4s ease-in-out infinite;
 }
 @keyframes speaking-pulse {
@@ -508,6 +495,18 @@ input[type=range]::-webkit-slider-thumb {
 .actor-card.manager-agent {
   border-color: color-mix(in srgb, #1a7a6e 45%, var(--line));
   box-shadow: 0 4px 12px rgba(26, 122, 110, 0.15);
+}
+
+/* Director card — pinned at top of actor list */
+.actor-card.director-card {
+  border-color: color-mix(in srgb, var(--gold) 50%, var(--line));
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--gold) 12%, transparent);
+}
+.actor-card.director-card:has(.dm-enabled-toggle:not(:checked)) { opacity: 0.45; }
+.actor-card.director-card .role-badge {
+  background: color-mix(in srgb, var(--gold) 15%, var(--panel));
+  border-color: color-mix(in srgb, var(--gold) 40%, var(--line));
+  color: var(--gold);
 }
 
 /* Management action notices in transcript */
