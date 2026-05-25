@@ -1,10 +1,12 @@
 import React from 'react';
 import * as Ic from './Icons';
-import { useForumState } from '../hooks/useForumState';
+import { useForumState, mutateState } from '../hooks/useForumState';
 import { useActions, getConnectionStatus, getConnectionStatusVersion, subscribeBusy, getBusy, subscribeConnectionStatus } from '../hooks/useActions';
 import { useSyncExternalStore } from 'react';
 
 export function Topbar({ onOpenCmd }) {
+  const assistantOpen = useForumState(s => s.ui?.assistantOpen || false);
+  const toggleAssistant = () => mutateState(s => { s.ui.assistantOpen = !s.ui.assistantOpen; });
   const mode = useForumState(s => s.scenario?.mode || 'problem');
   const title = useForumState(s => s.scenario?.title || 'Forum — Mission Control');
   const roundNum = useForumState(s => s.currentRound || 0);
@@ -51,6 +53,13 @@ export function Topbar({ onOpenCmd }) {
         )}
       </div>
 
+      <button
+        className={`icon-btn${assistantOpen ? ' active' : ''}`}
+        onClick={toggleAssistant}
+        title="AI Assistant · ⌘⇧I"
+      >
+        <Ic.Bolt width={16} height={16} />
+      </button>
       <button className="icon-btn" onClick={onOpenCmd} title="Command palette · ⌘K">
         <Ic.Cmd width={16} height={16} />
       </button>

@@ -8,6 +8,7 @@ import { Composer } from './components/Composer';
 import { CommandPalette } from './components/CommandPalette';
 import { StopModal } from './components/StopModal';
 import { ConfirmModal } from './components/ConfirmModal';
+import { AiAssistant } from './components/AiAssistant';
 // Importing state.js triggers loadState() at module level
 import './modules/state.js';
 import { setModuleRefs, useActions } from './hooks/useActions.js';
@@ -87,6 +88,8 @@ export default function App() {
       if (mod && e.shiftKey && e.key.toLowerCase() === 'r') { e.preventDefault(); runRound(); return; }
       // ⌘⇧A — toggle auto
       if (mod && e.shiftKey && e.key.toLowerCase() === 'a') { e.preventDefault(); startAuto(); return; }
+      // ⌘⇧I — toggle AI assistant
+      if (mod && e.shiftKey && e.key.toLowerCase() === 'i') { e.preventDefault(); mutateState(s => { s.ui.assistantOpen = !s.ui.assistantOpen; }); return; }
       // ⌘S — save session (prevent default browser save)
       if (mod && !e.shiftKey && e.key === 's') {
         e.preventDefault();
@@ -186,6 +189,7 @@ export default function App() {
         onClose={() => setCmdOpen(false)}
         onSelect={handleCommand}
       />
+      <AiAssistant />
       {confirmModal && (
         <ConfirmModal
           message={confirmModal.message}

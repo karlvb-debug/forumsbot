@@ -108,7 +108,8 @@ export const defaultState = {
     stopModal: null,            // { reason, suggestedGoal } — set by promptStopOrContinue
     confirmModal: null,         // { message, confirmLabel } — set by requestConfirm()
     embeddingProbeResult: null, // { ok, reason? } — set by pingConnection embedding probe
-    currentSpeaker: ""          // name of actor currently generating
+    currentSpeaker: "",         // name of actor currently generating
+    assistantOpen: false        // AI assistant drawer open/closed
   },
   memory: {
     enabled: true,
