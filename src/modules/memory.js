@@ -655,11 +655,11 @@ export function normalizeOutcomeUpdate(update) {
 export function formatCurrentOutcomes() {
   return [
     state.outcomes.finalRecommendation ? `Final recommendation:\n${state.outcomes.finalRecommendation}` : "",
-    state.outcomes.decisions ? `Decisions:\n${state.outcomes.decisions}` : "",
-    state.outcomes.rationale ? `Rationale:\n${state.outcomes.rationale}` : "",
-    state.outcomes.rejectedOptions ? `Rejected options:\n${state.outcomes.rejectedOptions}` : "",
-    state.outcomes.actionItems ? `Action items:\n${state.outcomes.actionItems}` : "",
-    state.outcomes.risks ? `Risks:\n${state.outcomes.risks}` : ""
+    state.outcomes.decisions?.length ? `Decisions:\n${state.outcomes.decisions.join('\n')}` : "",
+    state.outcomes.rationale?.length ? `Rationale:\n${state.outcomes.rationale.join('\n')}` : "",
+    state.outcomes.rejectedOptions?.length ? `Rejected options:\n${state.outcomes.rejectedOptions.join('\n')}` : "",
+    state.outcomes.actionItems?.length ? `Action items:\n${state.outcomes.actionItems.join('\n')}` : "",
+    state.outcomes.risks?.length ? `Risks:\n${state.outcomes.risks.join('\n')}` : ""
   ].filter(Boolean).join("\n\n") || "None.";
 }
 

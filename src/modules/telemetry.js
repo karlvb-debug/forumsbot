@@ -1,5 +1,6 @@
 import { state, logWarning } from './state.js';
 import { getEmbedding } from './api.js';
+import { notifyStateChange } from '../hooks/useForumState.js';
 
 // Cosine similarity between two vector arrays
 export function cosineSimilarity(vecA, vecB) {
@@ -167,12 +168,7 @@ export async function updateSemanticAlignment() {
 }
 
 function dispatchTelemetryUpdate() {
-  document.dispatchEvent(new CustomEvent("telemetryUpdated", {
-    detail: {
-      score: state.telemetry.currentAlignmentScore,
-      mode: state.telemetry.alignmentMode   // "embedding" | "keyword" | "none"
-    }
-  }));
+  notifyStateChange();
 }
 
 // Canvas Renderers

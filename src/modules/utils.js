@@ -364,7 +364,10 @@ export function normalizeQuickStartActor(actor, index, assignFreshIds) {
     voice: cleanConfigText(source.voice, "", 120),
     thoughts: cleanConfigText(source.thoughts, "", 700),
     enabled: source.enabled !== false,
-    isResearcher: !!source.isResearcher,
+    canDirect: !!(source.canDirect || source.isDirector),
+    canResearch: !!(source.canResearch || source.isResearcher),
+    canManageCast: !!(source.canManageCast || source.isManager),
+    canSeeThoughts: !!source.canSeeThoughts,
     color: ["#18726d", "#b84738", "#a2611a", "#355f9f", "#6e4c99", "#4f7d2d", "#9a4668"][index % 7]
   };
 }
