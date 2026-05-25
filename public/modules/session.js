@@ -406,89 +406,180 @@ export async function generateActorFromDescription() {
 
 export async function generateQuickStart() {
   if (!state.settings.model) {
-    setQuickStartStatus("Choose or type a model first.");
+    setQuickStartStatus("Choose a model first.");
+    openAiAssistantPanel();
     return;
   }
-  const prompt = (state.ui.quickStartPrompt || "").trim();
+  const input = document.getElementById("aiAssistantInput");
+  const prompt = (input?.value || state.ui.quickStartPrompt || "").trim();
   if (!prompt) {
-    setQuickStartStatus("Describe the forum you want first.");
+    setQuickStartStatus("Type a request first.");
     return;
   }
+  if (input) input.value = "";
 
   setQuickStartBusy(true);
-  setQuickStartStatus("Generating…");
+  setQuickStartStatus("Thinking…");
 
   const currentConfig = {
     scenario: state.scenario,
     dm: { enabled: state.dm.enabled, name: state.dm.name, persona: state.dm.persona, seesPrivateThoughts: state.dm.seesPrivateThoughts },
-    actors: state.actors.map(a => ({ name: a.name, role: a.role, persona: a.persona, goal: a.goal, voice: a.voice, enabled: a.enabled })),
+    actors: state.actors.map(a => ({ name: a.name, role: a.role, persona: a.persona, goal: a.goal, voice: a.voice, enabled: a.enabled, temperature: a.temperature, isResearcher: !!a.isResearcher, isManager: !!a.isManager })),
     settings: {
       temperature: state.settings.temperature,
       maxTokens: state.settings.maxTokens ?? 2000,
+      topP: state.settings.topP ?? 1.0,
+      repeatPenalty: state.settings.repeatPenalty ?? 1.1,
       toolsEnabled: state.settings.toolsEnabled,
       streamingEnabled: state.settings.streamingEnabled !== false,
       showThoughts: state.settings.showThoughts,
+      turboMode: !!state.settings.turboMode,
+      enablePreflightRouter: state.settings.enablePreflightRouter !== false,
+      enableHypothesisSampling: !!state.settings.enableHypothesisSampling,
+      hypothesisSampleCount: state.settings.hypothesisSampleCount ?? 2,
+      hypothesisAutoSelect: state.settings.hypothesisAutoSelect !== false,
+      enableCrossSessionMemory: state.settings.enableCrossSessionMemory !== false,
       enableAdaptiveCompression: state.settings.enableAdaptiveCompression !== false,
-      enableCrossSessionMemory: state.settings.enableCrossSessionMemory !== false
+      turnDelay: state.settings.turnDelay ?? 0,
     },
     document: { enabled: !!state.document?.enabled, title: state.document?.title || "" },
     autoStop: { enabled: state.autoStop.enabled, goal: state.autoStop.goal, goalCheckEnabled: state.autoStop.goalCheckEnabled, stopOnAllSkip: state.autoStop.stopOnAllSkip, maxRoundsEnabled: state.autoStop.maxRoundsEnabled, maxRounds: state.autoStop.maxRounds },
-    memory: { pinnedFacts: Array.isArray(state.memory.pinnedFacts) ? state.memory.pinnedFacts.join("\n") : (state.memory.pinnedFacts || "") }
+    memory: {
+      pinnedFacts: Array.isArray(state.memory.pinnedFacts) ? state.memory.pinnedFacts : [],
+      sharedSummary: state.memory.sharedSummary || "",
+      openQuestions: state.memory.openQuestions || "",
+      dmState: state.memory.dmState || ""
+    }
   };
 
-  const schemaShape = JSON.stringify({ scenario: { mode: "problem|story|freeform", title: "", premise: "", objective: "" }, dm: { enabled: true, name: "", persona: "", seesPrivateThoughts: false }, actors: [{ name: "", role: "", persona: "", goal: "", voice: "", thoughts: "", enabled: true }], memory: { pinnedFacts: "", sharedSummary: "", openQuestions: "", dmState: "" }, settings: { temperature: 0.8, maxTokens: 2000, toolsEnabled: true, streamingEnabled: true, showThoughts: false, enableAdaptiveCompression: true, enableCrossSessionMemory: true }, document: { enabled: false, title: "" }, autoStop: { enabled: true, goal: "", goalCheckEnabled: true, stopOnAllSkip: true, maxRoundsEnabled: false, maxRounds: 5 } });
+  const patchChangesShape = `{
+  "addActors": [{"name":"","role":"","persona":"","goal":"","voice":"","temperature":0.8,"isResearcher":false,"isManager":false}],
+  "removeActors": ["ActorName"],
+  "modifyActors": [{"find":"ActorName","persona":"...","goal":"...","temperature":0.9}],
+  "scenario": {"title":"...","premise":"...","objective":"...","mode":"problem|story|freeform"},
+  "dm": {"enabled":true,"name":"...","persona":"...","seesPrivateThoughts":false},
+  "settings": {"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"toolsEnabled":true,"streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":true,"enableHypothesisSampling":false,"hypothesisSampleCount":2,"hypothesisAutoSelect":true,"enableCrossSessionMemory":true,"enableAdaptiveCompression":true,"turnDelay":0},
+  "memory": {"addFacts":["fact text"],"removeFacts":["text to match and remove"],"sharedSummary":"...","openQuestions":"...","dmState":"..."},
+  "autoStop": {"enabled":true,"goal":"...","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5},
+  "document": {"enabled":false,"title":"..."}
+}`;
+
+  const fullSetupShape = `{"scenario":{"mode":"problem|story|freeform","title":"","premise":"","objective":""},"dm":{"enabled":true,"name":"","persona":"","seesPrivateThoughts":false},"actors":[{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"isResearcher":false,"isManager":false}],"memory":{"pinnedFacts":[],"sharedSummary":"","openQuestions":"","dmState":""},"settings":{"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"toolsEnabled":false,"streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":true,"enableHypothesisSampling":false,"hypothesisSampleCount":2,"hypothesisAutoSelect":true,"enableCrossSessionMemory":true,"enableAdaptiveCompression":true,"turnDelay":0},"document":{"enabled":false,"title":""},"autoStop":{"enabled":false,"goal":"","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5}}`;
 
   const system = [
-    "You are a setup assistant for a multi-actor AI forum. Return a complete configuration JSON every time — never a partial update.",
-    "The JSON must have EXACTLY this shape: " + schemaShape,
-    "Settings: toolsEnabled lets actors search the web; streamingEnabled shows tokens live; showThoughts=true exposes internal reasoning; document.enabled lets actors co-write a shared document.",
-    "Mode: problem=collaborative problem-solving, story=roleplay/narrative (no web tools), freeform=open discussion.",
-    "Actors: 3-5 unless specified. Use creative context-specific names (avoid Alice/Bob/Charlie generics).",
-    "Return only valid JSON. No markdown fences, no commentary."
+    "You are the AI Assistant for Forum, a local multi-agent AI discussion app running LLM actors via LM Studio.",
+    "",
+    "Respond with JSON in exactly one of three forms:",
+    "",
+    'type="chat" — for explanations, questions, or when no config change is needed:',
+    '{"type":"chat","message":"Your answer here"}',
+    "",
+    'type="patch" — for targeted changes (applied immediately, all fields optional):',
+    '{"type":"patch","message":"Short description","changes":' + patchChangesShape + '}',
+    "",
+    'type="fullSetup" — ONLY when creating an entirely new scenario from scratch:',
+    '{"type":"fullSetup","message":"Created [title]",' + fullSetupShape.slice(1),
+    "",
+    "SETTINGS REFERENCE:",
+    "Scenario: mode (problem/story/freeform), title, premise (backstory in every prompt), objective (goal-judge target).",
+    "story mode disables web tools and uses roleplay framing.",
+    "",
+    "Actors: Each gets its own LLM call per turn. name, role, persona, goal, voice are core.",
+    "temperature per actor (0-2, default 0.8). isResearcher=true makes actor fetch live web data.",
+    "isManager=true lets actor create/silence/resume other actors mid-session.",
+    "",
+    "Director (dm): moderates discussion. seesPrivateThoughts=true gives director visibility into all actors' private reasoning.",
+    "",
+    "Generation: temperature 0-2 (creativity), maxTokens 200-8000 (response length), topP 0.1-1 (nucleus sampling),",
+    "repeatPenalty 1-1.5 (repetition reduction). toolsEnabled allows web search. streamingEnabled shows tokens live.",
+    "showThoughts reveals private reasoning (good for debugging). turboMode disables memory/thoughts/alignment for speed.",
+    "",
+    "Optimizations: enablePreflightRouter saves ~1500 tokens/skipped turn via a cheap speak/skip pre-check.",
+    "enableHypothesisSampling generates N candidates (hypothesisSampleCount 2-3) and picks the best.",
+    "hypothesisAutoSelect=false lets user choose manually. enableCrossSessionMemory persists actor learning.",
+    "enableAdaptiveCompression compresses actor memory when context is tight. turnDelay 0-15s pauses between turns in auto mode.",
+    "",
+    "Memory: pinnedFacts (array, injected into every prompt), sharedSummary (all actors see it), openQuestions (tracked open threads), dmState (director private notes).",
+    "Use addFacts/removeFacts in patches for targeted fact management.",
+    "",
+    "Auto-stop: goal checked by LLM judge after each round. stopOnAllSkip catches exhausted discussions. maxRounds is a hard limit.",
+    "",
+    "Document: shared document actors can co-edit during the session. enabled/title.",
+    "",
+    "Use type=patch for: add/modify/remove one actor, change one setting, add/remove a fact, change the objective, etc.",
+    "Use type=fullSetup only for brand-new scenario requests from scratch.",
+    "Use type=chat for: questions about what settings do, requests for advice, anything that doesn't require a config change.",
+    "",
+    "Return only valid JSON. No markdown fences. No commentary outside the JSON."
   ].join("\n");
 
   const history = Array.isArray(state.ui.quickStartHistory) ? state.ui.quickStartHistory : [];
   const messages = [{ role: "system", content: system }];
 
-  // Include previous conversation turns
   for (const entry of history) {
     messages.push({ role: entry.role, content: entry.content });
   }
 
-  // Build the new user turn: include current config if there's existing content or prior history
-  const hasExistingContent = history.length > 0 || (state.scenario.title && state.scenario.title !== "Design council");
-  const userContent = hasExistingContent
-    ? "Current setup:\n" + JSON.stringify(currentConfig, null, 2) + "\n\nRequest: " + prompt
-    : prompt;
+  const hasContext = history.length > 0;
+  const userContent = hasContext
+    ? "Current config:\n" + JSON.stringify(currentConfig, null, 2) + "\n\nRequest: " + prompt
+    : (state.scenario.title && state.scenario.title !== "Design council" && state.scenario.premise
+        ? "Current config:\n" + JSON.stringify(currentConfig, null, 2) + "\n\nRequest: " + prompt
+        : prompt);
   messages.push({ role: "user", content: userContent });
+
+  // Add user bubble immediately
+  if (!Array.isArray(state.ui.quickStartHistory)) state.ui.quickStartHistory = [];
+  state.ui.quickStartHistory.push({ role: "user", content: prompt });
+  renderQuickStartChat();
 
   try {
     const temp = state.ui.quickStartTemperature ?? 0.8;
-    const content = await chatCompletionMessages(messages, { temperature: temp, maxTokens: 2400 });
-    state.ui.quickStartDraft = normalizeQuickStartConfig(parseQuickStartConfig(content));
-    state.ui.quickStartStatus = "Setup ready — click Apply when satisfied.";
+    const raw = await chatCompletionMessages(messages, { temperature: temp, maxTokens: 3000 });
 
-    if (!Array.isArray(state.ui.quickStartHistory)) state.ui.quickStartHistory = [];
-    state.ui.quickStartHistory.push({ role: "user", content: prompt });
-    state.ui.quickStartHistory.push({ role: "assistant", content, draft: state.ui.quickStartDraft });
+    let parsed;
+    try {
+      const cleaned = sanitizeJsonString(stripCodeFence(raw));
+      parsed = JSON.parse(cleaned);
+      if (!parsed || typeof parsed !== "object") throw new Error("Not an object");
+    } catch {
+      for (const candidate of extractBalancedObjects(sanitizeJsonString(stripCodeFence(raw)))) {
+        try { parsed = JSON.parse(candidate); if (parsed && typeof parsed === "object") break; } catch {}
+      }
+      if (!parsed) throw new Error("The model did not return usable JSON.");
+    }
 
-    state.ui.quickStartPrompt = "";
-    if (els.quickStartPrompt) els.quickStartPrompt.value = "";
+    const type = parsed.type || "fullSetup";
+    const message = parsed.message || "";
+
+    if (type === "patch" && parsed.changes && typeof parsed.changes === "object") {
+      applyAssistantPatch(parsed.changes);
+      state.ui.quickStartHistory.push({ role: "assistant", content: raw, type: "patch", message });
+      setQuickStartStatus("Changes applied.");
+    } else if (type === "chat") {
+      state.ui.quickStartHistory.push({ role: "assistant", content: raw, type: "chat", message });
+      setQuickStartStatus("");
+    } else {
+      // fullSetup
+      state.ui.quickStartDraft = normalizeQuickStartConfig(parsed);
+      state.ui.quickStartHistory.push({ role: "assistant", content: raw, type: "fullSetup", message, draft: state.ui.quickStartDraft });
+      setQuickStartStatus("Full setup ready — click Apply to replace current scenario.");
+    }
 
     saveState();
-    renderQuickStartPreview();
     renderQuickStartChat();
+    updateAiAssistantApplyButton();
   } catch (error) {
-    state.ui.quickStartDraft = null;
-    setQuickStartStatus(error.message || "Quick Setup generation failed.");
-    renderQuickStartPreview();
+    state.ui.quickStartHistory.push({ role: "assistant", content: "", type: "error", message: error.message || "Request failed." });
+    setQuickStartStatus("Error: " + (error.message || "Request failed."));
+    renderQuickStartChat();
   } finally {
     setQuickStartBusy(false);
   }
 }
 
 export function renderQuickStartChat() {
-  const container = document.getElementById("quickStartChatHistory");
+  const container = document.getElementById("aiAssistantChat");
   if (!container) return;
   const history = Array.isArray(state.ui.quickStartHistory) ? state.ui.quickStartHistory : [];
   container.innerHTML = "";
@@ -496,25 +587,31 @@ export function renderQuickStartChat() {
   for (const entry of history) {
     const div = document.createElement("div");
     div.className = "qs-msg qs-msg--" + entry.role;
-    const label = document.createElement("div");
-    label.className = "qs-msg-label";
-    label.textContent = entry.role === "user" ? "You" : "AI";
-    const body = document.createElement("div");
-    body.className = "qs-msg-summary";
-    if (entry.role === "assistant" && entry.draft) {
-      const d = entry.draft;
-      const names = (d.actors || []).map(a => a.name).filter(Boolean).join(", ");
-      body.textContent = "\u{1F4CB} " + (d.scenario?.title || "Setup") + " — " + (d.actors || []).length + " actors: " + names;
+    if (entry.role === "user") {
+      div.textContent = entry.content;
     } else {
-      const txt = typeof entry.content === "string" ? entry.content : "";
-      body.textContent = txt.length > 120 ? txt.slice(0, 120) + "\u2026" : txt;
+      // AI message: show message text, then type badge
+      const msg = entry.message || (entry.type === "error" ? "Error" : "");
+      if (msg) {
+        const p = document.createElement("div");
+        p.className = "qs-msg-text";
+        p.textContent = msg;
+        div.appendChild(p);
+      }
+      if (entry.type && entry.type !== "chat" && entry.type !== "error") {
+        const badge = document.createElement("span");
+        badge.className = "qs-msg-badge qs-msg-badge--" + entry.type;
+        badge.textContent = entry.type === "patch" ? "\u2713 Applied" : entry.type === "fullSetup" ? "\u2191 Full setup \u2014 click Apply" : "";
+        div.appendChild(badge);
+      }
+      if (entry.type === "error") {
+        div.classList.add("qs-msg--error");
+      }
     }
-    div.append(label, body);
     container.append(div);
   }
   container.scrollTop = container.scrollHeight;
 }
-
 export function parseQuickStartConfig(content) {
   const cleaned = sanitizeJsonString(stripCodeFence(content));
   try {
@@ -589,6 +686,7 @@ export async function applyQuickStartConfig() {
   };
   state.turnQueue = [];
   state.ui.quickStartDraft = null;
+  updateAiAssistantApplyButton();
   state.ui.quickStartStatus = "Setup applied.";
   saveState();
   syncFormFromState();
@@ -610,23 +708,127 @@ export function discardQuickStartConfig() {
   state.ui.quickStartDraft = null;
   state.ui.quickStartHistory = [];
   state.ui.quickStartPrompt = "";
+  const input = document.getElementById("aiAssistantInput");
+  if (input) input.value = "";
   if (els.quickStartPrompt) els.quickStartPrompt.value = "";
-  state.ui.quickStartStatus = "Chat cleared.";
+  state.ui.quickStartStatus = "";
   saveState();
-  renderQuickStartPreview();
   renderQuickStartChat();
+  updateAiAssistantApplyButton();
 }
 
 export function setQuickStartBusy(value) {
-  els.generateQuickStart.disabled = value;
-  els.applyQuickStart.disabled = value || !state.ui.quickStartDraft;
-  els.discardQuickStart.disabled = value || !state.ui.quickStartDraft;
+  const sendBtn = document.getElementById("aiAssistantSendBtn");
+  const applyBtn = document.getElementById("aiAssistantApplyBtn");
+  if (sendBtn) sendBtn.disabled = value;
+  if (applyBtn) applyBtn.disabled = value;
+  // Legacy sidebar elements (may not exist)
+  if (els.generateQuickStart) els.generateQuickStart.disabled = value;
+  if (els.applyQuickStart) els.applyQuickStart.disabled = value || !state.ui.quickStartDraft;
+  if (els.discardQuickStart) els.discardQuickStart.disabled = value || !state.ui.quickStartDraft;
 }
 
 export function setQuickStartStatus(message) {
   state.ui.quickStartStatus = message;
-  els.quickStartStatus.textContent = message;
+  const el = document.getElementById("aiAssistantStatus");
+  if (el) el.textContent = message;
+  if (els.quickStartStatus) els.quickStartStatus.textContent = message;
   saveState();
+}
+
+export function updateAiAssistantApplyButton() {
+  const btn = document.getElementById("aiAssistantApplyBtn");
+  if (btn) btn.style.display = state.ui.quickStartDraft ? "" : "none";
+}
+
+export function openAiAssistantPanel() {
+  const panel = document.getElementById("aiAssistantPanel");
+  if (panel) panel.hidden = false;
+}
+
+export function applyAssistantPatch(changes) {
+  const c = changes;
+
+  // Actors — add
+  for (const a of (c.addActors || [])) {
+    state.actors.push({
+      id: crypto.randomUUID(),
+      name: a.name || "New Actor",
+      role: a.role || "Participant",
+      persona: a.persona || "",
+      goal: a.goal || "",
+      voice: a.voice || "",
+      temperature: typeof a.temperature === "number" ? a.temperature : 0.8,
+      isResearcher: !!a.isResearcher,
+      isManager: !!a.isManager,
+      enabled: true,
+      thoughts: "",
+      color: colors[state.actors.length % colors.length]
+    });
+  }
+
+  // Actors — remove
+  for (const name of (c.removeActors || [])) {
+    const lower = name.toLowerCase();
+    state.actors = state.actors.filter(a => a.name.toLowerCase() !== lower);
+  }
+
+  // Actors — modify
+  for (const mod of (c.modifyActors || [])) {
+    const target = state.actors.find(a => a.name.toLowerCase() === (mod.find || "").toLowerCase());
+    if (target) {
+      const { find: _find, ...rest } = mod;
+      Object.assign(target, rest);
+    }
+  }
+
+  // Scenario (partial)
+  if (c.scenario && typeof c.scenario === "object") {
+    Object.assign(state.scenario, c.scenario);
+  }
+
+  // Director (partial)
+  if (c.dm && typeof c.dm === "object") {
+    Object.assign(state.dm, c.dm);
+  }
+
+  // Settings (partial)
+  if (c.settings && typeof c.settings === "object") {
+    for (const [key, val] of Object.entries(c.settings)) {
+      if (val !== null && val !== undefined) state.settings[key] = val;
+    }
+  }
+
+  // Memory
+  if (c.memory && typeof c.memory === "object") {
+    const mem = c.memory;
+    if (mem.addFacts) {
+      const existing = Array.isArray(state.memory.pinnedFacts) ? state.memory.pinnedFacts : [];
+      state.memory.pinnedFacts = [...existing, ...mem.addFacts].filter(Boolean);
+    }
+    if (mem.removeFacts) {
+      const toRemove = mem.removeFacts.map(s => s.toLowerCase());
+      const existing = Array.isArray(state.memory.pinnedFacts) ? state.memory.pinnedFacts : [];
+      state.memory.pinnedFacts = existing.filter(f => !toRemove.some(r => f.toLowerCase().includes(r)));
+    }
+    if (mem.sharedSummary !== undefined && mem.sharedSummary !== null) state.memory.sharedSummary = mem.sharedSummary;
+    if (mem.openQuestions !== undefined && mem.openQuestions !== null) state.memory.openQuestions = mem.openQuestions;
+    if (mem.dmState !== undefined && mem.dmState !== null) state.memory.dmState = mem.dmState;
+  }
+
+  // Auto-stop (partial)
+  if (c.autoStop && typeof c.autoStop === "object") {
+    Object.assign(state.autoStop, c.autoStop);
+  }
+
+  // Document (partial)
+  if (c.document && typeof c.document === "object") {
+    Object.assign(state.document, c.document);
+  }
+
+  saveState();
+  syncFormFromState();
+  render();
 }
 
 // ─── Session History ────────────────────────────────────────────────────────

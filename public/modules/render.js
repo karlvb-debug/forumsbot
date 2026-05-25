@@ -1624,11 +1624,14 @@ export function syncFormFromState() {
   els.dmName.value = state.dm.name;
   els.dmPersona.value = state.dm.persona;
   els.dmPrivate.checked = state.dm.seesPrivateThoughts;
-  els.quickStartPrompt.value = state.ui.quickStartPrompt;
+  if (els.quickStartPrompt) els.quickStartPrompt.value = state.ui.quickStartPrompt;
   if (els.quickStartTemp) {
     els.quickStartTemp.value = state.ui.quickStartTemperature ?? 0.8;
   }
-  els.quickStartStatus.textContent = state.ui.quickStartStatus;
+  if (els.quickStartStatus) els.quickStartStatus.textContent = state.ui.quickStartStatus;
+  // AI Assistant panel apply button
+  const aiApplyBtn = document.getElementById("aiAssistantApplyBtn");
+  if (aiApplyBtn) aiApplyBtn.style.display = state.ui.quickStartDraft ? "" : "none";
   els.memoryEnabled.checked = state.memory.enabled;
   els.pinnedFacts.value = Array.isArray(state.memory.pinnedFacts) ? state.memory.pinnedFacts.join("\n") : safeString(state.memory.pinnedFacts);
   els.sharedSummary.value = state.memory.sharedSummary;
@@ -1720,7 +1723,7 @@ export function readSettingsFromForm() {
   state.dm.name = els.dmName.value.trim() || "Director";
   state.dm.persona = els.dmPersona.value.trim();
   state.dm.seesPrivateThoughts = els.dmPrivate.checked;
-  state.ui.quickStartPrompt = els.quickStartPrompt.value.trim();
+  if (els.quickStartPrompt) state.ui.quickStartPrompt = els.quickStartPrompt.value.trim();
   if (els.quickStartTemp) {
     state.ui.quickStartTemperature = Number(els.quickStartTemp.value || 0.8);
   }

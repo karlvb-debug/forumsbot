@@ -70,7 +70,10 @@ import {
   renderQuickStartChat,
   saveCurrentSession,
   loadSession,
-  generateActorFromDescription
+  generateActorFromDescription,
+  openAiAssistantPanel,
+  applyAssistantPatch,
+  updateAiAssistantApplyButton
 } from './modules/session.js';
 import { initializeMemoryStorage, getAllChunks, getAllSessions, deleteSession } from './modules/db.js';
 import { startTensionGridAnimation, stopTensionGridAnimation } from './modules/telemetry.js';
@@ -93,7 +96,6 @@ function wireEvents() {
     els.dmName,
     els.dmPersona,
     els.dmPrivate,
-    els.quickStartPrompt,
     els.memoryEnabled,
     els.pinnedFacts,
     els.sharedSummary,
@@ -112,8 +114,7 @@ function wireEvents() {
     els.maxRoundsEnabled,
     els.showThoughts,
     els.toolsEnabled,
-    els.quickStartTemp
-  ].forEach((element) => {
+  ].filter(Boolean).forEach((element) => {
     const handler = () => {
       if (!isInitialized) return;
       readSettingsFromForm();
@@ -509,6 +510,17 @@ function wireEvents() {
     runNextTurn().then(ok => { if (ok) saveCurrentSession().catch(console.warn); });
   });
 
+  // ⌘K / Ctrl+K — toggle AI Assistant panel
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      e.preventDefault();
+      toggleAiAssistantPanel();
+      if (aiAssistantPanel && !aiAssistantPanel.hidden) {
+        document.getElementById("aiAssistantInput")?.focus();
+      }
+    }
+  });
+
   // Transcript search bar events
   const transcriptSearchInput = document.getElementById("transcriptSearchInput");
   const transcriptSearchPrev = document.getElementById("transcriptSearchPrev");
@@ -541,9 +553,45 @@ function wireEvents() {
   els.clearConversation.addEventListener("click", confirmAndResetSession);
   els.copySession.addEventListener("click", copySessionToClipboard);
   els.stop.addEventListener("click", stopGeneration);
-  els.generateQuickStart.addEventListener("click", generateQuickStart);
-  els.applyQuickStart.addEventListener("click", () => applyQuickStartConfig());
-  els.discardQuickStart.addEventListener("click", discardQuickStartConfig);
+  // AI Assistant panel toggle (header button + sidebar button)
+  const aiAssistantPanel = document.getElementById("aiAssistantPanel");
+  const aiAssistantToggle = document.getElementById("aiAssistantToggle");
+  const aiAssistantCloseBtn = document.getElementById("aiAssistantCloseBtn");
+  const openAiAssistantBtnSidebar = document.getElementById("openAiAssistantBtn");
+
+  function toggleAiAssistantPanel() {
+    if (aiAssistantPanel) aiAssistantPanel.hidden = !aiAssistantPanel.hidden;
+  }
+  if (aiAssistantToggle) aiAssistantToggle.addEventListener("click", toggleAiAssistantPanel);
+  if (aiAssistantCloseBtn) aiAssistantCloseBtn.addEventListener("click", () => { if (aiAssistantPanel) aiAssistantPanel.hidden = true; });
+  if (openAiAssistantBtnSidebar) openAiAssistantBtnSidebar.addEventListener("click", () => { if (aiAssistantPanel) aiAssistantPanel.hidden = false; });
+
+  // AI Assistant send
+  const aiAssistantSendBtn = document.getElementById("aiAssistantSendBtn");
+  if (aiAssistantSendBtn) aiAssistantSendBtn.addEventListener("click", generateQuickStart);
+
+  // AI Assistant input — Enter to send, Shift+Enter for newline
+  const aiAssistantInput = document.getElementById("aiAssistantInput");
+  if (aiAssistantInput) {
+    aiAssistantInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        generateQuickStart();
+      }
+    });
+  }
+
+  // AI Assistant apply/clear
+  const aiAssistantApplyBtn = document.getElementById("aiAssistantApplyBtn");
+  const aiAssistantClearBtn = document.getElementById("aiAssistantClearBtn");
+  if (aiAssistantApplyBtn) aiAssistantApplyBtn.addEventListener("click", applyQuickStartConfig);
+  if (aiAssistantClearBtn) aiAssistantClearBtn.addEventListener("click", discardQuickStartConfig);
+
+  // Legacy sidebar Quick Setup elements (null-safe — elements no longer exist in HTML)
+  if (els.generateQuickStart) els.generateQuickStart.addEventListener("click", generateQuickStart);
+  if (els.applyQuickStart) els.applyQuickStart.addEventListener("click", () => applyQuickStartConfig());
+  if (els.discardQuickStart) els.discardQuickStart.addEventListener("click", discardQuickStartConfig);
+
   els.addActor.addEventListener("click", () => addActor(false));
   els.addResearcher.addEventListener("click", () => addActor(true));
   document.getElementById("addManagerButton")?.addEventListener("click", addManager);
