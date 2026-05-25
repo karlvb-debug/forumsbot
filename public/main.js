@@ -30,7 +30,9 @@ import {
   renderPendingAnchors,
   renderAnchors,
   showToast,
-  renderStageMemoryHint
+  renderStageMemoryHint,
+  escapeHtml,
+  renderKnowledgeBase
 } from './modules/render.js';
 import {
   loadModels,
@@ -77,6 +79,7 @@ import {
 } from './modules/session.js';
 import { initializeMemoryStorage, getAllChunks, getAllSessions, deleteSession } from './modules/db.js';
 import { startTensionGridAnimation, stopTensionGridAnimation } from './modules/telemetry.js';
+import { putKbEntry, fetchUrlContent, newKbEntry, countWords } from './modules/knowledge.js';
 
 // Wire the els reference into api.js so setStatus, loadModels, etc. can access DOM elements
 initApi(els);
@@ -621,6 +624,115 @@ function wireEvents() {
       renderSessionsList(sessions);
     }
   });
+  // ── Knowledge Base panel ─────────────────────────────────────────────────
+
+  // Helpers: build target picker (All + per-actor checkboxes) in a container
+  function buildKbTargetPicker(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = "";
+    const allLabel = document.createElement("label");
+    allLabel.className = "kb-target-option";
+    allLabel.innerHTML = `<input type="checkbox" class="kb-target-all" checked> All actors`;
+    container.appendChild(allLabel);
+    for (const actor of state.actors) {
+      const lbl = document.createElement("label");
+      lbl.className = "kb-target-option";
+      const swatch = `<span class="kb-swatch" style="background:${actor.color}"></span>`;
+      lbl.innerHTML = `<input type="checkbox" class="kb-target-actor" data-actor-id="${actor.id}" checked> ${swatch}${escapeHtml(actor.name)}`;
+      container.appendChild(lbl);
+    }
+    // Toggle actor checkboxes based on "All" state
+    allLabel.querySelector("input").addEventListener("change", (e) => {
+      container.querySelectorAll(".kb-target-actor").forEach(cb => { cb.disabled = e.target.checked; });
+    });
+    container.querySelectorAll(".kb-target-actor").forEach(cb => { cb.disabled = true; }); // start disabled (all=true)
+  }
+
+  function getKbTargetValue(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return "all";
+    const allCb = container.querySelector(".kb-target-all");
+    if (!allCb || allCb.checked) return "all";
+    const ids = [];
+    container.querySelectorAll(".kb-target-actor:checked").forEach(cb => ids.push(cb.dataset.actorId));
+    return ids.length ? ids : "all";
+  }
+
+  const kbAddDocBtn = document.getElementById("kbAddDocBtn");
+  const kbAddDocForm = document.getElementById("kbAddDocForm");
+  const kbAddLinkBtn = document.getElementById("kbAddLinkBtn");
+  const kbAddLinkForm = document.getElementById("kbAddLinkForm");
+
+  kbAddDocBtn?.addEventListener("click", () => {
+    kbAddDocForm.style.display = kbAddDocForm.style.display === "none" ? "" : "none";
+    kbAddLinkForm.style.display = "none";
+    if (kbAddDocForm.style.display !== "none") buildKbTargetPicker("kbDocTargetPicker");
+  });
+
+  kbAddLinkBtn?.addEventListener("click", () => {
+    kbAddLinkForm.style.display = kbAddLinkForm.style.display === "none" ? "" : "none";
+    kbAddDocForm.style.display = "none";
+    if (kbAddLinkForm.style.display !== "none") buildKbTargetPicker("kbLinkTargetPicker");
+  });
+
+  document.getElementById("kbDocCancelBtn")?.addEventListener("click", () => {
+    kbAddDocForm.style.display = "none";
+  });
+  document.getElementById("kbLinkCancelBtn")?.addEventListener("click", () => {
+    kbAddLinkForm.style.display = "none";
+    document.getElementById("kbLinkPreviewArea").style.display = "none";
+    document.getElementById("kbLinkStatus").textContent = "";
+  });
+
+  document.getElementById("kbDocSaveBtn")?.addEventListener("click", async () => {
+    const title = document.getElementById("kbDocTitle")?.value.trim();
+    const content = document.getElementById("kbDocContent")?.value.trim();
+    if (!title || !content) { setStatus("Title and content are required.", "warn"); return; }
+    const entry = newKbEntry({ title, type: "document", content, target: getKbTargetValue("kbDocTargetPicker"), wordCount: countWords(content) });
+    await putKbEntry(entry);
+    kbAddDocForm.style.display = "none";
+    document.getElementById("kbDocTitle").value = "";
+    document.getElementById("kbDocContent").value = "";
+    renderKnowledgeBase();
+    setStatus(`Saved document "${title}".`, "ok");
+  });
+
+  let _kbLinkFetched = "";
+  document.getElementById("kbLinkFetchBtn")?.addEventListener("click", async () => {
+    const url = document.getElementById("kbLinkUrl")?.value.trim();
+    if (!url) { setStatus("Enter a URL first.", "warn"); return; }
+    const statusEl = document.getElementById("kbLinkStatus");
+    statusEl.textContent = "Fetching…";
+    try {
+      const text = await fetchUrlContent(url);
+      _kbLinkFetched = text;
+      const titleInput = document.getElementById("kbLinkTitle");
+      if (!titleInput.value) titleInput.value = new URL(url).hostname;
+      document.getElementById("kbLinkPreviewArea").style.display = "";
+      buildKbTargetPicker("kbLinkTargetPicker");
+      statusEl.textContent = `Fetched ${countWords(text).toLocaleString()} words`;
+    } catch (err) {
+      statusEl.textContent = "Error: " + (err.message || "fetch failed");
+    }
+  });
+
+  document.getElementById("kbLinkSaveBtn")?.addEventListener("click", async () => {
+    const url = document.getElementById("kbLinkUrl")?.value.trim();
+    const title = document.getElementById("kbLinkTitle")?.value.trim() || new URL(url).hostname;
+    if (!_kbLinkFetched) { setStatus("Fetch the URL first.", "warn"); return; }
+    const entry = newKbEntry({ title, type: "link", url, content: _kbLinkFetched, target: getKbTargetValue("kbLinkTargetPicker"), wordCount: countWords(_kbLinkFetched) });
+    await putKbEntry(entry);
+    kbAddLinkForm.style.display = "none";
+    document.getElementById("kbLinkPreviewArea").style.display = "none";
+    document.getElementById("kbLinkUrl").value = "";
+    document.getElementById("kbLinkTitle").value = "";
+    document.getElementById("kbLinkStatus").textContent = "";
+    _kbLinkFetched = "";
+    renderKnowledgeBase();
+    setStatus(`Saved link "${title}".`, "ok");
+  });
+
   els.reset.addEventListener("click", confirmAndFullReset);
   els.summarizeNow.addEventListener("click", () => summarizeMemory("manual"));
   els.rebuildMemory.addEventListener("click", () => summarizeMemory("rebuild", state.messages.slice(-24), { reset: true }));
