@@ -59,7 +59,13 @@ export function savePreset() {
   downloadJson(`forum-preset-${slugDate()}.json`, preset);
 }
 
+const EXPORT_MODES = new Set(['debug', 'shareable', 'markdown', 'eval']);
+
 export async function exportSession(mode = 'debug') {
+  if (!EXPORT_MODES.has(mode)) {
+    setStatus(`Unknown export mode: ${mode}`, 'error');
+    throw new Error(`Unknown export mode: ${mode}`);
+  }
   const messages = await getAllMessages();
   const chunks = await getAllChunks();
 
