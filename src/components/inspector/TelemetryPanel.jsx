@@ -1,6 +1,5 @@
-import React, { useMemo } from 'react';
-import * as Ic from '../Icons';
-import { Field, Toggle, Range } from '../shared/FormControls';
+import React from 'react';
+import { Toggle } from '../shared/FormControls';
 import { useForumState, mutateState } from '../../hooks/useForumState';
 
 export function TelemetryPanel() {
@@ -8,23 +7,25 @@ export function TelemetryPanel() {
   const telemetry = useForumState(s => s.telemetry || {});
   const settings = useForumState(s => s.settings || {});
 
-  const alignment = telemetry.currentAlignment ?? 0;
-  const alignmentPct = Math.round(alignment * 100);
+  // currentAlignmentScore is 0–100; default to 100 (on-track) before first check
+  const alignmentPct = telemetry.currentAlignmentScore ?? 100;
   const dialColor = alignmentPct >= 70 ? "var(--violet)" : alignmentPct >= 40 ? "var(--warn)" : "var(--danger)";
   const dashOffset = 251.2 - (251.2 * alignmentPct) / 100;
-  const history = telemetry.alignmentHistory || [];
-  const sparkData = history.slice(-10).map(h => Math.round((h.alignment ?? h) * 100));
 
-  const tension = useMemo(() => {
-    const cells = [];
-    for (let i = 0; i < 60; i++) cells.push(Math.random());
-    return cells;
-  }, []);
+  const history = telemetry.alignmentHistory || [];
+  // History entries are objects { turn, score, mode, timestamp }; older entries may be plain numbers
+  const sparkData = history.slice(-10).map(h =>
+    typeof h === 'number' ? h : Math.round(h.score ?? 0)
+  );
+
+  const enabledActors = actors.filter(a => a.enabled);
+  const hasRealInfluence = enabledActors.some(a => typeof a.influence === 'number');
 
   return (
     <div>
       <div className="card">
-        <div className="card-title"><h3>Alignment</h3>
+        <div className="card-title">
+          <h3>Alignment</h3>
           <span className={"badge" + (alignmentPct >= 70 ? " ok" : alignmentPct >= 40 ? " warn" : " err")}>
             {alignmentPct >= 70 ? "on track" : alignmentPct >= 40 ? "drifting" : "off track"}
           </span>
@@ -49,12 +50,13 @@ export function TelemetryPanel() {
               </span>
             </div>
             <div className="card-row" style={{ padding: "4px 0" }}>
-              <span className="lbl">Method</span><span className="val">cosine · embed</span>
+              <span className="lbl">Method</span>
+              <span className="val">{telemetry.alignmentMode || 'none'}</span>
             </div>
             {sparkData.length > 0 && (
               <div className="spark">
                 {sparkData.map((v, i) => (
-                  <div key={i} className={"bar" + (i === sparkData.length - 1 ? " active" : "")} style={{ height: `${v}%` }} />
+                  <div key={i} className={"bar" + (i === sparkData.length - 1 ? " active" : "")} style={{ height: `${Math.max(2, v)}%` }} />
                 ))}
               </div>
             )}
@@ -63,29 +65,31 @@ export function TelemetryPanel() {
       </div>
 
       <div className="card">
-        <div className="card-title"><h3>Tension Field</h3><span className="badge">live</span></div>
+        <div className="card-title"><h3>Session Texture</h3><span className="badge">visual</span></div>
         <div className="tension-grid">
-          {tension.map((n, i) => (
+          {(sparkData.length > 0 ? sparkData : Array(10).fill(50)).map((v, i) => (
             <div key={i} className="tension-cell" style={{
-              background: `oklch(from var(--accent) l c h / ${n * 0.6})`,
-              transform: `scale(${0.6 + n * 0.4})`,
+              background: `oklch(from var(--accent) l c h / ${(v / 100) * 0.6})`,
+              transform: `scale(${0.6 + (v / 100) * 0.4})`,
             }} />
           ))}
         </div>
+        <div className="field-hint" style={{ marginTop: 6 }}>Visualises recent alignment history.</div>
       </div>
 
       <div className="card">
         <div className="card-title"><h3>Influence Budget</h3></div>
-        {actors.filter(a => a.enabled).map(a => {
-          const inf = a.influence ?? Math.floor(100 / Math.max(1, actors.filter(x => x.enabled).length));
-          return (
+        {hasRealInfluence ? (
+          enabledActors.map(a => (
             <div className="influence-row" key={a.id}>
               <span style={{ minWidth: 50, color: "var(--fg-dim)" }}>{a.name}</span>
-              <div className="influence-bar"><div style={{ width: `${inf}%`, background: a.color }} /></div>
-              <span className="influence-pct">{inf}%</span>
+              <div className="influence-bar"><div style={{ width: `${a.influence}%`, background: a.color }} /></div>
+              <span className="influence-pct">{a.influence}%</span>
             </div>
-          );
-        })}
+          ))
+        ) : (
+          <div className="field-hint">Influence is measured by word-share per round. Run a session to see results.</div>
+        )}
       </div>
 
       <div className="card">

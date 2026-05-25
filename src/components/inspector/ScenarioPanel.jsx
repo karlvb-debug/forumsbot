@@ -25,13 +25,13 @@ export function ScenarioPanel() {
         />
         <div className="field-hint" style={{ marginTop: 8 }}>
           {mode === "problem" && "Collaborative problem-solving — actors analyze, challenge assumptions, converge on solutions."}
-          {mode === "story" && "Narrative roleplay — actors speak in character; web tools disabled."}
+          {mode === "story" && "Narrative roleplay — actors speak in character. Disable web tools in the Tools panel if you don't want actors to search."}
           {mode === "freeform" && "Open-ended discussion — no structured goal; actors explore freely."}
         </div>
       </div>
 
       <div className="card">
-        <div className="card-title"><h3>Anchor</h3><span className="badge">non-compressible</span></div>
+        <div className="card-title"><h3>Core Context</h3><span className="badge">non-compressible</span></div>
         <Field label="Title">
           <input value={title} onChange={(e) => updateScenario('title', e.target.value)} />
         </Field>

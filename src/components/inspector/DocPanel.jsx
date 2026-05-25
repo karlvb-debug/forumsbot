@@ -40,7 +40,7 @@ export function DocPanel() {
             {(doc.versions || []).slice(-8).reverse().map((v, i) => (
               <div className="card-row" key={i}>
                 <span className="lbl">v{(doc.versions?.length || 0) - i} · {new Date(v.timestamp || v.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
-                <span className="val">{v.speaker || 'System'} · {v.chars ? `+${v.chars} chars` : 'edit'}</span>
+                <span className="val">{v.author || v.speaker || 'System'} · edit</span>
               </div>
             ))}
             {!(doc.versions?.length) && <div className="empty">No version history yet.</div>}
@@ -51,12 +51,21 @@ export function DocPanel() {
       {actors.filter(a => a.enabled).length > 0 && (
         <div className="card">
           <div className="card-title"><h3>Attribution</h3></div>
-          {actors.filter(a => a.enabled).map(a => (
-            <div className="influence-row" key={a.id}>
-              <span style={{ minWidth: 50, color: "var(--fg-dim)" }}>{a.name}</span>
-              <div className="influence-bar"><div style={{ width: '0%', background: a.color }} /></div>
-            </div>
-          ))}
+          {(() => {
+            const lines = doc.lineAttribution || [];
+            return actors.filter(a => a.enabled).map(a => {
+              const actorLines = lines.filter(l => l.author === a.name).length;
+              const pct = lines.length ? Math.round((actorLines / lines.length) * 100) : 0;
+              return (
+                <div className="influence-row" key={a.id}>
+                  <span style={{ minWidth: 50, color: "var(--fg-dim)" }}>{a.name}</span>
+                  <div className="influence-bar"><div style={{ width: `${pct}%`, background: a.color }} /></div>
+                  <span className="influence-pct">{pct}%</span>
+                </div>
+              );
+            });
+          })()}
+          {!(doc.lineAttribution?.length) && <div className="field-hint" style={{ marginTop: 4 }}>Attribution populates as actors edit the document.</div>}
         </div>
       )}
     </div>

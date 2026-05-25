@@ -1,10 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Field, Toggle } from '../shared/FormControls';
 import { useForumState, mutateState } from '../../hooks/useForumState';
 import * as Ic from '../Icons';
 
 export function KnowledgeBasePanel() {
   const kb = useForumState(s => s.knowledgeBase || []);
+  const [fetchingId, setFetchingId] = useState(null);
+  const [fetchError, setFetchError] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -15,7 +17,7 @@ export function KnowledgeBasePanel() {
     return () => { cancelled = true; };
   }, []);
 
-  const persistEntry = async (entry) => {
+  const persistEntry = useCallback(async (entry) => {
     const mod = await import('../../modules/knowledge.js');
     const updated = { ...entry, wordCount: mod.countWords(entry.content || '') };
     await mod.putKbEntry(updated);
@@ -25,7 +27,7 @@ export function KnowledgeBasePanel() {
         ? current.map(e => e.id === updated.id ? updated : e)
         : [...current, updated];
     });
-  };
+  }, []);
 
   const addEntry = async (type) => {
     const mod = await import('../../modules/knowledge.js');
@@ -38,25 +40,34 @@ export function KnowledgeBasePanel() {
     await persistEntry(entry);
   };
 
-  const updateEntry = (entry, patch) => {
+  const updateEntry = useCallback((entry, patch) => {
     persistEntry({ ...entry, ...patch });
-  };
+  }, [persistEntry]);
 
   const deleteEntry = async (id) => {
     const mod = await import('../../modules/knowledge.js');
     await mod.deleteKbEntry(id);
     mutateState(s => { s.knowledgeBase = (s.knowledgeBase || []).filter(e => e.id !== id); });
+    setFetchError(prev => { const n = { ...prev }; delete n[id]; return n; });
   };
 
   const fetchLink = async (entry) => {
     if (!entry.url) return;
-    const mod = await import('../../modules/knowledge.js');
-    const content = await mod.fetchUrlContent(entry.url);
-    await persistEntry({
-      ...entry,
-      content,
-      title: entry.title && entry.title !== 'New link' ? entry.title : entry.url
-    });
+    setFetchingId(entry.id);
+    setFetchError(prev => { const n = { ...prev }; delete n[entry.id]; return n; });
+    try {
+      const mod = await import('../../modules/knowledge.js');
+      const content = await mod.fetchUrlContent(entry.url);
+      await persistEntry({
+        ...entry,
+        content,
+        title: entry.title && entry.title !== 'New link' ? entry.title : entry.url
+      });
+    } catch (err) {
+      setFetchError(prev => ({ ...prev, [entry.id]: err?.message || 'Fetch failed' }));
+    } finally {
+      setFetchingId(null);
+    }
   };
 
   return (
@@ -85,11 +96,26 @@ export function KnowledgeBasePanel() {
               <textarea rows={5} value={entry.content || ''} onChange={(e) => updateEntry(entry, { content: e.target.value })} />
             </Field>
             <div className="btn-row">
-              {entry.type === 'link' ? <button className="btn sm" onClick={() => fetchLink(entry)}>Fetch</button> : null}
+              {entry.type === 'link' && (
+                <button
+                  className="btn sm"
+                  onClick={() => fetchLink(entry)}
+                  disabled={fetchingId === entry.id || !entry.url}
+                  title={!entry.url ? 'Enter a URL first' : 'Fetch page content'}
+                >
+                  {fetchingId === entry.id ? 'Fetching…' : 'Fetch'}
+                </button>
+              )}
               <button className="btn ghost sm" style={{ color: "var(--danger)" }} onClick={() => deleteEntry(entry.id)}>
                 <Ic.Trash width={12} height={12} /> Delete
               </button>
             </div>
+            {fetchError[entry.id] && (
+              <div className="field-hint hint-warn" style={{ marginTop: 4 }}>⚠ {fetchError[entry.id]}</div>
+            )}
+            {fetchingId === entry.id && (
+              <div className="field-hint" style={{ marginTop: 4 }}>Fetching content…</div>
+            )}
           </div>
         ))}
         {!kb.length && <div className="empty">No knowledge base entries. Add documents or links to ground actor responses.</div>}
