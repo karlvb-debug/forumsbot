@@ -1024,7 +1024,13 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   const kbEntries = kind === "actor"
     ? await getKbEntriesForActor(actor.id)
     : await getKbEntriesForDirector();
-  let kbSection = buildKbSection(kbEntries);
+  // Scale KB limits with the model's actual context window.
+  // KB gets up to 25% of the prompt budget; entries split that budget fairly.
+  const kbMaxChars = Math.floor(PROMPT_TOKEN_BUDGET * 0.25) * 4;
+  const kbEntryMaxChars = kbEntries.length > 0
+    ? Math.floor(kbMaxChars / kbEntries.length)
+    : kbMaxChars;
+  let kbSection = buildKbSection(kbEntries, { maxSection: kbMaxChars, maxEntry: kbEntryMaxChars });
 
   // Role reminder appended at the bottom ("lost in the middle" mitigation).
   // Small models pay most attention to start and end of prompt.

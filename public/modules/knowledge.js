@@ -50,22 +50,22 @@ export async function getKbEntriesForDirector() {
 
 // ── Prompt injection ─────────────────────────────────────────────────────────
 
-// Formats KB entries into a prompt section. Caps at ~3 000 chars (~750 tokens).
-// Entries are each individually capped at 1 500 chars so one giant doc can't
-// crowd out the others.
-const KB_SECTION_MAX = 3000;
-const KB_ENTRY_MAX = 1500;
+// Formats KB entries into a prompt section.
+// maxSection and maxEntry are in chars (~4 chars per token).
+// Defaults are conservative fallbacks used when no model context info is available.
+const KB_SECTION_MAX_DEFAULT = 3000;
+const KB_ENTRY_MAX_DEFAULT = 1500;
 
-export function buildKbSection(entries) {
+export function buildKbSection(entries, { maxSection = KB_SECTION_MAX_DEFAULT, maxEntry = KB_ENTRY_MAX_DEFAULT } = {}) {
   if (!entries || !entries.length) return "";
   const parts = entries.map(e => {
-    const content = (e.content || "").slice(0, KB_ENTRY_MAX);
-    const suffix = e.content && e.content.length > KB_ENTRY_MAX ? "\n…[truncated]" : "";
+    const content = (e.content || "").slice(0, maxEntry);
+    const suffix = e.content && e.content.length > maxEntry ? "\n…[truncated]" : "";
     return `### ${e.title || "Untitled"}\n${content}${suffix}`;
   });
   let section = "## Knowledge Base\n" + parts.join("\n\n---\n\n");
-  if (section.length > KB_SECTION_MAX) {
-    section = section.slice(0, KB_SECTION_MAX) + "\n…[knowledge base truncated]";
+  if (section.length > maxSection) {
+    section = section.slice(0, maxSection) + "\n…[knowledge base truncated]";
   }
   return section;
 }
