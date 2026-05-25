@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Field, Toggle } from '../shared/FormControls';
-import { useForumState, mutateState } from '../../hooks/useForumState';
+import { useForumState, mutateState, saveState } from '../../hooks/useForumState';
 import { renderMarkdown } from '../../modules/markdown.js';
 import * as Ic from '../Icons';
 
@@ -153,6 +153,124 @@ function DocEntry({ entry, actors, onUpdate, onDelete }) {
   );
 }
 
+function ImportPrPanel({ onImported }) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState('');
+  const [token, setToken] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const importPr = async () => {
+    if (!url.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const cr = await import('../../modules/codeReview.js');
+      const prData = await cr.importGithubPr(url.trim(), token.trim());
+      const docs = cr.buildCodeReviewDocuments(prData);
+      const setup = cr.buildCodeReviewSetup(prData);
+      const mod = await import('../../modules/knowledge.js');
+      for (const doc of docs) await mod.putKbEntry(doc);
+      mutateState(s => {
+        if (!s.documents) s.documents = [];
+        s.documents = [...s.documents, ...docs];
+        Object.assign(s.scenario, setup.scenario);
+        // Prepend review actors only if no director exists yet
+        if (!s.actors.some(a => a.canDirect && a.enabled)) {
+          s.actors = [...setup.actors, ...s.actors];
+        }
+      });
+      setUrl('');
+      setToken('');
+      setOpen(false);
+      onImported?.();
+    } catch (err) {
+      setError(err?.message || 'Import failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const importFolder = async (e) => {
+    const files = e.target.files;
+    if (!files?.length) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const cr = await import('../../modules/codeReview.js');
+      const docs = await cr.importLocalFiles(Array.from(files));
+      if (!docs.length) { setError('No supported text files found in the selected folder.'); return; }
+      const mod = await import('../../modules/knowledge.js');
+      for (const doc of docs) await mod.putKbEntry(doc);
+      mutateState(s => {
+        if (!s.documents) s.documents = [];
+        s.documents = [...s.documents, ...docs];
+      });
+      onImported?.();
+    } catch (err) {
+      setError(err?.message || 'Folder import failed');
+    } finally {
+      setBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  return (
+    <div className="card">
+      <div className="card-title">
+        <h3><Ic.Search /> Import Code</h3>
+        <button className="btn sm ghost" onClick={() => { setOpen(v => !v); setError(null); }}>
+          {open ? 'Cancel' : 'GitHub PR'}
+        </button>
+        <button className="btn sm ghost" onClick={() => fileInputRef.current?.click()} disabled={busy} title="Import a local folder">
+          {busy ? 'Importing…' : 'Local folder'}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          style={{ display: 'none' }}
+          webkitdirectory="true"
+          multiple
+          onChange={importFolder}
+        />
+      </div>
+
+      {open && (
+        <div className="import-pr-form">
+          <Field label="GitHub PR URL">
+            <input
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              placeholder="https://github.com/owner/repo/pull/123"
+              onKeyDown={e => e.key === 'Enter' && importPr()}
+              disabled={busy}
+            />
+          </Field>
+          <Field label="Token (optional)" hint="For private repos. Never stored.">
+            <input
+              type="password"
+              value={token}
+              onChange={e => setToken(e.target.value)}
+              placeholder="ghp_…"
+              disabled={busy}
+            />
+          </Field>
+          {error && <div className="field-hint hint-warn" style={{ marginBottom: 6 }}>⚠ {error}</div>}
+          <div className="btn-row">
+            <button className="btn primary sm" onClick={importPr} disabled={busy || !url.trim()}>
+              {busy ? 'Fetching PR…' : 'Import PR'}
+            </button>
+          </div>
+          <div className="field-hint" style={{ marginTop: 6 }}>
+            Creates a "PR Overview" working document + diff reference. Sets up a review panel with Security, Architecture, and Test Coverage reviewers.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function DocumentsPanel() {
   const documents = useForumState(s => s.documents || []);
   const actors = useForumState(s => s.actors || []);
@@ -208,6 +326,8 @@ export function DocumentsPanel() {
 
   return (
     <div>
+      <ImportPrPanel />
+
       {/* Working Documents */}
       <div className="card">
         <div className="card-title">

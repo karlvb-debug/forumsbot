@@ -337,12 +337,69 @@ async function serveStatic(req, res) {
   }
 }
 
+async function githubPr(req, res) {
+  try {
+    const { url, token } = await readJson(req);
+    const match = String(url || "").match(/github\.com\/([^/]+)\/([^/?#]+)\/pull\/(\d+)/);
+    if (!match) return sendJson(res, 400, { error: "Not a valid GitHub PR URL. Expected: github.com/owner/repo/pull/N" });
+    const [, owner, repo, number] = match;
+    const base = `https://api.github.com/repos/${owner}/${repo}`;
+    const headers = {
+      accept: "application/vnd.github.v3+json",
+      "user-agent": "Forum/1.0",
+      ...(token ? { authorization: `Bearer ${token}` } : {})
+    };
+    const prRes = await fetch(`${base}/pulls/${number}`, { headers, signal: AbortSignal.timeout(10000) });
+    if (!prRes.ok) {
+      const body = await prRes.text().catch(() => "");
+      const msg = prRes.status === 404
+        ? "PR not found — check the URL, or provide a token for private repos."
+        : prRes.status === 401
+          ? "Unauthorized — provide a valid GitHub token for private repos."
+          : prRes.status === 403
+            ? "Rate limit exceeded or access denied. Provide a GitHub token to increase limits."
+            : `GitHub API error: ${prRes.status}`;
+      return sendJson(res, prRes.status, { error: msg });
+    }
+    const pr = await prRes.json();
+    const filesRes = await fetch(`${base}/pulls/${number}/files?per_page=100`, { headers, signal: AbortSignal.timeout(10000) });
+    const rawFiles = filesRes.ok ? await filesRes.json() : [];
+    const FILE_PATCH_CAP = 4000;
+    let totalDiff = 0;
+    const TOTAL_DIFF_CAP = 40000;
+    const files = rawFiles
+      .filter(f => f.patch) // skip binary files
+      .map(f => {
+        const patch = totalDiff < TOTAL_DIFF_CAP ? f.patch.slice(0, FILE_PATCH_CAP) : "";
+        totalDiff += patch.length;
+        return { filename: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch };
+      })
+      .filter(f => f.patch);
+    return sendJson(res, 200, {
+      title: pr.title,
+      body: pr.body || "",
+      state: pr.state,
+      base: pr.base?.ref,
+      head: pr.head?.ref,
+      additions: pr.additions,
+      deletions: pr.deletions,
+      changed_files: pr.changed_files,
+      user: pr.user?.login,
+      html_url: pr.html_url,
+      files
+    });
+  } catch (err) {
+    return sendJson(res, 502, { error: err?.message || "GitHub PR fetch failed." });
+  }
+}
+
 const server = createServer(async (req, res) => {
   if (req.method === "POST" && req.url === "/api/models") return proxyModels(req, res);
   if (req.method === "POST" && req.url === "/api/model-info") return proxyModelInfo(req, res);
   if (req.method === "POST" && req.url === "/api/chat") return proxyChat(req, res);
   if (req.method === "POST" && req.url === "/api/embeddings") return proxyEmbeddings(req, res);
   if (req.method === "POST" && req.url === "/api/tool-execute") return toolExecute(req, res);
+  if (req.method === "POST" && req.url === "/api/github-pr") return githubPr(req, res);
   if (req.method === "GET" || req.method === "HEAD") return serveStatic(req, res);
   sendJson(res, 405, { error: "Method not allowed." });
 });
