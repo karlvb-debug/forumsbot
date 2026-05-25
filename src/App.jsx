@@ -7,6 +7,7 @@ import { Transcript } from './components/Transcript';
 import { Composer } from './components/Composer';
 import { CommandPalette } from './components/CommandPalette';
 import { StopModal } from './components/StopModal';
+import { ConfirmModal } from './components/ConfirmModal';
 // Importing state.js triggers loadState() at module level
 import './modules/state.js';
 import { setModuleRefs, useActions } from './hooks/useActions.js';
@@ -49,6 +50,7 @@ export default function App() {
 
   const { nextTurn, runRound, startAuto, stopGeneration } = useActions();
   const stopModal = useForumState(s => s.ui?.stopModal || null);
+  const confirmModal = useForumState(s => s.ui?.confirmModal || null);
 
   // Load modules on mount
   useEffect(() => {
@@ -184,6 +186,14 @@ export default function App() {
         onClose={() => setCmdOpen(false)}
         onSelect={handleCommand}
       />
+      {confirmModal && (
+        <ConfirmModal
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          onConfirm={() => import('./modules/session.js').then(m => m.resolveConfirmModal(true))}
+          onCancel={() => import('./modules/session.js').then(m => m.resolveConfirmModal(false))}
+        />
+      )}
       {stopModal && (
         <StopModal
           reason={stopModal.reason}

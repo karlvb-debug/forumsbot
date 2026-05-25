@@ -6,6 +6,7 @@ import { useForumState, mutateState } from '../../hooks/useForumState';
 export function SessionsPanel() {
   const [sessions, setSessions] = useState([]);
   const [exportMode, setExportMode] = useState('debug');
+  const [pendingReset, setPendingReset] = useState(false);
   const presetInputRef = useRef(null);
 
   // Load sessions from IndexedDB on mount
@@ -95,12 +96,15 @@ export function SessionsPanel() {
             await db.clearMessages();
             mutateState(s => { s.messages = []; });
           }}><Ic.Trash width={13} height={13} /> Clear transcript</button>
-          <button className="btn danger" onClick={() => {
-            if (confirm('Reset all state? This cannot be undone.')) {
-              localStorage.clear();
-              window.location.reload();
-            }
-          }}><Ic.Trash width={13} height={13} /> Reset all</button>
+          {pendingReset ? (
+            <span className="confirm-inline">
+              Reset all state?
+              <button className="btn danger sm" onClick={() => { localStorage.clear(); window.location.reload(); }}>Yes, reset</button>
+              <button className="btn sm" onClick={() => setPendingReset(false)}>Cancel</button>
+            </span>
+          ) : (
+            <button className="btn danger" onClick={() => setPendingReset(true)}><Ic.Trash width={13} height={13} /> Reset all</button>
+          )}
         </div>
       </div>
     </div>

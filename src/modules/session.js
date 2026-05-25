@@ -1,6 +1,6 @@
 import { PRESET_VERSION, RECENT_MESSAGE_LIMIT, defaultState } from './constants.js';
 import { state, setState, normalizeState, saveState } from './state.js';
-import { saveState as _saveState } from '../hooks/useForumState.js';
+import { saveState as _saveState, mutateState } from '../hooks/useForumState.js';
 import { setStatus } from './api.js';
 import { clearMessages, clearChunks, putMessages, putChunk, countChunks, getRecentMessages, getAllMessages, getAllChunks, putSession, getAllSessions, deleteSession } from './db.js';
 import { chatCompletion, chatCompletionMessages } from './api.js';
@@ -17,6 +17,21 @@ import {
 } from './utils.js';
 
 export { cleanStoredMessage };
+
+let _confirmResolve = null;
+
+export function resolveConfirmModal(confirmed) {
+  if (_confirmResolve) { _confirmResolve(confirmed); _confirmResolve = null; }
+}
+
+async function requestConfirm(message, confirmLabel = "Confirm") {
+  return new Promise(resolve => {
+    _confirmResolve = resolve;
+    mutateState(s => { s.ui.confirmModal = { message, confirmLabel }; });
+  }).finally(() => {
+    mutateState(s => { s.ui.confirmModal = null; });
+  });
+}
 
 export function savePreset() {
   const preset = {
@@ -252,17 +267,8 @@ export async function resetSession(fullReset = false) {
   setStatus(fullReset ? "Everything reset to defaults." : "Conversation cleared.", "ok");
 }
 
-export async function confirmAndResetSession() {
-  const ok = window.confirm("Clear the conversation, actor memories, summaries, and archived memory? Your setup (actors, scenario, settings) will be kept.");
-  if (!ok) return;
-  await resetSession(false);
-}
-
-export async function confirmAndFullReset() {
-  const ok = window.confirm("Full factory reset: clear EVERYTHING and restore all defaults? This cannot be undone.");
-  if (!ok) return;
-  await resetSession(true);
-}
+export async function confirmAndResetSession() {}
+export async function confirmAndFullReset() {}
 
 export function loadPresetFile(file) {
   const reader = new FileReader();
@@ -356,52 +362,7 @@ export function addManager() {
 }
 
 export async function generateActorFromDescription() {
-  if (!state.settings.model) {
-    setStatus("Choose or type a model first.", "warn");
-    return;
-  }
-  const description = window.prompt("Describe the actor you want (one line):", "");
-  if (!description?.trim()) return;
-
-  setStatus("Generating actor…", "ok");
-  const system = [
-    "You generate a single forum actor configuration from a one-line description.",
-    "Return ONLY valid JSON with this exact shape (no markdown, no commentary):",
-    '{"name":"","role":"","persona":"","goal":"","voice":""}'
-  ].join("\n");
-  const user = [
-    `Description: ${description.trim()}`,
-    `Forum scenario: ${state.scenario.title || "general discussion"}`,
-    "Keep each field concise (1-2 sentences). Make name creative and specific to the context."
-  ].join("\n");
-
-  try {
-    const raw = await chatCompletion(system, user, { temperature: 0.8, maxTokens: 400 });
-    const cleaned = sanitizeJsonString(stripCodeFence(raw));
-    const parsed = JSON.parse(cleaned);
-    if (!parsed?.name) throw new Error("Invalid actor JSON returned.");
-    const index = state.actors.length;
-    state.actors.push({
-      id: crypto.randomUUID(),
-      name: String(parsed.name || `Actor ${index + 1}`).slice(0, 50),
-      role: String(parsed.role || "Participant").slice(0, 80),
-      persona: String(parsed.persona || "").slice(0, 400),
-      goal: String(parsed.goal || "").slice(0, 200),
-      voice: String(parsed.voice || "").slice(0, 200),
-      thoughts: "",
-      enabled: true,
-      expanded: true,
-      canDirect: false,
-      canManageCast: false,
-      canResearch: false,
-      canSeeThoughts: false,
-      color: colors[index % colors.length]
-    });
-    saveState();
-    setStatus(`Actor "${parsed.name}" created.`, "ok");
-  } catch (err) {
-    setStatus(`Actor generation failed: ${err.message}`, "error");
-  }
+  // Actor generation is handled directly in ActorsPanel via its own description input.
 }
 
 export async function generateQuickStart(promptOverride = "") {
@@ -410,13 +371,11 @@ export async function generateQuickStart(promptOverride = "") {
     openAiAssistantPanel();
     return;
   }
-  const input = document.getElementById("aiAssistantInput");
-  const prompt = (promptOverride || input?.value || state.ui.quickStartPrompt || "").trim();
+  const prompt = (promptOverride || state.ui.quickStartPrompt || "").trim();
   if (!prompt) {
     setQuickStartStatus("Type a request first.");
     return;
   }
-  if (input) input.value = "";
   state.ui.quickStartPrompt = "";
 
   setQuickStartBusy(true);
@@ -677,8 +636,6 @@ export function discardQuickStartConfig() {
   state.ui.quickStartDraft = null;
   state.ui.quickStartHistory = [];
   state.ui.quickStartPrompt = "";
-  const input = document.getElementById("aiAssistantInput");
-  if (input) input.value = "";
   state.ui.quickStartStatus = "";
   saveState();
   renderQuickStartChat();
@@ -845,8 +802,9 @@ export async function forkSessionAtMessage(messageId) {
   const idx = state.messages.findIndex(m => m.id === messageId);
   if (idx < 0) return;
 
-  const confirmed = window.confirm(
-    `Fork conversation from message ${idx + 1} of ${state.messages.length}?\n\nHistory up to this point will be kept. Future turns will diverge into a new branch.`
+  const confirmed = await requestConfirm(
+    `Fork from message ${idx + 1} of ${state.messages.length}? History up to this point will be kept and future turns will diverge into a new branch.`,
+    "Fork"
   );
   if (!confirmed) return;
 

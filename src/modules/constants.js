@@ -106,6 +106,7 @@ export const defaultState = {
     quickStartHistory: [],
     quickStartTemperature: 0.8,
     stopModal: null,            // { reason, suggestedGoal } — set by promptStopOrContinue
+    confirmModal: null,         // { message, confirmLabel } — set by requestConfirm()
     embeddingProbeResult: null, // { ok, reason? } — set by pingConnection embedding probe
     currentSpeaker: ""          // name of actor currently generating
   },
