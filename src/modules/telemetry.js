@@ -315,7 +315,7 @@ export function startConfluenceRiverAnimation(canvas) {
     ctx.clearRect(0, 0, w, h);
 
     // Compute contribution shares for enabled actors + Director
-    const lines = state.document.lineAttribution || [];
+    const lines = (state.documents || []).filter(d => d.aiEditable).flatMap(d => d.lineAttribution || []);
     if (!lines.length) {
       // Draw empty placeholder text
       ctx.fillStyle = 'rgba(255,255,255,0.2)';

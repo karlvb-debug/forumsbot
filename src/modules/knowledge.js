@@ -1,51 +1,79 @@
 import { state } from './state.js';
 import { db, storageAvailable, idbRequest, idbDone } from './db.js';
 import { KB_STORE } from './constants.js';
+import { normalizeDocumentEntry } from './state.js';
 
 // ── CRUD ────────────────────────────────────────────────────────────────────
 
-export async function getAllKbEntries() {
-  if (!storageAvailable || !db) return state.knowledgeBase || [];
+// Sync KB_STORE → state.documents on load. Called once from DocumentsPanel on mount.
+export async function syncIdbToDocuments() {
+  if (!storageAvailable || !db) return;
   const tx = db.transaction(KB_STORE, "readonly");
-  const result = await idbRequest(tx.objectStore(KB_STORE).getAll());
-  return result.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  const idbEntries = await idbRequest(tx.objectStore(KB_STORE).getAll());
+  for (const idbEntry of idbEntries) {
+    const exists = (state.documents || []).some(d => d.id === idbEntry.id);
+    if (!exists) {
+      if (!state.documents) state.documents = [];
+      state.documents.push(normalizeDocumentEntry(idbEntry));
+    }
+  }
+}
+
+export async function getAllKbEntries() {
+  return (state.documents || []).slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 }
 
 export async function putKbEntry(entry) {
-  if (!storageAvailable || !db) {
-    if (!state.knowledgeBase) state.knowledgeBase = [];
-    state.knowledgeBase = state.knowledgeBase.filter(e => e.id !== entry.id);
-    state.knowledgeBase.push(entry);
-    return;
+  if (!state.documents) state.documents = [];
+  const idx = state.documents.findIndex(e => e.id === entry.id);
+  if (idx >= 0) {
+    state.documents[idx] = normalizeDocumentEntry(entry);
+  } else {
+    state.documents.push(normalizeDocumentEntry(entry));
   }
-  const tx = db.transaction(KB_STORE, "readwrite");
-  tx.objectStore(KB_STORE).put(entry);
-  await idbDone(tx);
+  if (storageAvailable && db) {
+    const tx = db.transaction(KB_STORE, "readwrite");
+    tx.objectStore(KB_STORE).put(entry);
+    await idbDone(tx);
+  }
 }
 
 export async function deleteKbEntry(id) {
-  if (!storageAvailable || !db) {
-    state.knowledgeBase = (state.knowledgeBase || []).filter(e => e.id !== id);
-    return;
+  state.documents = (state.documents || []).filter(e => e.id !== id);
+  if (storageAvailable && db) {
+    const tx = db.transaction(KB_STORE, "readwrite");
+    tx.objectStore(KB_STORE).delete(id);
+    await idbDone(tx);
   }
-  const tx = db.transaction(KB_STORE, "readwrite");
-  tx.objectStore(KB_STORE).delete(id);
-  await idbDone(tx);
 }
 
 // ── Query helpers ────────────────────────────────────────────────────────────
 
+function matchesActor(entry, actorId) {
+  return entry.enabled !== false &&
+    (entry.target === "all" || (Array.isArray(entry.target) && entry.target.includes(actorId)));
+}
+
 export async function getKbEntriesForActor(actorId) {
-  const all = await getAllKbEntries();
-  return all.filter(e =>
-    e.enabled !== false &&
-    (e.target === "all" || (Array.isArray(e.target) && e.target.includes(actorId)))
-  );
+  return (state.documents || []).filter(e => matchesActor(e, actorId));
 }
 
 export async function getKbEntriesForDirector() {
-  const all = await getAllKbEntries();
-  return all.filter(e => e.enabled !== false && e.target === "all");
+  return (state.documents || []).filter(e => e.enabled !== false && e.target === "all");
+}
+
+// Split documents into editable (aiEditable=true) and reference (aiEditable=false) sets
+// filtered to what the given actorId can see.
+export function splitDocuments(actorId) {
+  const all = (state.documents || []).filter(e => matchesActor(e, actorId));
+  return {
+    editable: all.filter(e => e.aiEditable),
+    reference: all.filter(e => !e.aiEditable),
+  };
+}
+
+export function getDocumentsForActor(actorId) {
+  return (state.documents || []).filter(e => matchesActor(e, actorId));
 }
 
 // ── Prompt injection ─────────────────────────────────────────────────────────
@@ -85,6 +113,31 @@ function allocateChars(needs, budget) {
   return alloc;
 }
 
+// Builds a line-numbered editable document block for actor prompts.
+// Each document shows full content with 1-based line numbers.
+export function buildEditableDocSection(docs) {
+  if (!docs || !docs.length) return "";
+  const parts = docs.map(doc => {
+    const lines = (doc.content || "").split("\n");
+    const numbered = lines.map((l, i) => `${String(i + 1).padStart(3)} | ${l}`).join("\n");
+    return `#### ${doc.title || "Untitled"}  [id: ${doc.id}]\n${numbered || "(Empty document — start drafting.)"}`;
+  });
+  const editInstructions = [
+    `To edit: add "documentEdits": [{"documentId":"<id>","op":"append|replace|full","content":"...","startLine":N,"endLine":M}]`,
+    `For "replace": startLine/endLine refer to the numbers shown above. For "append": content is added after existing text. For "full": replaces entire content.`,
+    `Omit documentEdits entirely if you have no changes.`
+  ].join("\n");
+  return "### Working Documents\n\n" + parts.join("\n\n") + "\n\n" + editInstructions;
+}
+
+// Builds a read-only reference section (25% budget, water-fill allocation).
+export function buildReferenceSection(docs, { maxSection = KB_SECTION_MAX_DEFAULT } = {}) {
+  if (!docs || !docs.length) return "";
+  const labeled = docs.map(e => ({ ...e, title: `${e.title || "Untitled"} [read-only]` }));
+  const raw = buildKbSection(labeled, { maxSection });
+  return raw.replace("## Knowledge Base", "## Reference Documents");
+}
+
 export function buildKbSection(entries, { maxSection = KB_SECTION_MAX_DEFAULT } = {}) {
   if (!entries || !entries.length) return "";
   // Estimate overhead: header + separators + titles
@@ -121,16 +174,27 @@ export async function fetchUrlContent(url) {
 // ── Entry factory ────────────────────────────────────────────────────────────
 
 export function newKbEntry(overrides = {}) {
+  return newDocument({ aiEditable: false, ...overrides });
+}
+
+export function newDocument(overrides = {}) {
+  const now = new Date().toISOString();
   return {
     id: crypto.randomUUID(),
     title: "",
-    type: "document",   // "document" | "link"
+    type: "document",
     content: "",
     url: "",
-    target: "all",      // "all" | string[] of actor IDs
+    target: "all",
     enabled: true,
-    createdAt: new Date().toISOString(),
+    createdAt: now,
+    updatedAt: now,
     wordCount: 0,
+    aiEditable: false,
+    versions: [],
+    maxVersions: 20,
+    lineAttribution: [],
+    showAttribution: false,
     ...overrides
   };
 }

@@ -1,6 +1,28 @@
 import { STORAGE_KEY, VALID_TABS, defaultState, colors } from './constants.js';
 import { normalizeQuickStartConfig, cleanStoredMessage, normalizeStringArray } from './utils.js';
 
+function normalizeDocumentEntry(e) {
+  return {
+    id: e.id || crypto.randomUUID(),
+    title: e.title || "Untitled",
+    type: e.type === "link" ? "link" : "document",
+    content: e.content || "",
+    url: e.url || "",
+    target: (e.target === "all" || Array.isArray(e.target)) ? e.target : "all",
+    enabled: e.enabled !== false,
+    createdAt: e.createdAt || new Date().toISOString(),
+    updatedAt: e.updatedAt || e.createdAt || new Date().toISOString(),
+    wordCount: e.wordCount || 0,
+    aiEditable: e.aiEditable === true,
+    versions: Array.isArray(e.versions) ? e.versions : [],
+    maxVersions: typeof e.maxVersions === "number" ? e.maxVersions : 20,
+    lineAttribution: Array.isArray(e.lineAttribution) ? e.lineAttribution : [],
+    showAttribution: !!e.showAttribution,
+  };
+}
+
+export { normalizeDocumentEntry };
+
 function normalizeState(value) {
   const merged = {
     ...structuredClone(defaultState),
@@ -12,15 +34,48 @@ function normalizeState(value) {
     diagnostics: { ...defaultState.diagnostics, ...value.diagnostics },
     outcomes: { ...defaultState.outcomes, ...value.outcomes },
     autoStop: { ...defaultState.autoStop, ...value.autoStop },
-    document: { ...defaultState.document, ...value.document },
     scenario: { ...defaultState.scenario, ...value.scenario },
     dm: { ...defaultState.dm, ...value.dm },
     actors: Array.isArray(value.actors) && value.actors.length ? value.actors : structuredClone(defaultState.actors),
     messages: Array.isArray(value.messages) ? value.messages.map(cleanStoredMessage) : [],
     turnQueue: Array.isArray(value.turnQueue) ? value.turnQueue : []
   };
-  if (!Array.isArray(merged.document.versions)) merged.document.versions = [];
-  if (!Array.isArray(merged.document.lineAttribution)) merged.document.lineAttribution = [];
+
+  // Migrate old document + knowledgeBase → unified documents[]
+  if (!Array.isArray(value.documents)) {
+    const docs = [];
+    // Old KB entries → read-only reference documents
+    for (const e of (Array.isArray(value.knowledgeBase) ? value.knowledgeBase : [])) {
+      docs.push(normalizeDocumentEntry({ ...e, aiEditable: false }));
+    }
+    // Old single editable document → first editable document
+    const d = value.document;
+    if (d && (d.content || d.title || d.enabled)) {
+      docs.unshift(normalizeDocumentEntry({
+        id: crypto.randomUUID(),
+        title: d.title || "Shared Document",
+        type: "document",
+        content: d.content || "",
+        url: "",
+        target: "all",
+        enabled: d.enabled !== false,
+        aiEditable: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        wordCount: (d.content || "").trim().split(/\s+/).filter(Boolean).length,
+        versions: d.versions || [],
+        maxVersions: d.maxVersions || 20,
+        lineAttribution: d.lineAttribution || [],
+        showAttribution: d.showAttribution || false,
+      }));
+    }
+    merged.documents = docs;
+  } else {
+    merged.documents = value.documents.map(normalizeDocumentEntry);
+  }
+  delete merged.document;
+  delete merged.knowledgeBase;
+
   if (!Array.isArray(merged.telemetry.alignmentHistory)) merged.telemetry.alignmentHistory = [];
   if (!Array.isArray(merged.diagnostics.transitions)) merged.diagnostics.transitions = [];
   if (!Array.isArray(merged.diagnostics.warnings)) merged.diagnostics.warnings = [];
@@ -29,7 +84,6 @@ function normalizeState(value) {
   if (!Array.isArray(merged.diagnostics.parseFailures)) merged.diagnostics.parseFailures = [];
   if (!Array.isArray(merged.diagnostics.outcomeExtractionLog)) merged.diagnostics.outcomeExtractionLog = [];
   if (!Array.isArray(merged.anchors)) merged.anchors = [];
-  if (!Array.isArray(merged.knowledgeBase)) merged.knowledgeBase = [];
 
   merged.memory.isSummarizing = false;
   if (!value.settings?.baseUrl || value.settings.baseUrl === "http://localhost:1234/v1") {
@@ -90,12 +144,6 @@ function normalizeState(value) {
   if (merged.autoStop.enabled && !String(merged.autoStop.goal || "").trim()) {
     merged.autoStop.goal = String(merged.scenario.objective || "").trim();
   }
-  // Auto-populate document title from scenario title when blank
-  if (!String(merged.document?.title || "").trim() && merged.scenario?.title) {
-    if (!merged.document) merged.document = {};
-    merged.document.title = merged.scenario.title;
-  }
-
   // ── DM → Actor migration ──
   // If old state has a `dm` object, convert it into an actor with permissions
   if (merged.dm && typeof merged.dm === "object" && merged.dm.name) {
@@ -144,7 +192,6 @@ function normalizeState(value) {
     canResearch: !!(actor.canResearch || actor.isResearcher),
     canSeeThoughts: !!(actor.canSeeThoughts)
   }));
-  merged.ui.viewingVersionIndex = merged.document.versions.length;
   return merged;
 }
 

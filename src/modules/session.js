@@ -140,7 +140,7 @@ export async function exportSession(mode = 'debug') {
         goal: state.autoStop.goal,
         roundsRun: state.autoStop.roundsRun
       },
-      sessionMetrics: calculateSessionMetrics(messages, state.document.lineAttribution),
+      sessionMetrics: calculateSessionMetrics(messages, (state.documents || []).filter(d => d.aiEditable).flatMap(d => d.lineAttribution || [])),
       telemetry: {
         currentAlignmentScore: state.telemetry?.currentAlignmentScore,
         alignmentHistory: state.telemetry?.alignmentHistory
@@ -413,7 +413,7 @@ export async function generateQuickStart(promptOverride = "") {
       enableAdaptiveCompression: state.settings.enableAdaptiveCompression !== false,
       turnDelay: state.settings.turnDelay ?? 0,
     },
-    document: { enabled: !!state.document?.enabled, title: state.document?.title || "" },
+    documents: (state.documents || []).map(d => ({ id: d.id, title: d.title, aiEditable: d.aiEditable, enabled: d.enabled })),
     autoStop: { enabled: state.autoStop.enabled, goal: state.autoStop.goal, goalCheckEnabled: state.autoStop.goalCheckEnabled, stopOnAllSkip: state.autoStop.stopOnAllSkip, maxRoundsEnabled: state.autoStop.maxRoundsEnabled, maxRounds: state.autoStop.maxRounds },
     memory: {
       pinnedFacts: Array.isArray(state.memory.pinnedFacts) ? state.memory.pinnedFacts : [],
@@ -763,10 +763,6 @@ export async function applyQuickStartConfig() {
     if (typeof ns.enableAdaptiveCompression === "boolean") state.settings.enableAdaptiveCompression = ns.enableAdaptiveCompression;
     if (typeof ns.enableCrossSessionMemory === "boolean") state.settings.enableCrossSessionMemory = ns.enableCrossSessionMemory;
   }
-  if (normalized.document) {
-    if (typeof normalized.document.enabled === "boolean") state.document.enabled = normalized.document.enabled;
-    if (normalized.document.title) state.document.title = normalized.document.title;
-  }
   if (normalized.autoStop) {
     const nas = normalized.autoStop;
     if (typeof nas.enabled === "boolean") state.autoStop.enabled = nas.enabled;
@@ -907,11 +903,6 @@ export function applyAssistantPatch(changes) {
   // Auto-stop (partial)
   if (c.autoStop && typeof c.autoStop === "object") {
     Object.assign(state.autoStop, c.autoStop);
-  }
-
-  // Document (partial)
-  if (c.document && typeof c.document === "object") {
-    Object.assign(state.document, c.document);
   }
 
   saveState();

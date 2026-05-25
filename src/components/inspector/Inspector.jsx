@@ -6,9 +6,8 @@ import { ActorsPanel } from './ActorsPanel';
 import { MemoryPanel } from './MemoryPanel';
 import { TelemetryPanel } from './TelemetryPanel';
 import { GoalPanel } from './GoalPanel';
-import { DocPanel } from './DocPanel';
 import { SessionsPanel } from './SessionsPanel';
-import { KnowledgeBasePanel } from './KnowledgeBasePanel';
+import { DocumentsPanel } from './DocumentsPanel';
 
 const PANELS = {
   connection: ConnectionPanel,
@@ -17,9 +16,8 @@ const PANELS = {
   memory: MemoryPanel,
   telemetry: TelemetryPanel,
   goal: GoalPanel,
-  doc: DocPanel,
   sessions: SessionsPanel,
-  kb: KnowledgeBasePanel,
+  documents: DocumentsPanel,
 };
 
 export function Inspector({ active, meta, nav }) {

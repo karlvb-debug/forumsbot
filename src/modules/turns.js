@@ -9,7 +9,7 @@ import { summarizeMemory, recallRelevantChunks, formatCurrentOutcomes, parseOutc
 import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, checkDrift } from './utils.js';
 import { alignLineAttributions, calculateTurnMetrics, updateSemanticAlignment, calculateToolUsefulness, calculateInfluenceBudget } from './telemetry.js';
 import { preflightSkipCheck } from './preflight.js';
-import { getKbEntriesForActor, getKbEntriesForDirector, buildKbSection } from './knowledge.js';
+import { getKbEntriesForDirector, splitDocuments, buildEditableDocSection, buildReferenceSection, buildKbSection } from './knowledge.js';
 
 function labelForMode(mode) {
   return { problem: 'Problem', story: 'Story', freeform: 'Freeform' }[mode] || mode;
@@ -652,23 +652,27 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
       (!showThoughts)
         ? "IMPORTANT: Private thoughts display is disabled. You MUST keep your JSON \"thought\" field empty (\"\") to save tokens and minimize latency."
         : "IMPORTANT: Private thoughts display is enabled. You can record private thoughts before outputting your direction.",
-      state.document.enabled
-        ? (showThoughts
-            ? "Return only valid JSON: {\"thought\":\"private note\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\",\"nextSpeaker\":\"(optional) name of next actor to speak\",\"anchor\":\"(optional) settled agreement to propose as anchor, max 20 words\"}."
-            : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\",\"nextSpeaker\":\"(optional) name of next actor to speak\",\"anchor\":\"(optional) settled agreement to propose as anchor, max 20 words\"}.")
-        : (showThoughts
-            ? "Return only valid JSON: {\"thought\":\"private director note\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\",\"nextSpeaker\":\"(optional) name of next actor to speak\",\"anchor\":\"(optional) settled agreement to propose as anchor, max 20 words\"}."
-            : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\",\"nextSpeaker\":\"(optional) name of next actor to speak\",\"anchor\":\"(optional) settled agreement to propose as anchor, max 20 words\"}."),
+      (() => {
+        const hasEditable = (state.documents || []).some(d => d.aiEditable && d.enabled && (d.target === 'all' || (Array.isArray(d.target) && d.target.includes(actor.id))));
+        return hasEditable
+          ? (showThoughts
+              ? "Return only valid JSON: {\"thought\":\"private note\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdits\":[{\"documentId\":\"<id>\",\"op\":\"append|replace|full\",\"content\":\"...\"}],\"nextSpeaker\":\"(optional)\",\"anchor\":\"(optional) settled agreement, max 20 words\"}."
+              : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdits\":[{\"documentId\":\"<id>\",\"op\":\"append|replace|full\",\"content\":\"...\"}],\"nextSpeaker\":\"(optional)\",\"anchor\":\"(optional) settled agreement, max 20 words\"}.")
+          : (showThoughts
+              ? "Return only valid JSON: {\"thought\":\"private director note\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\",\"nextSpeaker\":\"(optional) name of next actor to speak\",\"anchor\":\"(optional) settled agreement to propose as anchor, max 20 words\"}."
+              : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\",\"nextSpeaker\":\"(optional) name of next actor to speak\",\"anchor\":\"(optional) settled agreement to propose as anchor, max 20 words\"}.");
+      })(),
       "The JSON is transport only. Put natural public dialogue only inside message; do not make message itself JSON.",
-      state.document.enabled
-        ? [
-            "SHARED DOCUMENT: As director, you can edit the shared document via the \"documentEdit\" field.",
-            "Write your new content directly — it is appended automatically.",
-            "To fix specific text, use: {\"documentEdit\": \"[REPLACE: old text] new text\"}",
-            "Write ONLY actual content, not instructions or operation names.",
-            "CRITICAL: Do NOT output the entire document in documentEdit to just append something, as that will duplicate it. To overwrite the whole document, start with [FULL]. Otherwise, output only the new line/content, or use [REPLACE: old text] new text."
-          ].join("\n")
-        : "",
+      (() => {
+        const hasEditable = (state.documents || []).some(d => d.aiEditable && d.enabled && (d.target === 'all' || (Array.isArray(d.target) && d.target.includes(actor.id))));
+        return hasEditable
+          ? [
+              "DOCUMENT EDITS: Working Documents are shown in your context. Include a \"documentEdits\" array to propose edits.",
+              "Each edit: {\"documentId\": \"<id from header>\", \"op\": \"append|replace|full\", \"content\": \"your text\"}",
+              "For op=\"replace\" also include \"startLine\" and \"endLine\" (1-based). Omit documentEdits if no changes."
+            ].join("\n")
+          : "";
+      })(),
       (!isStoryMode && state.settings.toolsEnabled)
         ? (() => {
             const lastUserMsg = [...state.messages].reverse().find((m) => m.type === "user");
@@ -760,13 +764,16 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
       (!showThoughts)
         ? "IMPORTANT: Private thoughts display is disabled. You MUST keep your JSON \"thought\" field empty (\"\") or containing only a tool tag to save token throughput and minimize latency."
         : "IMPORTANT: Private thoughts display is enabled. You can reason privately in your thought field before formulating your response.",
-      state.document.enabled
-        ? (showThoughts
-            ? "Return only valid JSON: {\"thought\":\"private reasoning with tool tag\",\"action\":\"speak or skip\",\"message\":\"public research brief with citations\",\"documentEdit\":\"(optional) text to edit/add to the document\"}."
-            : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public research brief with citations\",\"documentEdit\":\"(optional) text to edit/add to the document\"}.")
-        : (showThoughts
-            ? "Return only valid JSON with this exact shape: {\"thought\":\"private reasoning with tool tag\",\"action\":\"speak or skip\",\"message\":\"public research brief with citations, empty if skipping\"}."
-            : "Return only valid JSON with this exact shape: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public research brief with citations, empty if skipping\"}."),
+      (() => {
+        const hasEditable = (state.documents || []).some(d => d.aiEditable && d.enabled && (d.target === 'all' || (Array.isArray(d.target) && d.target.includes(actor.id))));
+        return hasEditable
+          ? (showThoughts
+              ? "Return only valid JSON: {\"thought\":\"private reasoning with tool tag\",\"action\":\"speak or skip\",\"message\":\"public research brief with citations\",\"documentEdits\":[{\"documentId\":\"<id>\",\"op\":\"append|replace|full\",\"content\":\"...\"}]}."
+              : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public research brief with citations\",\"documentEdits\":[{\"documentId\":\"<id>\",\"op\":\"append|replace|full\",\"content\":\"...\"}]}.")
+          : (showThoughts
+              ? "Return only valid JSON with this exact shape: {\"thought\":\"private reasoning with tool tag\",\"action\":\"speak or skip\",\"message\":\"public research brief with citations, empty if skipping\"}."
+              : "Return only valid JSON with this exact shape: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public research brief with citations, empty if skipping\"}.");
+      })(),
       "The JSON is transport only. Put natural public dialogue/briefs only inside message; do not make message itself JSON."
     ].filter(Boolean).join("\n");
 
@@ -826,33 +833,32 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
           : (showThoughts
               ? "Return only valid JSON: {\"thought\":\"your PRIVATE reasoning (not shown to others)\",\"message\":\"*actions in asterisks* plus \\\"spoken dialogue in quotes\\\"\"}"
               : "Return only valid JSON: {\"thought\":\"\",\"message\":\"*actions in asterisks* plus \\\"spoken dialogue in quotes\\\"\"}"))
-      : state.document.enabled
-        ? (skipAllowed
-            ? (showThoughts
-                ? "Return only valid JSON: {\"thought\":\"private reasoning\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\"}."
-                : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\"}.")
-            : (showThoughts
-                ? "Return only valid JSON: {\"thought\":\"private reasoning\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\"}."
-                : "Return only valid JSON: {\"thought\":\"\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\"}."))
-        : (skipAllowed
+      : (editableDocsSection
+          ? (skipAllowed
+              ? (showThoughts
+                  ? "Return only valid JSON: {\"thought\":\"private reasoning\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdits\":[{\"documentId\":\"<id>\",\"op\":\"append|replace|full\",\"content\":\"...\",\"startLine\":N,\"endLine\":M}]}. Omit documentEdits if no changes."
+                  : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdits\":[{\"documentId\":\"<id>\",\"op\":\"append|replace|full\",\"content\":\"...\"}]}. Omit documentEdits if no changes.")
+              : (showThoughts
+                  ? "Return only valid JSON: {\"thought\":\"private reasoning\",\"message\":\"public message\",\"documentEdits\":[{\"documentId\":\"<id>\",\"op\":\"append|replace|full\",\"content\":\"...\",\"startLine\":N,\"endLine\":M}]}. Omit documentEdits if no changes."
+                  : "Return only valid JSON: {\"thought\":\"\",\"message\":\"public message\",\"documentEdits\":[{\"documentId\":\"<id>\",\"op\":\"append|replace|full\",\"content\":\"...\"}]}. Omit documentEdits if no changes."))
+          : (skipAllowed
             ? (showThoughts
                 ? "Return only valid JSON with this exact shape: {\"thought\":\"private reasoning for your memory\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\"}."
                 : "Return only valid JSON with this exact shape: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\"}.")
             : (showThoughts
                 ? "Return only valid JSON with this exact shape: {\"thought\":\"private reasoning for your memory\",\"message\":\"your public message\"}."
-                : "Return only valid JSON with this exact shape: {\"thought\":\"\",\"message\":\"your public message\"}.")),
+                : "Return only valid JSON with this exact shape: {\"thought\":\"\",\"message\":\"your public message\"}."))),
     isStoryMode
       ? "The JSON is transport only. Your message is rendered as Markdown. Use *italics* (single asterisks) for physical actions and stage directions, **bold** for dramatic emphasis on a word or phrase. Do NOT use headings, tables, bullet lists, or code blocks — you are speaking in character, not writing a document."
       : "The JSON is transport only. Your message field is rendered as Markdown in the UI — use formatting to make your output clear and readable: **bold** for emphasis, _italic_ for nuance, `inline code` for terms/values, ```language\\n...``` fenced blocks for multi-line code or data, ## headings to structure long responses, - bullet lists or 1. numbered lists for steps or options, > blockquotes to highlight key points, and | col | col | tables for comparisons. Use formatting purposefully — short conversational replies need no decoration. No LaTeX notation (write 'leads to' not '\\rightarrow').",
-    state.document.enabled
+    editableDocsSection
       ? [
-          "SHARED DOCUMENT: The group is collaborating on a shared document. The current content is shown in your context.",
-          "To add content, include a \"documentEdit\" field with your new text. It will be appended to the end automatically.",
-          "Example: {\"documentEdit\": \"## Key Findings\\n- Finding one\\n- Finding two\"}",
-          "To fix a specific part, use: {\"documentEdit\": \"[REPLACE: old text here] new text here\"}",
-          "Write ONLY your actual content in documentEdit — do not write instructions or operation names, just the text itself.",
-          "CRITICAL: Do NOT output the entire document in documentEdit to just append something, as that will duplicate it. To overwrite the whole document, start with [FULL]. Otherwise, output only the new line/content, or use [REPLACE: old text] new text.",
-          "Omit documentEdit entirely if you have no changes to propose."
+          "DOCUMENT EDITS: You can propose edits to Working Documents shown above. Include a \"documentEdits\" array in your JSON.",
+          "Each edit: {\"documentId\": \"<id from header>\", \"op\": \"append|replace|full\", \"content\": \"your text here\"}",
+          "For op=\"replace\" also provide \"startLine\" and \"endLine\" (1-based, referring to the line numbers shown above).",
+          "For op=\"append\": content is added after the last line. For op=\"full\": replaces the entire document.",
+          "Example: {\"documentEdits\":[{\"documentId\":\"doc-abc123\",\"op\":\"append\",\"content\":\"## New Section\\n- item one\"}]}",
+          "Omit documentEdits entirely if you have no changes to propose."
         ].join("\n")
       : "",
     (!isStoryMode && state.settings.toolsEnabled)
@@ -942,15 +948,20 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
     }
   }
 
-  // Knowledge base entries assigned to this actor (or all actors).
-  // Stored as a let so graceful degradation can drop it under budget pressure.
-  const kbEntries = kind === "actor"
-    ? await getKbEntriesForActor(actor.id)
-    : await getKbEntriesForDirector();
-  // KB gets up to 25% of the prompt budget, scaled to the model's actual context window.
-  // Allocation across entries is handled internally by buildKbSection (water-fill).
+  // Documents: split into editable (per-turn fresh injection) and reference (snapshot-safe).
   const kbMaxChars = Math.floor(PROMPT_TOKEN_BUDGET * 0.25) * 4;
-  let kbSection = buildKbSection(kbEntries, { maxSection: kbMaxChars });
+  let editableDocsSection = "";
+  let kbSection = "";
+  if (kind === "actor") {
+    const { editable, reference } = splitDocuments(actor.id);
+    // Editable docs: injected fresh each turn (not from round snapshot) so line numbers are current.
+    editableDocsSection = buildEditableDocSection(editable);
+    kbSection = buildReferenceSection(reference, { maxSection: kbMaxChars });
+  } else {
+    // Director sees all reference docs only
+    const directorEntries = await getKbEntriesForDirector();
+    kbSection = buildKbSection(directorEntries, { maxSection: kbMaxChars });
+  }
 
   // Role reminder appended at the bottom ("lost in the middle" mitigation).
   // Small models pay most attention to start and end of prompt.
@@ -996,9 +1007,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   const buildSections = (chunks, msgs, memOverride = null) => [
     scenarioBlock(),
     state.memory.enabled ? memoryBlock(chunks) : "",
-    state.document.enabled
-      ? `### Shared Document: "${state.document.title}"\n---\n${state.document.content || "(Empty — start drafting.)" }\n---`
-      : "",
+    editableDocsSection,
     crossSessionBlock,
     kbSection,
     memOverride || participantMemory,
@@ -1196,16 +1205,19 @@ export async function applyAiResult(participant, result) {
     action: result.action,
     thoughtLen: result.thought?.length || 0,
     toolCalls: result.toolCalls?.length || 0,
-    docEdit: result.documentEdit ? result.documentEdit.length : 0,
+    docEdits: Array.isArray(result.documentEdits) ? result.documentEdits.length : 0,
     messagePreview: result.message?.slice(0, 80)
   });
 
-  // Apply document edit if present
   const speakerName = participant.data.name;
-  if (result.documentEdit && state.document.enabled) {
-    applyDocumentEdit(speakerName, result.documentEdit);
+  // Apply document edits (new protocol)
+  if (Array.isArray(result.documentEdits) && result.documentEdits.length) {
+    applyDocumentEdits(result.documentEdits, speakerName);
+  } else if (result.documentEdit) {
+    // Stale prompt: old single-field protocol — silently ignore
+    console.warn(`[document] ${speakerName} used legacy documentEdit field — ignoring. Update actor prompt.`);
   }
-  const docEdited = !!(result.documentEdit && state.document.enabled);
+  const docEdited = !!(Array.isArray(result.documentEdits) && result.documentEdits.length);
 
   const actor = participant.data;
   actor.thoughts = appendMemory(actor.thoughts, result.thought);
@@ -1271,175 +1283,46 @@ export async function applyAiResult(participant, result) {
   return addMessage({ type: msgType, actorId: actor.id, speaker: actor.name, content: result.message, thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, metrics: result.metrics, nextSpeaker: result.nextSpeaker || "" });
 }
 
-function applyDocumentEdit(author, editText) {
-  // Guard: reject bare operation keywords with no content
-  const bareKeyword = /^(append|replace|full|edit|update|insert|add|write|none|n\/a|null|undefined|\{\}|\[\])$/i;
-  if (bareKeyword.test(editText.trim())) {
-    console.warn(`[document] ${author} sent bare keyword "${editText.trim()}", ignoring.`);
-    return;
-  }
-
-  const prev = state.document.content;
-  let newContent = prev;
-  let opLabel = "append";
-
-  let cleaned = editText.trim();
-
-  // [REPLACE: old text] new text — surgical find-and-replace
-  if (/^\[REPLACE:/i.test(cleaned)) {
-    const match = cleaned.match(/^\[REPLACE:\s*([\s\S]*?)\]\s*([\s\S]*)$/i);
-    if (match) {
-      const findText = match[1].trim();
-      let replaceText = match[2].trim();
-      
-      // Clean potential [WITH: ...] or WITH: prefixes inside replace content
-      replaceText = replaceText.replace(/^\[WITH:\s*([\s\S]*?)\]$/i, "$1");
-      replaceText = replaceText.replace(/^WITH:\s*/i, "");
-
-      if (prev.includes(findText)) {
-        newContent = prev.replace(findText, replaceText);
-        opLabel = "replace";
-      } else {
-        // Fuzzy: try case-insensitive match
-        const idx = prev.toLowerCase().indexOf(findText.toLowerCase());
-        if (idx !== -1) {
-          newContent = prev.slice(0, idx) + replaceText + prev.slice(idx + findText.length);
-          opLabel = "replace (fuzzy)";
-        } else {
-          // Can't find target — append instead
-          newContent = prev + (prev ? "\n\n" : "") + replaceText;
-          opLabel = "replace→append (not found)";
-        }
-      }
+function applyDocumentEdits(edits, authorName) {
+  if (!Array.isArray(edits) || !edits.length) return;
+  let anyChanged = false;
+  for (const edit of edits) {
+    const doc = (state.documents || []).find(d => d.id === edit.documentId);
+    if (!doc || !doc.aiEditable || doc.enabled === false) {
+      if (!doc) console.warn(`[document] ${authorName} edit for unknown id "${edit.documentId}", skipping.`);
+      continue;
     }
-  }
-  // [FULL] — explicit full replacement
-  else if (/^\[FULL\]/i.test(cleaned)) {
-    newContent = cleaned.replace(/^\[FULL\]\s*/i, "").trim();
-    opLabel = "full replace";
-  }
-  // Default: APPEND to the end with wrapper cleanup & duplication protection
-  else {
-    // Strip common bracketed wrappers like [APPEND: text] or [INSERT: text]
-    const bracketWrapper = /^\[(APPEND|INSERT|ADD|UPDATE):\s*([\s\S]*?)\]$/i;
-    const wrapperMatch = cleaned.match(bracketWrapper);
-    if (wrapperMatch) {
-      cleaned = wrapperMatch[2].trim();
+    const lines = (doc.content || "").split("\n");
+    let newContent;
+    if (edit.op === "full") {
+      newContent = String(edit.content || "");
+    } else if (edit.op === "append") {
+      newContent = doc.content + (doc.content ? "\n\n" : "") + String(edit.content || "");
+    } else if (edit.op === "replace") {
+      const s = Math.max(0, (Number(edit.startLine) || 1) - 1);
+      const e = Math.min(lines.length - 1, (Number(edit.endLine) || s + 1) - 1);
+      const replacement = String(edit.content || "");
+      newContent = [...lines.slice(0, s), replacement, ...lines.slice(e + 1)].join("\n");
+    } else {
+      console.warn(`[document] ${authorName} unknown op "${edit.op}", skipping.`);
+      continue;
     }
-    
-    // Also strip generic leading/trailing tags
-    cleaned = cleaned.replace(/^\[(APPEND|INSERT|ADD|UPDATE|EDIT)\]\s*/i, "");
-    cleaned = cleaned.replace(/\s*\[\/(APPEND|INSERT|ADD|UPDATE|EDIT)\]$/i, "");
-    
-    cleaned = cleaned.trim();
-
-    if (cleaned) {
-      const cleanPrev = prev.trim();
-      
-      // Heuristic 1: Redundant append (ignore if already in document)
-      if (cleanPrev && cleanPrev.includes(cleaned)) {
-        console.warn(`[document] ${author} sent edit that is already fully present in the document, ignoring.`);
-        return;
-      }
-      
-      // Check for suffix-prefix line overlap
-      const prevLinesRaw = prev.split("\n");
-      const cleanLinesRaw = cleaned.split("\n");
-      const prevLinesProcessed = prevLinesRaw.map(l => l.trim());
-      const cleanLinesProcessed = cleanLinesRaw.map(l => l.trim());
-      
-      let overlapFound = 0;
-      const maxOverlap = Math.min(prevLinesProcessed.length, cleanLinesProcessed.length);
-      for (let K = maxOverlap; K >= 1; K--) {
-        let match = true;
-        let hasContentLine = false;
-        for (let i = 0; i < K; i++) {
-          const l1 = prevLinesProcessed[prevLinesProcessed.length - K + i];
-          const l2 = cleanLinesProcessed[i];
-          if (l1 !== l2) {
-            match = false;
-            break;
-          }
-          if (l2.length > 5) {
-            hasContentLine = true;
-          }
-        }
-        if (match && hasContentLine) {
-          overlapFound = K;
-          break;
-        }
-      }
-
-      if (overlapFound > 0) {
-        const remainingEdit = cleanLinesRaw.slice(overlapFound).join("\n");
-        if (remainingEdit.trim() !== "") {
-          newContent = prev.trimEnd() + "\n" + remainingEdit;
-        } else {
-          newContent = prev;
-        }
-        opLabel = "append (merged suffix-prefix overlap)";
-      } else {
-        // Heuristic 2: Duplicate full-text generation
-        const prevLen = prev.length;
-        const newLen = cleaned.length;
-        const prevLines = prev.split("\n").map(l => l.trim()).filter(Boolean);
-        const longLines = prevLines.filter(l => l.length > 15);
-        const targetLines = longLines.length ? longLines : prevLines;
-        
-        let matchedCount = 0;
-        for (const line of targetLines) {
-          if (cleaned.includes(line)) {
-            matchedCount++;
-          }
-        }
-        const lineOverlapPct = targetLines.length ? (matchedCount / targetLines.length) : 0;
-        const decision = (prevLen > 0 && newLen >= prevLen * 0.6 && lineOverlapPct >= 0.3) ? "replace" : "append";
-        
-        console.debug("[doc] duplicate detection", { 
-          prevLen, newLen, lineOverlapPct, decision 
-        });
-
-        if (decision === "replace") {
-          newContent = cleaned;
-          opLabel = "heuristics: full replace (high line overlap)";
-        } else if (cleanPrev.length >= 20 && cleaned.startsWith(cleanPrev.substring(0, 20))) {
-          newContent = cleaned;
-          opLabel = "heuristics: full replace (detected duplicate document body)";
-        } else {
-          newContent = prev + (prev ? "\n\n" : "") + cleaned;
-          opLabel = "append";
-        }
-      }
-    }
+    if (newContent === doc.content) continue;
+    doc.versions = [...(doc.versions || []),
+      { author: authorName, content: doc.content, timestamp: new Date().toISOString() }
+    ].slice(-(doc.maxVersions || 20));
+    doc.lineAttribution = alignLineAttributions(
+      doc.content.split("\n"), newContent.split("\n"),
+      doc.lineAttribution || [], authorName, doc.versions.length
+    );
+    const prev = doc.content;
+    doc.content = newContent;
+    doc.updatedAt = new Date().toISOString();
+    doc.wordCount = newContent.trim().split(/\s+/).filter(Boolean).length;
+    logTransition("document_edit", { author: authorName, documentId: doc.id, op: edit.op, prevLength: prev.length, newLength: newContent.length });
+    anyChanged = true;
   }
-
-  if (newContent === prev) return;
-
-  state.document.versions.push({
-    author,
-    content: prev,
-    timestamp: new Date().toISOString()
-  });
-  if (state.document.versions.length > (state.document.maxVersions || 20)) {
-    state.document.versions = state.document.versions.slice(-(state.document.maxVersions || 20));
-  }
-
-  // LCS Line-level authorship attribution
-  const prevLines = prev.split("\n");
-  const newLines = newContent.split("\n");
-  const oldAttributions = state.document.lineAttribution || [];
-  state.document.lineAttribution = alignLineAttributions(
-    prevLines,
-    newLines,
-    oldAttributions,
-    author,
-    state.document.versions.length
-  );
-
-  state.document.content = newContent;
-  logTransition("document_edit", { author, operation: opLabel, prevLength: prev.length, newLength: newContent.length });
-  saveState();
-  console.debug(`[document] ${author} ${opLabel} (${newContent.length} chars, ${state.document.versions.length} versions)`);
+  if (anyChanged) { saveState(); }
 }
 
 export function appendMemory(existing, thought) {

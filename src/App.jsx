@@ -20,10 +20,9 @@ const NAV = [
   { id: 'actors',     label: 'Actors',      icon: 'Actors',   group: 1 },
   { id: 'memory',     label: 'Memory',      icon: 'Brain',    group: 2 },
   { id: 'telemetry',  label: 'Telemetry',   icon: 'Gauge',    group: 2 },
-  { id: 'doc',        label: 'Document',    icon: 'Doc',      group: 2 },
+  { id: 'documents',  label: 'Documents',   icon: 'Doc',      group: 2 },
   { id: 'goal',       label: 'Goal',        icon: 'Sliders',  group: 3 },
   { id: 'sessions',   label: 'Sessions',    icon: 'Sessions', group: 3 },
-  { id: 'kb',         label: 'Knowledge',   icon: 'Search',   group: 3 },
   { id: 'connection', label: 'Connection',  icon: 'Plug',     group: 4 },
 ];
 
@@ -32,10 +31,9 @@ const NAV_TITLES = {
   actors:     { title: 'Actors',      sub: 'panel composition' },
   memory:     { title: 'Memory',      sub: 'facts · summary · anchors · outcomes' },
   telemetry:  { title: 'Telemetry',   sub: 'alignment · drift · influence' },
-  doc:        { title: 'Document',    sub: 'shared draft & history' },
+  documents:  { title: 'Documents',   sub: 'working docs · references · links' },
   goal:       { title: 'Goal',        sub: 'auto-stop & judges' },
   sessions:   { title: 'Sessions',    sub: 'save · load · export' },
-  kb:         { title: 'Knowledge',   sub: 'documents · links · context' },
   connection: { title: 'Connection',  sub: 'LM Studio · model · generation' },
 };
 

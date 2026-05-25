@@ -1,7 +1,7 @@
 export const STORAGE_KEY = "forum-state-v1";
 export const PRESET_VERSION = 1;
 export const DB_NAME = "forum-memory";
-export const DB_VERSION = 5;
+export const DB_VERSION = 6;
 export const MESSAGE_STORE = "messages";
 export const CHUNK_STORE = "chunks";
 export const ACTOR_MEMORY_STORE = "actor-memory";
@@ -167,15 +167,7 @@ export const defaultState = {
     roundsRun: 0,
     status: "Auto-stop ready."
   },
-  document: {
-    enabled: false,
-    title: "",
-    content: "",
-    versions: [],
-    maxVersions: 20,
-    lineAttribution: [],
-    showAttribution: false
-  },
+  documents: [],
   scenario: {
     mode: "problem",
     title: "Design council",
@@ -249,7 +241,6 @@ export const defaultState = {
       canSeeThoughts: false
     }
   ],
-  knowledgeBase: [],
   messages: [],
   turnQueue: [],
   currentRound: 0,
