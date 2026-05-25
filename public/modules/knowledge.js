@@ -1,0 +1,107 @@
+import { state } from './state.js';
+import { db, storageAvailable, idbRequest, idbDone } from './db.js';
+import { KB_STORE } from './constants.js';
+
+// ── CRUD ────────────────────────────────────────────────────────────────────
+
+export async function getAllKbEntries() {
+  if (!storageAvailable || !db) return state.knowledgeBase || [];
+  const tx = db.transaction(KB_STORE, "readonly");
+  const result = await idbRequest(tx.objectStore(KB_STORE).getAll());
+  return result.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+}
+
+export async function putKbEntry(entry) {
+  if (!storageAvailable || !db) {
+    if (!state.knowledgeBase) state.knowledgeBase = [];
+    state.knowledgeBase = state.knowledgeBase.filter(e => e.id !== entry.id);
+    state.knowledgeBase.push(entry);
+    return;
+  }
+  const tx = db.transaction(KB_STORE, "readwrite");
+  tx.objectStore(KB_STORE).put(entry);
+  await idbDone(tx);
+}
+
+export async function deleteKbEntry(id) {
+  if (!storageAvailable || !db) {
+    state.knowledgeBase = (state.knowledgeBase || []).filter(e => e.id !== id);
+    return;
+  }
+  const tx = db.transaction(KB_STORE, "readwrite");
+  tx.objectStore(KB_STORE).delete(id);
+  await idbDone(tx);
+}
+
+// ── Query helpers ────────────────────────────────────────────────────────────
+
+export async function getKbEntriesForActor(actorId) {
+  const all = await getAllKbEntries();
+  return all.filter(e =>
+    e.enabled !== false &&
+    (e.target === "all" || (Array.isArray(e.target) && e.target.includes(actorId)))
+  );
+}
+
+export async function getKbEntriesForDirector() {
+  const all = await getAllKbEntries();
+  return all.filter(e => e.enabled !== false && e.target === "all");
+}
+
+// ── Prompt injection ─────────────────────────────────────────────────────────
+
+// Formats KB entries into a prompt section. Caps at ~3 000 chars (~750 tokens).
+// Entries are each individually capped at 1 500 chars so one giant doc can't
+// crowd out the others.
+const KB_SECTION_MAX = 3000;
+const KB_ENTRY_MAX = 1500;
+
+export function buildKbSection(entries) {
+  if (!entries || !entries.length) return "";
+  const parts = entries.map(e => {
+    const content = (e.content || "").slice(0, KB_ENTRY_MAX);
+    const suffix = e.content && e.content.length > KB_ENTRY_MAX ? "\n…[truncated]" : "";
+    return `### ${e.title || "Untitled"}\n${content}${suffix}`;
+  });
+  let section = "## Knowledge Base\n" + parts.join("\n\n---\n\n");
+  if (section.length > KB_SECTION_MAX) {
+    section = section.slice(0, KB_SECTION_MAX) + "\n…[knowledge base truncated]";
+  }
+  return section;
+}
+
+// ── URL fetch ────────────────────────────────────────────────────────────────
+
+// Calls the server-side web_read proxy (same one used by Researcher actors).
+export async function fetchUrlContent(url) {
+  const res = await fetch("/api/tools", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tool: "web_read", args: { url } })
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data.text || "";
+}
+
+// ── Entry factory ────────────────────────────────────────────────────────────
+
+export function newKbEntry(overrides = {}) {
+  return {
+    id: crypto.randomUUID(),
+    title: "",
+    type: "document",   // "document" | "link"
+    content: "",
+    url: "",
+    target: "all",      // "all" | string[] of actor IDs
+    enabled: true,
+    createdAt: new Date().toISOString(),
+    wordCount: 0,
+    ...overrides
+  };
+}
+
+export function countWords(text) {
+  return text ? text.trim().split(/\s+/).filter(Boolean).length : 0;
+}

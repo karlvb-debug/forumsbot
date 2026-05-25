@@ -1,4 +1,4 @@
-import { DB_NAME, DB_VERSION, MESSAGE_STORE, CHUNK_STORE, ACTOR_MEMORY_STORE, SESSION_STORE } from './constants.js';
+import { DB_NAME, DB_VERSION, MESSAGE_STORE, CHUNK_STORE, ACTOR_MEMORY_STORE, SESSION_STORE, KB_STORE } from './constants.js';
 import { state } from './state.js';
 import { cleanStoredMessage } from './utils.js';
 
@@ -58,6 +58,10 @@ export function openMemoryDb() {
       // Sessions history store
       if (!database.objectStoreNames.contains(SESSION_STORE)) {
         database.createObjectStore(SESSION_STORE, { keyPath: "id" });
+      }
+      // Knowledge base store
+      if (!database.objectStoreNames.contains(KB_STORE)) {
+        database.createObjectStore(KB_STORE, { keyPath: "id" });
       }
     });
     request.addEventListener("blocked", () => {

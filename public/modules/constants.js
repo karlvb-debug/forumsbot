@@ -1,11 +1,12 @@
 export const STORAGE_KEY = "forum-state-v1";
 export const PRESET_VERSION = 1;
 export const DB_NAME = "forum-memory";
-export const DB_VERSION = 4;
+export const DB_VERSION = 5;
 export const MESSAGE_STORE = "messages";
 export const CHUNK_STORE = "chunks";
 export const ACTOR_MEMORY_STORE = "actor-memory";
 export const SESSION_STORE = "sessions";
+export const KB_STORE = "knowledge-base";
 export const RECENT_MESSAGE_LIMIT = 80;
 export const PROMPT_MESSAGE_LIMIT = 20;
 export const RECALLED_CHUNK_LIMIT = 6;

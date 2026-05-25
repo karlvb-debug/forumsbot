@@ -7,6 +7,7 @@ import { summarizeMemory, recallRelevantChunks, formatCurrentOutcomes, parseOutc
 import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, checkDrift } from './utils.js';
 import { alignLineAttributions, calculateTurnMetrics, updateSemanticAlignment, calculateToolUsefulness, calculateInfluenceBudget } from './telemetry.js';
 import { preflightSkipCheck } from './preflight.js';
+import { getKbEntriesForActor, getKbEntriesForDirector, buildKbSection } from './knowledge.js';
 
 export let abortController = null;
 let _lastPromptParts = null;
@@ -1018,6 +1019,13 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
     }
   }
 
+  // Knowledge base entries assigned to this actor (or all actors).
+  // Stored as a let so graceful degradation can drop it under budget pressure.
+  const kbEntries = kind === "actor"
+    ? await getKbEntriesForActor(actor.id)
+    : await getKbEntriesForDirector();
+  let kbSection = buildKbSection(kbEntries);
+
   // Role reminder appended at the bottom ("lost in the middle" mitigation).
   // Small models pay most attention to start and end of prompt.
   const roleReminder = kind === "actor" && (participant.role || participant.goal || participant.voice)
@@ -1066,6 +1074,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
       ? `### Shared Document: "${state.document.title}"\n---\n${state.document.content || "(Empty — start drafting.)" }\n---`
       : "",
     crossSessionBlock,
+    kbSection,
     memOverride || participantMemory,
     privateThoughts,
     `### Recent transcript\n${formatTranscript(msgs, WORD_LIMITS.recentTranscript)}`,
@@ -1100,6 +1109,12 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   while (estimateTokens(assembled) > PROMPT_TOKEN_BUDGET && transcriptLimit > 4) {
     transcriptLimit -= 2;
     recentMessages = messageSource.slice(-transcriptLimit);
+    assembled = buildSections(recallChunks, recentMessages);
+  }
+
+  // Stage 2.5: drop knowledge base section
+  if (estimateTokens(assembled) > PROMPT_TOKEN_BUDGET && kbSection) {
+    kbSection = "";
     assembled = buildSections(recallChunks, recentMessages);
   }
 
