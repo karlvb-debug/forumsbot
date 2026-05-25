@@ -29,6 +29,7 @@ function normalizeState(value) {
   if (!Array.isArray(merged.diagnostics.parseFailures)) merged.diagnostics.parseFailures = [];
   if (!Array.isArray(merged.diagnostics.outcomeExtractionLog)) merged.diagnostics.outcomeExtractionLog = [];
   if (!Array.isArray(merged.anchors)) merged.anchors = [];
+  if (!Array.isArray(merged.knowledgeBase)) merged.knowledgeBase = [];
 
   merged.memory.isSummarizing = false;
   if (!value.settings?.baseUrl || value.settings.baseUrl === "http://localhost:1234/v1") {

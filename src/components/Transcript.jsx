@@ -3,7 +3,7 @@ import * as Ic from './Icons';
 import { useForumState, mutateState } from '../hooks/useForumState';
 import { useStreaming } from '../hooks/useStreaming';
 
-function MessageCard({ msg, actor, showThoughts, onAnchor }) {
+function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork }) {
   if (!actor) return null;
 
   const timeStr = msg.createdAt
@@ -64,8 +64,8 @@ function MessageCard({ msg, actor, showThoughts, onAnchor }) {
         )}
 
         <div className="msg-actions">
-          <button className={msg.feedback === "up" ? "active" : ""} title="Helpful">👍</button>
-          <button className={msg.feedback === "down" ? "active" : ""} title="Unhelpful">👎</button>
+          <button className={msg.feedback === "up" ? "active" : ""} title="Helpful" onClick={() => onFeedback?.(msg.id, "up")}>👍</button>
+          <button className={msg.feedback === "down" ? "active" : ""} title="Unhelpful" onClick={() => onFeedback?.(msg.id, "down")}>👎</button>
           <button
             className={msg.anchored ? "active" : ""}
             title="Anchor this claim"
@@ -73,7 +73,7 @@ function MessageCard({ msg, actor, showThoughts, onAnchor }) {
           >
             <Ic.Anchor width={13} height={13} />
           </button>
-          <button title="Fork from here">⑂</button>
+          <button title="Fork from here" onClick={() => onFork?.(msg.id)}>⑂</button>
         </div>
       </div>
     </article>
@@ -174,16 +174,32 @@ export function Transcript({ showThoughts }) {
         msg.anchored = !msg.anchored;
         if (msg.anchored) {
           if (!s.anchors) s.anchors = [];
-          s.anchors.push({
-            id: 'ank-' + Date.now(),
-            text: msg.content || msg.text || msg.message || '',
-            source: msg.speaker || 'Unknown',
-            createdAt: new Date().toISOString(),
-            messageId: msgId,
-          });
+          if (!s.anchors.some(a => a.messageId === msgId)) {
+            s.anchors.push({
+              id: 'ank-' + Date.now(),
+              text: msg.content || msg.text || msg.message || '',
+              source: msg.speaker || 'Unknown',
+              createdAt: new Date().toISOString(),
+              messageId: msgId,
+            });
+          }
+        } else {
+          s.anchors = (s.anchors || []).filter(a => a.messageId !== msgId);
         }
       }
     });
+  };
+
+  const onFeedback = (msgId, value) => {
+    mutateState(s => {
+      const msg = s.messages.find(m => m.id === msgId);
+      if (msg) msg.feedback = msg.feedback === value ? "" : value;
+    });
+  };
+
+  const onFork = async (msgId) => {
+    const session = await import('../modules/session.js');
+    await session.forkSessionAtMessage(msgId);
   };
 
   return (
@@ -211,6 +227,8 @@ export function Transcript({ showThoughts }) {
             actor={actor}
             showThoughts={showThoughts}
             onAnchor={onAnchor}
+            onFeedback={onFeedback}
+            onFork={onFork}
           />
         );
       })}

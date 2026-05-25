@@ -243,6 +243,7 @@ export const defaultState = {
       canSeeThoughts: false
     }
   ],
+  knowledgeBase: [],
   messages: [],
   turnQueue: [],
   autoRunning: false,

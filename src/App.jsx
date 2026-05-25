@@ -9,7 +9,7 @@ import { CommandPalette } from './components/CommandPalette';
 // Importing state.js triggers loadState() at module level
 import './modules/state.js';
 import { setModuleRefs, useActions } from './hooks/useActions.js';
-import { notifyStateChange } from './hooks/useForumState.js';
+import { mutateState, notifyStateChange, saveState } from './hooks/useForumState.js';
 
 // Navigation items for the rail
 const NAV = [
@@ -58,8 +58,10 @@ export default function App() {
       import('./modules/session.js'),
       import('./modules/memory.js'),
       import('./modules/db.js'),
-    ]).then(([turns, api, session, memory, db]) => {
+    ]).then(async ([turns, api, session, memory, db]) => {
       setModuleRefs({ turns, api, session, memory, db });
+      await db.initializeMemoryStorage?.();
+      saveState();
       // Auto-ping connection on startup
       api.startConnectionPing?.();
       setReady(true);
@@ -104,6 +106,11 @@ export default function App() {
       startAuto();
     } else if (item.id === 'act:stop') {
       stopGeneration();
+    } else if (item.id === 'act:nudge') {
+      mutateState(s => {
+        if (!s.telemetry) s.telemetry = {};
+        s.telemetry.nudgeTriggered = true;
+      });
     } else if (item.id === 'act:save') {
       import('./modules/session.js').then(m => m.saveCurrentSession?.());
     } else if (item.id === 'act:export') {

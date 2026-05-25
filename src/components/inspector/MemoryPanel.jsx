@@ -5,6 +5,7 @@ import { useForumState, mutateState } from '../../hooks/useForumState';
 
 export function MemoryPanel() {
   const [section, setSection] = useState('facts');
+  const [actionBusy, setActionBusy] = useState('');
   const pinnedFacts = useForumState(s => s.memory?.pinnedFacts || []);
   const pendingFacts = useForumState(s => s.memory?.pendingPinnedFacts || []);
   const openQuestions = useForumState(s => s.memory?.openQuestions || []);
@@ -13,13 +14,52 @@ export function MemoryPanel() {
   const anchors = useForumState(s => s.anchors || []);
   const outcomes = useForumState(s => s.outcomes || {});
   const cycleCount = useForumState(s => s.memory?.cycleCount || 0);
+  const archivedCount = useForumState(s => s.memory?.archivedCount || 0);
+  const memoryStatus = useForumState(s => s.memory?.status || '');
+  const outcomeStatus = useForumState(s => s.outcomes?.status || '');
 
   const removeFact = (index) => mutateState(s => { s.memory.pinnedFacts.splice(index, 1); });
   const removeQuestion = (index) => mutateState(s => { s.memory.openQuestions.splice(index, 1); });
   const removeAnchor = (index) => mutateState(s => { s.anchors.splice(index, 1); });
+  const runMemoryAction = async (label, fn) => {
+    setActionBusy(label);
+    try {
+      await fn();
+    } finally {
+      setActionBusy('');
+    }
+  };
 
   return (
     <div>
+      <div className="btn-row" style={{ marginBottom: 12 }}>
+        <button className="btn sm" disabled={!!actionBusy} onClick={() => runMemoryAction('summarize', async () => {
+          const memory = await import('../../modules/memory.js');
+          await memory.summarizeMemory('manual');
+        })}>Summarize Now</button>
+        <button className="btn sm" disabled={!!actionBusy} onClick={() => runMemoryAction('rebuild', async () => {
+          const memory = await import('../../modules/memory.js');
+          await memory.summarizeMemory('rebuild', null, { reset: true });
+        })}>Rebuild Summary</button>
+        <button className="btn sm" disabled={!!actionBusy} onClick={() => runMemoryAction('extract', async () => {
+          const memory = await import('../../modules/memory.js');
+          await memory.extractOutcomes();
+          setSection('outcomes');
+        })}>Extract Outcomes</button>
+        <button className="btn sm" disabled={!!actionBusy} onClick={() => runMemoryAction('compact', async () => {
+          const memory = await import('../../modules/memory.js');
+          await memory.compactPinnedFacts();
+        })}>Compact Facts</button>
+        <button className="btn sm ghost" disabled={!!actionBusy} onClick={() => runMemoryAction('clear', async () => {
+          const memory = await import('../../modules/memory.js');
+          await memory.clearArchivedMemory();
+        })}>Clear Archive</button>
+      </div>
+      {(memoryStatus || outcomeStatus || actionBusy) && (
+        <div className="field-hint" style={{ marginBottom: 10 }}>
+          {actionBusy ? `Working: ${actionBusy}...` : memoryStatus || outcomeStatus}
+        </div>
+      )}
       <div className="subnav">
         <button className={section === "facts" ? "active" : ""} onClick={() => setSection("facts")}>Facts</button>
         <button className={section === "summary" ? "active" : ""} onClick={() => setSection("summary")}>Summary</button>
@@ -69,8 +109,9 @@ export function MemoryPanel() {
           </div>
 
           <div className="card">
-            <div className="card-title"><h3>Archive</h3><span className="badge">{cycleCount} cycles</span></div>
+            <div className="card-title"><h3>Archive</h3><span className="badge">{archivedCount} chunks</span></div>
             <div className="card-row"><span className="lbl">Memory cycles</span><span className="val">{cycleCount}</span></div>
+            <div className="card-row"><span className="lbl">Archived chunks</span><span className="val">{archivedCount}</span></div>
           </div>
         </div>
       )}

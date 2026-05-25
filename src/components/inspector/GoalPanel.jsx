@@ -4,8 +4,13 @@ import { useForumState, mutateState } from '../../hooks/useForumState';
 
 export function GoalPanel() {
   const autoStop = useForumState(s => s.autoStop || {});
+  const messages = useForumState(s => s.messages || []);
 
   const update = (key, val) => mutateState(s => { s.autoStop[key] = val; });
+  const checkGoalNow = async () => {
+    const turns = await import('../../modules/turns.js');
+    await turns.judgeGoal(messages.slice(-turns.participantCycleCount()), { manual: true });
+  };
 
   return (
     <div>
@@ -35,7 +40,7 @@ export function GoalPanel() {
         <div className="card-title"><h3>Status</h3></div>
         <div className="card-row"><span className="lbl">Rounds run</span><span className="val">{autoStop.roundsRun || 0} / {autoStop.maxRounds || 12}</span></div>
         <div className="card-row"><span className="lbl">Status</span><span className="val">{autoStop.status || 'Idle'}</span></div>
-        <button className="btn full" style={{ marginTop: 10 }}>Check Goal Now</button>
+        <button className="btn full" style={{ marginTop: 10 }} onClick={checkGoalNow}>Check Goal Now</button>
       </div>
     </div>
   );

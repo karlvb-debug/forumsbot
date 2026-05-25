@@ -64,6 +64,10 @@ export function getBusy() {
   return _busy;
 }
 
+export function getBusyVersion() {
+  return _busyVersion;
+}
+
 export function subscribeBusy(cb) {
   _busyListeners.add(cb);
   return () => _busyListeners.delete(cb);

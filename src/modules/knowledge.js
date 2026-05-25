@@ -107,7 +107,7 @@ export function buildKbSection(entries, { maxSection = KB_SECTION_MAX_DEFAULT } 
 
 // Calls the server-side web_read proxy (same one used by Researcher actors).
 export async function fetchUrlContent(url) {
-  const res = await fetch("/api/tools", {
+  const res = await fetch("/api/tool-execute", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tool: "web_read", args: { url } })

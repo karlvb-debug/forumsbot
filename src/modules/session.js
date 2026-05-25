@@ -404,19 +404,20 @@ export async function generateActorFromDescription() {
   }
 }
 
-export async function generateQuickStart() {
+export async function generateQuickStart(promptOverride = "") {
   if (!state.settings.model) {
     setQuickStartStatus("Choose a model first.");
     openAiAssistantPanel();
     return;
   }
   const input = document.getElementById("aiAssistantInput");
-  const prompt = (input?.value || state.ui.quickStartPrompt || "").trim();
+  const prompt = (promptOverride || input?.value || state.ui.quickStartPrompt || "").trim();
   if (!prompt) {
     setQuickStartStatus("Type a request first.");
     return;
   }
   if (input) input.value = "";
+  state.ui.quickStartPrompt = "";
 
   setQuickStartBusy(true);
   setQuickStartStatus("Thinking…");

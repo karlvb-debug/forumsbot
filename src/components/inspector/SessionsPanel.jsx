@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import * as Ic from '../Icons';
 import { Field } from '../shared/FormControls';
 import { useForumState, mutateState } from '../../hooks/useForumState';
@@ -6,6 +6,7 @@ import { useForumState, mutateState } from '../../hooks/useForumState';
 export function SessionsPanel() {
   const [sessions, setSessions] = useState([]);
   const [exportMode, setExportMode] = useState('debug');
+  const presetInputRef = useRef(null);
 
   // Load sessions from IndexedDB on mount
   useEffect(() => {
@@ -35,6 +36,14 @@ export function SessionsPanel() {
   const handleExport = async () => {
     const { exportSession } = await import('../../modules/session.js');
     exportSession(exportMode);
+  };
+
+  const handlePresetFile = async (event) => {
+    const [file] = event.target.files || [];
+    if (!file) return;
+    const { loadPresetFile } = await import('../../modules/session.js');
+    loadPresetFile(file);
+    event.target.value = '';
   };
 
   return (
@@ -67,7 +76,14 @@ export function SessionsPanel() {
         </Field>
         <div className="btn-row">
           <button className="btn" onClick={handleExport}><Ic.Download width={13} height={13} /> Export</button>
-          <button className="btn"><Ic.Upload width={13} height={13} /> Load preset</button>
+          <button className="btn" onClick={() => presetInputRef.current?.click()}><Ic.Upload width={13} height={13} /> Load preset</button>
+          <input
+            ref={presetInputRef}
+            type="file"
+            accept="application/json"
+            hidden
+            onChange={handlePresetFile}
+          />
         </div>
       </div>
 

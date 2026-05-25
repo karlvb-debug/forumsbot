@@ -1,12 +1,8 @@
 import React, { useState, useRef, useCallback } from 'react';
 import * as Ic from './Icons';
 import { useForumState, mutateState } from '../hooks/useForumState';
-import { useActions, getBusy, subscribeBusy } from '../hooks/useActions';
+import { useActions, getBusy, getBusyVersion, subscribeBusy } from '../hooks/useActions';
 import { useSyncExternalStore } from 'react';
-
-// Inline busy version tracker
-let _busyVersion = 0;
-function getBusyVersion() { return _busyVersion; }
 
 export function Composer({ showThoughts, onToggleThoughts }) {
   const [text, setText] = useState('');
@@ -19,7 +15,7 @@ export function Composer({ showThoughts, onToggleThoughts }) {
   const { nextTurn, runRound, startAuto, stopGeneration, sendMessage } = useActions();
 
   // Subscribe to busy state
-  useSyncExternalStore(subscribeBusy, () => _busyVersion);
+  useSyncExternalStore(subscribeBusy, getBusyVersion);
   const busy = getBusy();
 
   const autoresize = useCallback((el) => {

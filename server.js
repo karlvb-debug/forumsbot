@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import * as cheerio from "cheerio";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
-const publicDir = join(__dirname, "public");
+const staticDir = join(__dirname, "dist");
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "127.0.0.1";
 
@@ -283,10 +283,10 @@ async function toolExecute(req, res) {
 async function serveStatic(req, res) {
   const requestUrl = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
   const rawPath = decodeURIComponent(requestUrl.pathname === "/" ? "/index.html" : requestUrl.pathname);
-  const normalizedPath = normalize(rawPath).replace(/^(\.\.[/\\])+/, "");
-  const filePath = join(publicDir, normalizedPath);
+  const normalizedPath = normalize(rawPath).replace(/^[/\\]+/, "").replace(/^(\.\.[/\\])+/, "");
+  const filePath = join(staticDir, normalizedPath);
 
-  if (!filePath.startsWith(publicDir)) {
+  if (!filePath.startsWith(staticDir)) {
     res.writeHead(403);
     res.end("Forbidden");
     return;
@@ -298,14 +298,20 @@ async function serveStatic(req, res) {
       "content-type": mimeTypes[extname(filePath)] || "application/octet-stream",
       "cache-control": "no-store"
     });
-    res.end(file);
+    res.end(req.method === "HEAD" ? undefined : file);
   } catch {
-    const fallback = await readFile(join(publicDir, "index.html"));
-    res.writeHead(200, {
-      "content-type": mimeTypes[".html"],
-      "cache-control": "no-store"
-    });
-    res.end(fallback);
+    try {
+      const fallback = await readFile(join(staticDir, "index.html"));
+      res.writeHead(200, {
+        "content-type": mimeTypes[".html"],
+        "cache-control": "no-store"
+      });
+      res.end(req.method === "HEAD" ? undefined : fallback);
+    } catch {
+      sendJson(res, 500, {
+        error: "Forum build output was not found. Run `npm run build` before starting the server."
+      });
+    }
   }
 }
 
@@ -315,7 +321,7 @@ const server = createServer(async (req, res) => {
   if (req.method === "POST" && req.url === "/api/chat") return proxyChat(req, res);
   if (req.method === "POST" && req.url === "/api/embeddings") return proxyEmbeddings(req, res);
   if (req.method === "POST" && req.url === "/api/tool-execute") return toolExecute(req, res);
-  if (req.method === "GET") return serveStatic(req, res);
+  if (req.method === "GET" || req.method === "HEAD") return serveStatic(req, res);
   sendJson(res, 405, { error: "Method not allowed." });
 });
 
@@ -323,5 +329,3 @@ server.listen(port, host, () => {
   console.log(`Forum is running at http://${host}:${port}`);
   console.log("Point it at LM Studio's local server, usually http://127.0.0.1:1234");
 });
-
-
