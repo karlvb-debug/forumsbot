@@ -25,6 +25,10 @@ export function ActorsPanel() {
 
   const addActor = useCallback((overrides = {}) => {
     mutateState(s => {
+      // Enforce at most one director — demote any existing director if a new one is added
+      if (overrides.canDirect) {
+        s.actors.forEach(a => { a.canDirect = false; a.canManageCast = false; });
+      }
       s.actors.push({
         id: crypto.randomUUID(),
         name: overrides.name || `Actor ${s.actors.length + 1}`,
@@ -46,7 +50,10 @@ export function ActorsPanel() {
   }, []);
 
   const removeActor = useCallback((id) => {
-    mutateState(s => { s.actors = s.actors.filter(a => a.id !== id); });
+    mutateState(s => {
+      s.actors = s.actors.filter(a => a.id !== id);
+      s.turnQueue = (s.turnQueue || []).filter(qid => qid !== id);
+    });
   }, []);
 
   const activePerms = (a) => PERM_DEFS.filter(p => a[p.key]);

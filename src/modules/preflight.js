@@ -93,7 +93,7 @@ export async function preflightSkipCheck(actor, messages, scenario, opts = {}) {
     const parsed = parsePreflightResponse(raw);
 
     // Log the decision regardless of outcome
-    logTransition('preflight_check', null, null, {
+    logTransition('preflight_check', {
       actor: actor.name,
       shouldSkip: parsed.shouldSkip,
       confidence: parsed.confidence,
@@ -102,7 +102,7 @@ export async function preflightSkipCheck(actor, messages, scenario, opts = {}) {
 
     // Apply threshold: only skip if model confidence is below threshold
     if (parsed.shouldSkip && parsed.confidence <= threshold) {
-      logTransition('preflight_skip', null, null, {
+      logTransition('preflight_skip', {
         actor: actor.name,
         confidence: parsed.confidence,
         reason: parsed.reason

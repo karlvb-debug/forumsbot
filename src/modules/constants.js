@@ -251,6 +251,7 @@ export const defaultState = {
   knowledgeBase: [],
   messages: [],
   turnQueue: [],
+  currentRound: 0,
   autoRunning: false,
   // Sprint 7: Conceptual Anchors — settled group agreements, injected into every prompt
   anchors: [],  // [{ id, text, speaker, color, messageId, createdAt }]

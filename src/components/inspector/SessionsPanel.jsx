@@ -55,8 +55,8 @@ export function SessionsPanel() {
           <div key={s.id} className="session-row" onClick={() => handleLoadSession(s)}>
             <div style={{ width: 8, height: 8, borderRadius: 99, background: "var(--fg-faint)", flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="session-name" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.title || s.name || 'Untitled'}</div>
-              <div className="session-meta">{s.savedAt ? new Date(s.savedAt).toLocaleString() : ''} · {s.turnCount || 0} turns</div>
+              <div className="session-name" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.scenarioTitle || 'Untitled'}</div>
+              <div className="session-meta">{s.timestamp ? new Date(s.timestamp).toLocaleString() : ''} · {s.messageCount || 0} messages</div>
             </div>
             <button className="mini-icon-btn" title="Delete" onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }}>
               <Ic.Trash width={12} height={12} />
@@ -71,8 +71,8 @@ export function SessionsPanel() {
         <Field label="Export mode">
           <select value={exportMode} onChange={(e) => setExportMode(e.target.value)}>
             <option value="debug">Debug — all traces & metrics</option>
-            <option value="share">Shareable — redacted privacy mode</option>
-            <option value="md">Markdown — human-readable</option>
+            <option value="shareable">Shareable — redacted privacy mode</option>
+            <option value="markdown">Markdown — human-readable</option>
           </select>
         </Field>
         <div className="btn-row">

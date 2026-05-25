@@ -641,25 +641,37 @@ export function parseOutcomeJson(content) {
   return { finalRecommendation: cleaned };
 }
 
+function normalizeOutcomeArray(value, wordLimit = 80, maxItems = 6) {
+  return normalizeStringArray(value)
+    .map(item => trimWords(item, wordLimit))
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
 export function normalizeOutcomeUpdate(update) {
   return {
     finalRecommendation: trimWords(stringifyList(update.finalRecommendation), 260),
-    decisions: trimWords(stringifyBullets(update.decisions), 360),
-    rationale: trimWords(stringifyBullets(update.rationale), 360),
-    rejectedOptions: trimWords(stringifyBullets(update.rejectedOptions), 260),
-    actionItems: trimWords(stringifyBullets(update.actionItems), 360),
-    risks: trimWords(stringifyBullets(update.risks), 260)
+    decisions:       normalizeOutcomeArray(update.decisions, 80),
+    rationale:       normalizeOutcomeArray(update.rationale, 80),
+    rejectedOptions: normalizeOutcomeArray(update.rejectedOptions, 60),
+    actionItems:     normalizeOutcomeArray(update.actionItems, 80),
+    risks:           normalizeOutcomeArray(update.risks, 60)
   };
 }
 
 export function formatCurrentOutcomes() {
+  const arr = (v) => Array.isArray(v) ? v : normalizeStringArray(v);
+  const section = (label, v) => {
+    const items = arr(v).filter(Boolean);
+    return items.length ? `${label}:\n${items.join('\n')}` : "";
+  };
   return [
     state.outcomes.finalRecommendation ? `Final recommendation:\n${state.outcomes.finalRecommendation}` : "",
-    state.outcomes.decisions?.length ? `Decisions:\n${state.outcomes.decisions.join('\n')}` : "",
-    state.outcomes.rationale?.length ? `Rationale:\n${state.outcomes.rationale.join('\n')}` : "",
-    state.outcomes.rejectedOptions?.length ? `Rejected options:\n${state.outcomes.rejectedOptions.join('\n')}` : "",
-    state.outcomes.actionItems?.length ? `Action items:\n${state.outcomes.actionItems.join('\n')}` : "",
-    state.outcomes.risks?.length ? `Risks:\n${state.outcomes.risks.join('\n')}` : ""
+    section("Decisions", state.outcomes.decisions),
+    section("Rationale", state.outcomes.rationale),
+    section("Rejected options", state.outcomes.rejectedOptions),
+    section("Action items", state.outcomes.actionItems),
+    section("Risks", state.outcomes.risks)
   ].filter(Boolean).join("\n\n") || "None.";
 }
 

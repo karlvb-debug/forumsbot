@@ -345,6 +345,7 @@ export async function runRound(options = {}) {
   }
   const startIndex = state.messages.length;
   let completedTurns = 0;
+  state.currentRound = (state.currentRound || 0) + 1;
 
   // Freeze the transcript at round start so all actors in this round share a
   // byte-identical prompt prefix. The runtime's KV cache can then reuse the

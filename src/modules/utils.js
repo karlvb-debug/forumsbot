@@ -426,7 +426,15 @@ export function normalizeQuickStartConfig(config, assignFreshIds = true) {
       persona: cleanConfigText(dm.persona, "Keep the scene moving, summarize when useful, and invite quieter actors in without taking over.", 500),
       seesPrivateThoughts: dm.seesPrivateThoughts === true
     },
-    actors: actorSources.map((actor, index) => normalizeQuickStartActor(actor, index, assignFreshIds)),
+    actors: (() => {
+      const normalized = actorSources.map((actor, index) => normalizeQuickStartActor(actor, index, assignFreshIds));
+      // Enforce at most one director — keep the first, clear canDirect on the rest
+      let foundDirector = false;
+      normalized.forEach(a => {
+        if (a.canDirect) { if (foundDirector) { a.canDirect = false; a.canManageCast = false; } else { foundDirector = true; } }
+      });
+      return normalized;
+    })(),
     memory: {
       pinnedFacts: cleanConfigText(memory.pinnedFacts, "", 700),
       sharedSummary: cleanConfigText(memory.sharedSummary, "", 900),

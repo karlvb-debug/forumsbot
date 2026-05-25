@@ -209,9 +209,10 @@ export async function copySessionToClipboard() {
     const typeLabel = msg.type || 'actor';
     const headerStr = `### ${msg.speaker || 'Unknown'} (${typeLabel}) - ${timeStr}`;
     
-    const thoughtStr = msg.thought ? `**Thought:**\n${msg.thought}\n` : '';
+    const includeThought = msg.thought && state.settings.showThoughts;
+    const thoughtStr = includeThought ? `**Thought:**\n${msg.thought}\n` : '';
     const contentStr = `**Message:**\n${msg.content || ''}`;
-    
+
     return [headerStr, thoughtStr, contentStr].filter(Boolean).join('\n');
   }).join("\n\n");
 
@@ -844,7 +845,7 @@ export function applyAssistantPatch(changes) {
 // ─── Session History ────────────────────────────────────────────────────────
 
 export async function saveCurrentSession() {
-  if (!state.messages.length) return;
+  if (!state.scenario?.title && !state.messages.length) return; // nothing worth saving
 
   if (!state._currentSessionId) {
     state._currentSessionId = crypto.randomUUID();
