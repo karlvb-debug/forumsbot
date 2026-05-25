@@ -1,6 +1,7 @@
 import { AVAILABLE_TOOLS, MAX_TOOL_ROUNDS } from './constants.js';
-import { state } from './state.js';
+import { state, saveState } from './state.js';
 import { parseAiJson, parseTextToolCalls, stripTextToolCalls, stripCodeFence } from './utils.js';
+import { setConnectionStatus } from '../hooks/useActions.js';
 
 // Extract the message field content progressively from a streaming JSON buffer.
 // Handles {"thought":"...","action":"...","message":"..."} with proper JSON unescape.
@@ -53,11 +54,7 @@ function extractStreamingDisplay(accumulated) {
   return ""; // preamble — keep cursor blinking
 }
 
-// els reference — set via initApi() called from main.js
-let els = null;
-export function initApi(elsRef) {
-  els = elsRef;
-}
+// els reference removed — React manages UI
 
 // Track which actor/director is currently generating so tool status messages
 // can say "Architect is searching..." rather than a generic message.
@@ -180,7 +177,7 @@ export async function chatCompletion(system, user, { temperature = state.setting
 
     // Path A: Native tool calls (OpenAI format)
     if (msg?.tool_calls?.length) {
-      console.log(`[tools] Round ${round + 1}: native tool_calls (${msg.tool_calls.length})`);
+      console.debug(`[tools] Round ${round + 1}: native tool_calls (${msg.tool_calls.length})`);
       messages.push({ role: "assistant", content: msg.content || null, tool_calls: msg.tool_calls });
 
       for (const call of msg.tool_calls) {
@@ -205,7 +202,7 @@ export async function chatCompletion(system, user, { temperature = state.setting
       const textCalls = parseTextToolCalls(content);
       if (textCalls.length) {
         const callTypes = textCalls.map((tc) => tc.tool).join(", ");
-        console.log(`[tools] Round ${round + 1}: text-based calls [${callTypes}] (${textCalls.length} total)`);
+        console.debug(`[tools] Round ${round + 1}: text-based calls [${callTypes}] (${textCalls.length} total)`);
         let toolResults = "";
         for (const tc of textCalls) {
           const result = await executeToolCall(tc.tool, JSON.stringify(tc.args), signal);
@@ -594,7 +591,7 @@ export async function executeToolCall(toolName, argsString, signal) {
     toolArgs = {};
   }
 
-  console.log(`[tools] Executing: ${toolName}(${JSON.stringify(toolArgs)})`);
+  console.debug(`[tools] Executing: ${toolName}(${JSON.stringify(toolArgs)})`);
 
   // Live status update so the user knows a web call is in flight.
   const speakerLabel = _currentSpeaker ? `${_currentSpeaker} is` : "Agent is";
@@ -650,7 +647,7 @@ export async function executeToolCall(toolName, argsString, signal) {
             // Truncate to ~2000 chars to avoid overwhelming context
             const trimmed = pageText.length > 2000 ? pageText.slice(0, 2000) + "\n\n[...truncated]" : pageText;
             resultText += `\n\n━━━ Full content from [1] (${topDomain}) ━━━\n${trimmed}\n━━━ End ━━━`;
-            console.log(`[tools] Auto-read top result: ${topDomain} (${pageText.length} chars → ${trimmed.length} chars)`);
+            console.debug(`[tools] Auto-read top result: ${topDomain} (${pageText.length} chars → ${trimmed.length} chars)`);
           }
         } catch (readErr) {
           console.debug("[tools] Auto-read failed (non-critical):", readErr.message);
@@ -664,7 +661,7 @@ export async function executeToolCall(toolName, argsString, signal) {
       resultText = toolData.text || toolData.error || "No content returned.";
     }
 
-    console.log(`[tools] ${toolName} returned ${resultText.length} chars`);
+    console.debug(`[tools] ${toolName} returned ${resultText.length} chars`);
     return resultText;
   } catch (err) {
     console.warn(`[tools] ${toolName} execution failed:`, err);
@@ -673,11 +670,7 @@ export async function executeToolCall(toolName, argsString, signal) {
 }
 
 export function setStatus(message, tone = "pending") {
-  if (!els) return;
-  els.connectionStatus.textContent = message;
-  els.connectionStatus.className = "status-pill";
-  if (tone === "ok") els.connectionStatus.classList.add("connected");
-  if (tone === "error") els.connectionStatus.classList.add("error");
+  setConnectionStatus(message, tone);
 }
 
 export async function pingConnection(silent = false) {
@@ -693,20 +686,14 @@ export async function pingConnection(silent = false) {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Unreachable");
     const models = (data.data || []).map((m) => m.id).filter(Boolean);
-    // Populate datalist
-    if (els) {
-      els.modelOptions.innerHTML = "";
-      models.forEach((id) => {
-        const option = document.createElement("option");
-        option.value = id;
-        els.modelOptions.append(option);
-      });
-      // Auto-select first model if none chosen
-      if (!state.settings.model && models[0]) {
-        state.settings.model = models[0];
-        els.model.value = models[0];
-      }
+    // Store models in state for React to render
+    state.ui = state.ui || {};
+    state.ui.availableModels = models;
+    // Auto-select first model if none chosen
+    if (!state.settings.model && models[0]) {
+      state.settings.model = models[0];
     }
+    saveState();
     // Persist last known good connection
     try {
       sessionStorage.setItem("forum-last-baseurl", baseUrl);
@@ -798,11 +785,9 @@ export function restoreLastConnection() {
     const lastModel = sessionStorage.getItem("forum-last-model");
     if (lastUrl && !state.settings.baseUrl) {
       state.settings.baseUrl = lastUrl;
-      if (els) els.baseUrl.value = lastUrl;
     }
     if (lastModel && !state.settings.model) {
       state.settings.model = lastModel;
-      if (els) els.model.value = lastModel;
     }
   } catch (_) {}
 }

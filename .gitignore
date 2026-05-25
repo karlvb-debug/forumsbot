@@ -1,2 +1,29 @@
+# Dependencies
 node_modules/
+node_modules_old/
+
+# Build output
+dist/
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Environment
+.env
+.env.*
+
+# Old backups
+presets_old/
+
+# Dev scratch files
+scratch/
+
+# User session exports
+Saves Sessions/

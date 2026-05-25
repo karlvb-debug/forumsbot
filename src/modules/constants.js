@@ -176,14 +176,24 @@ export const defaultState = {
     premise: "A small group of local AI actors are gathered to discuss the user's topic.",
     objective: "Ask clarifying questions, challenge weak assumptions, and converge on practical next steps."
   },
-  dm: {
-    enabled: true,
-    name: "Director",
-    persona: "Keep the scene moving, summarize when useful, and invite quieter actors in without taking over.",
-    seesPrivateThoughts: false,
-    thoughts: ""
-  },
   actors: [
+    {
+      id: crypto.randomUUID(),
+      name: "Director",
+      role: "Discussion facilitator",
+      expanded: false,
+      persona: "Keep the scene moving, summarize when useful, and invite quieter actors in without taking over.",
+      goal: "Guide the group toward clear decisions and next steps.",
+      voice: "Calm, concise, neutral.",
+      thoughts: "",
+      enabled: true,
+      color: "#c8a830",
+      // Permissions
+      canDirect: true,
+      canManageCast: true,
+      canResearch: false,
+      canSeeThoughts: false
+    },
     {
       id: crypto.randomUUID(),
       name: "Architect",
@@ -194,7 +204,11 @@ export const defaultState = {
       voice: "Calm, precise, concise.",
       thoughts: "",
       enabled: true,
-      color: colors[0]
+      color: colors[0],
+      canDirect: false,
+      canManageCast: false,
+      canResearch: false,
+      canSeeThoughts: false
     },
     {
       id: crypto.randomUUID(),
@@ -206,7 +220,11 @@ export const defaultState = {
       voice: "Direct but constructive.",
       thoughts: "",
       enabled: true,
-      color: colors[1]
+      color: colors[1],
+      canDirect: false,
+      canManageCast: false,
+      canResearch: false,
+      canSeeThoughts: false
     },
     {
       id: crypto.randomUUID(),
@@ -218,7 +236,11 @@ export const defaultState = {
       voice: "Warm, vivid, specific.",
       thoughts: "",
       enabled: true,
-      color: colors[2]
+      color: colors[2],
+      canDirect: false,
+      canManageCast: false,
+      canResearch: false,
+      canSeeThoughts: false
     }
   ],
   messages: [],

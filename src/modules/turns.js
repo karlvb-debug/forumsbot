@@ -1,13 +1,19 @@
 import { RECENT_MESSAGE_LIMIT, PROMPT_MESSAGE_LIMIT, WORD_LIMITS, ANCHOR_WORD_CAP, colors } from './constants.js';
 import { state, saveState, logTransition, logWarning } from './state.js';
 import { chatCompletion, chatJson, setStatus, setCurrentSpeaker, getLastToolCalls } from './api.js';
-import { render, renderTranscript, renderActors, renderAutoStop, renderDocument, readSettingsFromForm, readAutoStopFromForm, setBusy, getIsGenerating, els, labelForMode, showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble } from './render.js';
+import { saveState as _hookSaveState } from '../hooks/useForumState.js';
+import { setBusy, getBusy as getIsGenerating } from '../hooks/useActions.js';
+import { showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble } from '../hooks/useStreaming.js';
 import { putMessage, getAllChunks, getActorMemory, putActorMemory } from './db.js';
 import { summarizeMemory, recallRelevantChunks, formatCurrentOutcomes, parseOutcomeJson, extractOutcomes } from './memory.js';
 import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, checkDrift } from './utils.js';
 import { alignLineAttributions, calculateTurnMetrics, updateSemanticAlignment, calculateToolUsefulness, calculateInfluenceBudget } from './telemetry.js';
 import { preflightSkipCheck } from './preflight.js';
 import { getKbEntriesForActor, getKbEntriesForDirector, buildKbSection } from './knowledge.js';
+
+function labelForMode(mode) {
+  return { problem: 'Problem', story: 'Story', freeform: 'Freeform' }[mode] || mode;
+}
 
 export let abortController = null;
 let _lastPromptParts = null;
@@ -36,26 +42,23 @@ export async function addMessage(message) {
   state.messages = state.messages.slice(-RECENT_MESSAGE_LIMIT);
   await putMessage(storedMessage);
   saveState();
-  renderTranscript();
   return storedMessage;
 }
 
 export function buildTurnQueue() {
   const enabledIds = state.actors.filter((actor) => actor.enabled).map((actor) => actor.id);
   const queue = [...enabledIds];
-  if (state.dm.enabled) queue.push("dm");
   state.turnQueue = queue;
   return queue;
 }
 
 export function nextParticipant() {
   const enabled = new Set(state.actors.filter((actor) => actor.enabled).map((actor) => actor.id));
-  state.turnQueue = state.turnQueue.filter((id) => id === "dm" ? state.dm.enabled : enabled.has(id));
+  state.turnQueue = state.turnQueue.filter((id) => enabled.has(id));
   if (!state.turnQueue.length) buildTurnQueue();
   const id = state.turnQueue.shift();
   if (!id) return null;
   state.turnQueue.push(id);
-  if (id === "dm") return { kind: "dm", data: state.dm };
   const actor = state.actors.find((item) => item.id === id);
   return actor ? { kind: "actor", data: actor } : null;
 }
@@ -85,7 +88,6 @@ async function countdownRetry(attempt, maxMs) {
 }
 
 export async function runNextTurn(options = {}) {
-  readSettingsFromForm();
   if (!state.settings.model) {
     setStatus("Choose or type a model first.", "warn");
     return false;
@@ -112,7 +114,7 @@ export async function runNextTurn(options = {}) {
       // When router is on and Phase 1 says "speak", set twoPhase=true so askActor()
       // skips the action/skip instruction and focuses Phase 2 purely on content.
       let twoPhase = false;
-      if (participant.kind === 'actor') {
+      if (!participant.data.canDirect) {
         // Detect if the previous visible speaker explicitly called on this actor
         const msgSource = _roundSnapshot || state.messages;
         const lastVisibleMsg = msgSource.slice().reverse().find(m => m.type === 'actor' || m.type === 'dm' || m.type === 'user');
@@ -128,7 +130,7 @@ export async function runNextTurn(options = {}) {
         if (preflight.shouldSkip) {
           setCurrentSpeaker('');
           participant.data.skipCount = (participant.data.skipCount || 0) + 1;
-          renderActors();
+          saveState();
           await addMessage({
             type: 'skip',
             speaker: participant.data.name,
@@ -153,13 +155,11 @@ export async function runNextTurn(options = {}) {
 
       // Show a streaming bubble so the user sees activity immediately.
       // updateStreamingBubble() fills in message text as tokens arrive.
-      const streamingColor = participant.kind === "dm" ? "var(--gold)" : (participant.data.color || "var(--accent)");
-      showStreamingBubble(participant.data.name, streamingColor, participant.kind === "dm" ? "dm" : "actor");
+      const streamingColor = participant.data.color || "var(--accent)";
+      showStreamingBubble(participant.data.name, streamingColor, "actor");
       const onStream = (messageText) => updateStreamingBubble(messageText);
 
-      const result = participant.kind === "dm"
-        ? await askDirector(participant.data, abortController.signal, onStream)
-        : await askActor(participant.data, abortController.signal, onStream, twoPhase);
+      const result = await askActor(participant.data, abortController.signal, onStream, twoPhase);
 
 
       const latencyMs = Date.now() - startTime;
@@ -176,8 +176,7 @@ export async function runNextTurn(options = {}) {
         _tokSpeedWindow.push(tokenSpeed);
         if (_tokSpeedWindow.length > 8) _tokSpeedWindow.shift();
         const avg = Math.round(_tokSpeedWindow.reduce((a, b) => a + b, 0) / _tokSpeedWindow.length);
-        const el = document.getElementById("tokenGaugeSpeed");
-        if (el) { el.textContent = `${avg} tok/s`; el.style.display = ""; }
+        state.ui.tokenSpeed = avg;
       }
 
       result.trace = {
@@ -212,7 +211,6 @@ export async function runNextTurn(options = {}) {
       // Only triggers for actor turns where sampling is enabled and the turn
       // is meaningful (action === 'speak', not a skip/document edit).
       if (
-        participant.kind === 'actor' &&
         state.settings.enableHypothesisSampling &&
         result.action === 'speak' &&
         result.message
@@ -273,7 +271,7 @@ export async function runNextTurn(options = {}) {
       await applyAiResult(participant, result);
 
       // Sprint 6: Tool Usefulness Score — computed after applyAiResult so we have the final message
-      if (participant.kind === 'actor' && result.toolCalls?.length && result.message) {
+      if (result.toolCalls?.length && result.message) {
         const usefulnessScore = calculateToolUsefulness(
           result.toolCalls.map(tc => tc.result || tc.content || ''),
           result.message
@@ -282,7 +280,7 @@ export async function runNextTurn(options = {}) {
       }
 
       // Sprint 6: Distill cross-session actor memory (fire-and-forget)
-      if (participant.kind === 'actor' && result.thought && state.settings.enableCrossSessionMemory !== false && !state.settings.turboMode) {
+      if (result.thought && state.settings.enableCrossSessionMemory !== false && !state.settings.turboMode) {
         distillActorMemory(participant.data.name, result.thought).catch(err =>
           console.warn('[cross-session-memory] distill failed:', err.message)
         );
@@ -341,8 +339,7 @@ export async function runNextTurn(options = {}) {
 }
 
 export async function runRound(options = {}) {
-  readSettingsFromForm();
-  const count = state.actors.filter((actor) => actor.enabled).length + (state.dm.enabled ? 1 : 0);
+  const count = state.actors.filter((actor) => actor.enabled).length;
   if (!count) {
     setStatus("Add at least one enabled actor or turn on the DM.", "warn");
     return false;
@@ -386,7 +383,7 @@ export async function runRound(options = {}) {
 }
 
 export function participantCycleCount() {
-  return Math.max(1, state.actors.filter((actor) => actor.enabled).length + (state.dm.enabled ? 1 : 0));
+  return Math.max(1, state.actors.filter((actor) => actor.enabled).length);
 }
 
 export async function runAutoLoop() {
@@ -398,7 +395,7 @@ export async function runAutoLoop() {
   } else {
     setAutoStopStatus("Auto paused.");
   }
-  render();
+  saveState();
   const { saveCurrentSession } = await import('./session.js');
   while (state.autoRunning) {
     const ok = await runRound({ fromAuto: true });
@@ -409,7 +406,7 @@ export async function runAutoLoop() {
     saveCurrentSession().catch(console.warn);
     await wait(450);
   }
-  render();
+  saveState();
   extractOutcomes();
 }
 
@@ -417,12 +414,11 @@ export function stopGeneration() {
   state.autoRunning = false;
   abortController?.abort();
   setAutoStopStatus("Auto paused.");
-  render();
+  saveState();
   extractOutcomes();
 }
 
 export async function evaluateAutoStopAfterRound(roundMessages, options = {}) {
-  readAutoStopFromForm();
   if (!state.autoStop.enabled) {
     saveState();
     return false;
@@ -453,12 +449,10 @@ export async function evaluateAutoStopAfterRound(roundMessages, options = {}) {
   }
 
   saveState();
-  renderAutoStop();
   return false;
 }
 
 export async function judgeGoal(roundMessages = [], options = {}) {
-  readSettingsFromForm();
   if (!state.autoStop.goal.trim()) {
     setAutoStopStatus("Add a goal before checking.");
     return { achieved: false, confidence: 0, reason: "No goal set.", nextGoalSuggestion: "" };
@@ -532,7 +526,7 @@ export function normalizeGoalVerdict(value) {
 export async function promptStopOrContinue(reason, options = {}) {
   state.autoRunning = false;
   setAutoStopStatus(reason);
-  render();
+  saveState();
 
   const modal = typeof document !== "undefined" ? document.getElementById("stopOrContinueModal") : null;
   const reasonEl = typeof document !== "undefined" ? document.getElementById("modalReason") : null;
@@ -548,7 +542,6 @@ export async function promptStopOrContinue(reason, options = {}) {
       state.autoStop.roundsRun = 0;
       setAutoStopStatus(`Stopped: ${reason}`);
       saveState();
-      render();
       return true;
     }
 
@@ -560,14 +553,12 @@ export async function promptStopOrContinue(reason, options = {}) {
       setAutoStopStatus(options.fromAuto ? "New goal saved. Continuing Auto." : "New goal saved. Press Auto to continue.");
       if (options.fromAuto) state.autoRunning = true;
       saveState();
-      render();
       return false;
     }
 
     state.autoStop.roundsRun = 0;
     setAutoStopStatus("Auto paused. No new goal was set.");
     saveState();
-    render();
     return true;
   }
 
@@ -609,7 +600,6 @@ export async function promptStopOrContinue(reason, options = {}) {
       state.autoStop.roundsRun = 0;
       setAutoStopStatus(`Stopped: ${reason}`);
       saveState();
-      render();
       resolve(true);
     }
 
@@ -618,7 +608,6 @@ export async function promptStopOrContinue(reason, options = {}) {
       state.autoStop.roundsRun = 0;
       setAutoStopStatus("Auto paused. No new goal was set.");
       saveState();
-      render();
       resolve(true);
     }
 
@@ -631,7 +620,6 @@ export async function promptStopOrContinue(reason, options = {}) {
       setAutoStopStatus(options.fromAuto ? "New goal saved. Continuing Auto." : "New goal saved. Press Auto to continue.");
       if (options.fromAuto) state.autoRunning = true;
       saveState();
-      render();
       resolve(false);
     }
 
@@ -643,7 +631,6 @@ export async function promptStopOrContinue(reason, options = {}) {
 
 export function setAutoStopStatus(message) {
   state.autoStop.status = message;
-  if (els.autoStopStatus) els.autoStopStatus.textContent = message;
   saveState();
 }
 
@@ -697,9 +684,99 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
   const showThoughts = !state.settings.turboMode;
   // In two-phase mode, Phase 1 already decided to speak — Phase 2 never re-checks skip.
   // Researchers and Managers are exempt: they have their own skip logic.
-  const skipAllowed = !twoPhase || !!actor.isResearcher || !!actor.isManager;
+  const skipAllowed = !twoPhase || !!actor.canResearch || !!actor.canManageCast;
 
-  if (actor.isManager) {
+  if (actor.canDirect) {
+    // This actor is a Director — build director-style prompt
+    const privateThoughts = actor.canSeeThoughts ? privateThoughtDigest() : "";
+    const isStoryMode = state.scenario.mode === "story" || state.scenario.mode === "freeform";
+    const modeInstruction = isStoryMode
+      ? "You are the narrative DM. Describe the environment, atmosphere, sounds, and consequences of the characters' actions using rich descriptive narration wrapped in asterisks. Frame scene beats, introduce complications, and advance the story. Do NOT speak for the characters—react to what they do and set the stage for their next moves."
+      : "Help move the exchange forward. Surface decisions, conflicts, and next questions. Summarize when useful and invite quieter actors in without taking over.";
+
+    // Cast management: in story mode always; in problem mode only if canManageCast
+    const castManagementBlock = (isStoryMode || actor.canManageCast)
+      ? [
+          isStoryMode
+            ? "CAST MANAGEMENT: As the narrative DM you control who is in the scene."
+            : "CAST MANAGEMENT: You control the roster of participants.",
+          "To introduce a new character, include an optional \"manageActors\" field in your JSON with a \"create\" array — give each character a name, role (character archetype), persona, goal, and voice.",
+          "To retire a character who has left the scene or is no longer relevant, add their name to \"silence\". To bring a retired character back, add them to \"resume\".",
+          "Maximum 2 new characters per turn. You cannot silence yourself.",
+          "Example: \"manageActors\":{\"create\":[{\"name\":\"Old Mirren\",\"role\":\"Village elder\",\"persona\":\"Weathered and cryptic. Knows the forest's secrets.\",\"goal\":\"Protect the village at any cost.\",\"voice\":\"Slow, deliberate, speaks in half-riddles.\"}],\"silence\":[\"Guard Captain\"]}"
+        ].join("\n")
+      : "";
+
+    const system = [
+      `You are ${actor.name}, the DM/director for a local AI forum.`,
+      actor.persona ? `Style: ${actor.persona}` : "",
+      modeInstruction,
+      castManagementBlock,
+      "Messages labelled [USER] in the transcript are from the human facilitator. Acknowledge and act on their instructions.",
+      "Do not dominate the forum. You may skip if the actors are already progressing.",
+      "CRITICAL SKIP RULE: If you have no new guidance, summaries, or questions to introduce, you MUST set action to \"skip\" and leave message empty. This keeps the debate focused on the active actors.",
+      "CONCISENESS RULE: Keep your directions, summaries, and questions brief and high-density. Avoid conversational padding (e.g. 'Excellent points everyone', 'Let's move on'). Aim for the minimum words required to guide the discussion or narrate scene beats. Do not dominate or generate words for the sake of it.",
+      "You can describe physical actions, scenery changes, or narrator actions by surrounding them with asterisks, e.g. *the wind howls in the background* or *gestures to the map*.",
+      "FLOW CONTROL: You can direct the conversation flow dynamically. If you want a specific actor to respond next, include their name in the optional \"nextSpeaker\" JSON field (case-insensitive, e.g. \"Anya\" or \"Ben\"). If you want the default turn order to continue, omit \"nextSpeaker\" or set it to empty.",
+      "ANCHOR SUGGESTIONS: If the group has just reached a clear, settled agreement worth locking in, include a brief statement of it in the optional \"anchor\" field (max 20 words). The user will be prompted to approve it. Only anchor genuinely settled points — not ongoing debates.",
+      (!showThoughts)
+        ? "IMPORTANT: Private thoughts display is disabled. You MUST keep your JSON \"thought\" field empty (\"\") to save tokens and minimize latency."
+        : "IMPORTANT: Private thoughts display is enabled. You can record private thoughts before outputting your direction.",
+      state.document.enabled
+        ? (showThoughts
+            ? "Return only valid JSON: {\"thought\":\"private note\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\",\"nextSpeaker\":\"(optional) name of next actor to speak\",\"anchor\":\"(optional) settled agreement to propose as anchor, max 20 words\"}."
+            : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\",\"nextSpeaker\":\"(optional) name of next actor to speak\",\"anchor\":\"(optional) settled agreement to propose as anchor, max 20 words\"}.")
+        : (showThoughts
+            ? "Return only valid JSON: {\"thought\":\"private director note\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\",\"nextSpeaker\":\"(optional) name of next actor to speak\",\"anchor\":\"(optional) settled agreement to propose as anchor, max 20 words\"}."
+            : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\",\"nextSpeaker\":\"(optional) name of next actor to speak\",\"anchor\":\"(optional) settled agreement to propose as anchor, max 20 words\"}."),
+      "The JSON is transport only. Put natural public dialogue only inside message; do not make message itself JSON.",
+      state.document.enabled
+        ? [
+            "SHARED DOCUMENT: As director, you can edit the shared document via the \"documentEdit\" field.",
+            "Write your new content directly — it is appended automatically.",
+            "To fix specific text, use: {\"documentEdit\": \"[REPLACE: old text] new text\"}",
+            "Write ONLY actual content, not instructions or operation names.",
+            "CRITICAL: Do NOT output the entire document in documentEdit to just append something, as that will duplicate it. To overwrite the whole document, start with [FULL]. Otherwise, output only the new line/content, or use [REPLACE: old text] new text."
+          ].join("\n")
+        : "",
+      (!isStoryMode && state.settings.toolsEnabled)
+        ? (() => {
+            const lastUserMsg = [...state.messages].reverse().find((m) => m.type === "user");
+            const userWantsSearch = lastUserMsg && /search|look.?up|research|find out|check|googl|web|online/i.test(lastUserMsg.content || "");
+            return [
+              userWantsSearch
+                ? (showThoughts
+                    ? "IMPORTANT: The user has asked for a web search. Use [SEARCH: query] in your thought field."
+                    : "IMPORTANT: The user has asked for a web search. Use [SEARCH: query] in your JSON thought field (keep it empty other than the tag).")
+                : (showThoughts
+                    ? "WEB TOOLS: You have access to live web tools. To guide the panel effectively, verify facts, or check recent benchmarks, you are STRONGLY ENCOURAGED to use [SEARCH: query] or [READ: url] inside your thought field rather than relying on stale information."
+                    : "WEB TOOLS: You have access to live web tools. To guide the panel effectively, verify facts, or check recent benchmarks, you are STRONGLY ENCOURAGED to use [SEARCH: query] or [READ: url] inside your JSON thought field."),
+              showThoughts
+                ? "DIRECTOR RESEARCH RULE: Use [SEARCH: query] to look up specs, news, or details if the panelists raise technical debates, so you can synthesize and resolve discrepancies with fresh ground truth."
+                : "DIRECTOR RESEARCH RULE: Use [SEARCH: query] to look up specs, news, or details if the panelists raise technical debates.",
+              showThoughts
+                ? "Example: {\"thought\":\"I should look up the latest specs. [SEARCH: latest local LLM benchmarks 2026]\",\"action\":\"speak\",\"message\":\"\"}"
+                : "Example: {\"thought\":\"[SEARCH: latest local LLM benchmarks 2026]\",\"action\":\"speak\",\"message\":\"\"}"
+            ].join("\n");
+          })()
+        : ""
+    ].filter(Boolean).join("\n");
+
+    const baseUser = await buildPromptContext({ kind: "actor", actor, privateThoughts });
+    const rosterLabel = isStoryMode ? "Current cast" : "Current actor roster";
+    const rosterLines = state.actors.map(a => `- ${a.name} (${a.role || (isStoryMode ? "Character" : "Participant")})${a.enabled ? "" : (isStoryMode ? " [offstage]" : " [SILENCED]")}`).join("\n");
+    const user = `${baseUser}\n\n### ${rosterLabel}\n${rosterLines}`;
+    const promptParts = {
+      ..._lastPromptParts,
+      system,
+      persona: `Name: ${actor.name}\nPersona: ${actor.persona || ""}`
+    };
+    const result = await chatJson(system, user, actor.temperature ?? state.settings.temperature, signal, onStream);
+    result._promptParts = promptParts;
+    return result;
+  }
+
+  if (actor.canManageCast) {
     const rosterLines = state.actors
       .map(a => `- ${a.name} (${a.role || "Participant"})${a.enabled ? "" : " [SILENCED]"}`)
       .join("\n");
@@ -729,7 +806,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
     return chatJson(system, user, actor.temperature ?? state.settings.temperature, signal, onStream);
   }
 
-  if (actor.isResearcher) {
+  if (actor.canResearch) {
     const system = [
       `You are ${actor.name}.`,
       `Role: ${actor.role || "Research Specialist"}`,
@@ -777,7 +854,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
           : "IMPORTANT: Private thoughts display is disabled. Keep the JSON \"thought\" field empty. The \"message\" field is ONLY what you say and do IN CHARACTER. Never put analysis or meta-commentary in message.",
         "In your message, you MUST include physical actions wrapped in asterisks alongside your spoken dialogue. Show what your character physically does—gestures, expressions, movements, interactions with objects and the environment.",
         "Example of a good message: *peers through the undergrowth, gripping the strap of his pack* \"I don't like the look of that ravine.\" *takes a cautious step back, scanning the treeline*",
-        state.dm.enabled
+        state.actors.some(a => a.canDirect && a.enabled)
           ? "The Director (prefixed with [DIRECTOR] in the transcript) narrates the scene, settings, and consequences. Read the Director's narration carefully and react to it. Do not confuse the Director's words with other characters' speech."
           : ""
       ].filter(Boolean).join("\n")
@@ -882,94 +959,6 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
   return result;
 }
 
-export async function askDirector(dm, signal, onStream = null) {
-  const showThoughts = !state.settings.turboMode;
-  const privateThoughts = state.dm.seesPrivateThoughts ? privateThoughtDigest() : "";
-  const isStoryMode = state.scenario.mode === "story" || state.scenario.mode === "freeform";
-  const modeInstruction = isStoryMode
-    ? "You are the narrative DM. Describe the environment, atmosphere, sounds, and consequences of the characters' actions using rich descriptive narration wrapped in asterisks. Frame scene beats, introduce complications, and advance the story. Do NOT speak for the characters—react to what they do and set the stage for their next moves."
-    : "Help move the exchange forward. Surface decisions, conflicts, and next questions. Summarize when useful and invite quieter actors in without taking over.";
-
-  // In story mode the DM controls the cast — they can introduce new characters or
-  // retire ones who have left the scene, exactly like the Manager role in problem mode.
-  const castManagementBlock = isStoryMode
-    ? [
-        "CAST MANAGEMENT: As the narrative DM you control who is in the scene.",
-        "To introduce a new character, include an optional \"manageActors\" field in your JSON with a \"create\" array — give each character a name, role (character archetype), persona, goal, and voice.",
-        "To retire a character who has left the scene or is no longer relevant, add their name to \"silence\". To bring a retired character back, add them to \"resume\".",
-        "Maximum 2 new characters per turn. You cannot silence yourself.",
-        "Example: \"manageActors\":{\"create\":[{\"name\":\"Old Mirren\",\"role\":\"Village elder\",\"persona\":\"Weathered and cryptic. Knows the forest's secrets.\",\"goal\":\"Protect the village at any cost.\",\"voice\":\"Slow, deliberate, speaks in half-riddles.\"}],\"silence\":[\"Guard Captain\"]}"
-      ].join("\n")
-    : "";
-
-  const system = [
-    `You are ${dm.name}, the DM/director for a local AI forum.`,
-    dm.persona ? `Style: ${dm.persona}` : "",
-    modeInstruction,
-    castManagementBlock,
-    "Messages labelled [USER] in the transcript are from the human facilitator. Acknowledge and act on their instructions.",
-    "Do not dominate the forum. You may skip if the actors are already progressing.",
-    "CRITICAL SKIP RULE: If you have no new guidance, summaries, or questions to introduce, you MUST set action to \"skip\" and leave message empty. This keeps the debate focused on the active actors.",
-    "CONCISENESS RULE: Keep your directions, summaries, and questions brief and high-density. Avoid conversational padding (e.g. 'Excellent points everyone', 'Let's move on'). Aim for the minimum words required to guide the discussion or narrate scene beats. Do not dominate or generate words for the sake of it.",
-    "You can describe physical actions, scenery changes, or narrator actions by surrounding them with asterisks, e.g. *the wind howls in the background* or *gestures to the map*.",
-    "FLOW CONTROL: You can direct the conversation flow dynamically. If you want a specific actor to respond next, include their name in the optional \"nextSpeaker\" JSON field (case-insensitive, e.g. \"Anya\" or \"Ben\"). If you want the default turn order to continue, omit \"nextSpeaker\" or set it to empty.",
-    "ANCHOR SUGGESTIONS: If the group has just reached a clear, settled agreement worth locking in, include a brief statement of it in the optional \"anchor\" field (max 20 words). The user will be prompted to approve it. Only anchor genuinely settled points — not ongoing debates.",
-    (!showThoughts)
-      ? "IMPORTANT: Private thoughts display is disabled. You MUST keep your JSON \"thought\" field empty (\"\") to save tokens and minimize latency."
-      : "IMPORTANT: Private thoughts display is enabled. You can record private thoughts before outputting your direction.",
-    state.document.enabled
-      ? (showThoughts
-          ? "Return only valid JSON: {\"thought\":\"private note\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\",\"nextSpeaker\":\"(optional) name of next actor to speak\",\"anchor\":\"(optional) settled agreement to propose as anchor, max 20 words\"}."
-          : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message\",\"documentEdit\":\"(optional) text to add or edit\",\"nextSpeaker\":\"(optional) name of next actor to speak\",\"anchor\":\"(optional) settled agreement to propose as anchor, max 20 words\"}.")
-      : (showThoughts
-          ? "Return only valid JSON: {\"thought\":\"private director note\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\",\"nextSpeaker\":\"(optional) name of next actor to speak\",\"anchor\":\"(optional) settled agreement to propose as anchor, max 20 words\"}."
-          : "Return only valid JSON: {\"thought\":\"\",\"action\":\"speak or skip\",\"message\":\"public message, empty if skipping\",\"nextSpeaker\":\"(optional) name of next actor to speak\",\"anchor\":\"(optional) settled agreement to propose as anchor, max 20 words\"}."),
-    "The JSON is transport only. Put natural public dialogue only inside message; do not make message itself JSON.",
-    state.document.enabled
-      ? [
-          "SHARED DOCUMENT: As director, you can edit the shared document via the \"documentEdit\" field.",
-          "Write your new content directly — it is appended automatically.",
-          "To fix specific text, use: {\"documentEdit\": \"[REPLACE: old text] new text\"}",
-          "Write ONLY actual content, not instructions or operation names.",
-          "CRITICAL: Do NOT output the entire document in documentEdit to just append something, as that will duplicate it. To overwrite the whole document, start with [FULL]. Otherwise, output only the new line/content, or use [REPLACE: old text] new text."
-        ].join("\n")
-      : "",
-    (!isStoryMode && state.settings.toolsEnabled)
-      ? (() => {
-          const lastUserMsg = [...state.messages].reverse().find((m) => m.type === "user");
-          const userWantsSearch = lastUserMsg && /search|look.?up|research|find out|check|googl|web|online/i.test(lastUserMsg.content || "");
-          return [
-            userWantsSearch
-              ? (showThoughts
-                  ? "IMPORTANT: The user has asked for a web search. Use [SEARCH: query] in your thought field."
-                  : "IMPORTANT: The user has asked for a web search. Use [SEARCH: query] in your JSON thought field (keep it empty other than the tag).")
-              : (showThoughts
-                  ? "WEB TOOLS: You have access to live web tools. To guide the panel effectively, verify facts, or check recent benchmarks, you are STRONGLY ENCOURAGED to use [SEARCH: query] or [READ: url] inside your thought field rather than relying on stale information."
-                  : "WEB TOOLS: You have access to live web tools. To guide the panel effectively, verify facts, or check recent benchmarks, you are STRONGLY ENCOURAGED to use [SEARCH: query] or [READ: url] inside your JSON thought field."),
-            showThoughts
-              ? "DIRECTOR RESEARCH RULE: Use [SEARCH: query] to look up specs, news, or details if the panelists raise technical debates, so you can synthesize and resolve discrepancies with fresh ground truth."
-              : "DIRECTOR RESEARCH RULE: Use [SEARCH: query] to look up specs, news, or details if the panelists raise technical debates.",
-            showThoughts
-              ? "Example: {\"thought\":\"I should look up the latest specs. [SEARCH: latest local LLM benchmarks 2026]\",\"action\":\"speak\",\"message\":\"\"}"
-              : "Example: {\"thought\":\"[SEARCH: latest local LLM benchmarks 2026]\",\"action\":\"speak\",\"message\":\"\"}"
-          ].join("\n");
-        })()
-      : ""
-  ].filter(Boolean).join("\n");
-
-  const baseUser = await buildPromptContext({ kind: "dm", dm, privateThoughts });
-  const user = isStoryMode
-    ? `${baseUser}\n\n### Current cast\n${state.actors.map(a => `- ${a.name} (${a.role || "Character"})${a.enabled ? "" : " [offstage]"}`).join("\n")}`
-    : baseUser;
-  const promptParts = {
-    ..._lastPromptParts,
-    system,
-    persona: `Name: ${dm.name}\nPersona: ${dm.persona || ""}`
-  };
-  const result = await chatJson(system, user, state.settings.temperature, signal, onStream);
-  result._promptParts = promptParts;
-  return result;
-}
 
 // Dynamic token budget — scales smoothly with the model's detected context window.
 // Uses a logarithmic curve so there are no step-change cliffs at tier boundaries.
@@ -1047,7 +1036,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   const periodicReminder = (state.scenario.objective && state.messages.length > 0 && state.messages.length % 5 === 0)
     ? `[Reminder: the objective is "${state.scenario.objective}". Stay on track.]`
     : "";
-  const gravityWarning = (isDrifting && kind === "actor" && !actor.isResearcher)
+  const gravityWarning = (isDrifting && kind === "actor" && !actor.canResearch)
     ? `[The discussion has drifted off-topic (alignment ${alignment}%). Don't repeat what's already been said — challenge an assumption, ask a sharp question, or propose something concrete to get back to: "${state.scenario.objective || "the goal"}"]`
     : "";
 
@@ -1087,7 +1076,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
     directAddressNote,
     roleReminder,
     kind === "actor"
-      ? (actor.isResearcher
+      ? (actor.canResearch
           ? "You are the Researcher. Analyze the open questions, run a web search using `[SEARCH: query]` in your thought field if facts are needed, cite your sources, and skip your turn if no further research is required right now."
           : "Take your next turn now. Write as you would speak aloud in a real conversation — plain English, direct, natural rhythm. One to three sentences is usually enough. Do NOT use filler openers (e.g. 'Certainly', 'Absolutely', 'Great point', 'It's worth noting', 'In conclusion', 'I would argue that', 'Building on that'). Do NOT use hedging academic constructions. Say the thing directly.")
       : "Take the director turn now. Be brief and direct. Keep summaries and guidance to plain conversational English — no formal preamble."
@@ -1193,7 +1182,7 @@ export function memoryBlock(recallChunks) {
     state.memory.sharedSummary ? `**Shared summary:**\n${trimWords(state.memory.sharedSummary, WORD_LIMITS.sharedSummary)}` : "Shared summary: none yet.",
     deltaText ? `**Recent updates (since last full summary):**\n${deltaText}` : "",
     questionsStr ? `**Open questions:**\n${trimWords(questionsStr, WORD_LIMITS.openQuestions)}` : "Open questions: none recorded.",
-    state.dm.enabled && state.memory.dmState ? `**DM state:**\n${trimWords(state.memory.dmState, WORD_LIMITS.dmState)}` : "",
+    state.memory.dmState ? `**DM state:**\n${trimWords(state.memory.dmState, WORD_LIMITS.dmState)}` : "",
     `**Relevant archived memory:**\n${chunkText}`
   ].filter(Boolean).join("\n");
 }
@@ -1214,7 +1203,8 @@ export function formatTranscript(messages, wordLimit = WORD_LIMITS.recentTranscr
 
 function applyActorManagement(spec, managerName, managerColor) {
   const log = [];
-  const directorName = state.dm.name?.toLowerCase();
+  // Cannot silence any actor with canDirect (protect directors)
+  const directorNames = state.actors.filter(a => a.canDirect).map(a => a.name.toLowerCase());
 
   // Create new actors (max 2 per turn)
   for (const s of (spec.create || []).slice(0, 2)) {
@@ -1236,7 +1226,7 @@ function applyActorManagement(spec, managerName, managerColor) {
   // Silence actors (cannot silence self or Director)
   for (const name of (spec.silence || [])) {
     const lower = String(name).toLowerCase();
-    if (lower === managerName.toLowerCase() || lower === directorName) continue;
+    if (lower === managerName.toLowerCase() || directorNames.includes(lower)) continue;
     const actor = state.actors.find(a => a.enabled && a.name.toLowerCase() === lower);
     if (actor) {
       actor.enabled = false;
@@ -1257,7 +1247,6 @@ function applyActorManagement(spec, managerName, managerColor) {
   if (log.length) {
     buildTurnQueue();
     saveState();
-    render();
     addMessage({
       type: "management",
       speaker: managerName,
@@ -1269,7 +1258,7 @@ function applyActorManagement(spec, managerName, managerColor) {
 }
 
 export async function applyAiResult(participant, result) {
-  console.log(`[applyAiResult] ${participant.data.name}:`, {
+  console.debug(`[applyAiResult] ${participant.data.name}:`, {
     action: result.action,
     thoughtLen: result.thought?.length || 0,
     toolCalls: result.toolCalls?.length || 0,
@@ -1278,97 +1267,63 @@ export async function applyAiResult(participant, result) {
   });
 
   // Apply document edit if present
-  const speakerName = participant.kind === "dm" ? state.dm.name : participant.data.name;
+  const speakerName = participant.data.name;
   if (result.documentEdit && state.document.enabled) {
     applyDocumentEdit(speakerName, result.documentEdit);
   }
   const docEdited = !!(result.documentEdit && state.document.enabled);
 
-  if (participant.kind === "dm") {
-    state.dm.thoughts = appendMemory(state.dm.thoughts, result.thought);
-
-    // Director anchor suggestions — queued for user approval like pending facts
-    if (result.anchor && String(result.anchor).trim()) {
-      const anchorText = String(result.anchor).trim().slice(0, 160);
-      if (!state.anchors) state.anchors = [];
-      const alreadyAnchored = state.anchors.some(a => a.text === anchorText);
-      if (!alreadyAnchored) {
-        const pendingAnchor = { id: crypto.randomUUID(), text: anchorText, speaker: state.dm.name, color: "var(--gold)", suggestedAt: new Date().toISOString() };
-        if (!state.memory.pendingAnchors) state.memory.pendingAnchors = [];
-        state.memory.pendingAnchors.push(pendingAnchor);
-        document.dispatchEvent(new CustomEvent("anchorSuggested", { detail: pendingAnchor }));
-        logTransition("anchor_suggested", { text: anchorText });
-      }
-    }
-
-    // Director cast management (story mode) — create/silence/resume characters
-    if (result.manageActors && typeof result.manageActors === "object") {
-      applyActorManagement(result.manageActors, state.dm.name, "var(--gold)");
-    }
-
-    // Director-guided dynamic turn routing
-    if (result.nextSpeaker) {
-      const targetName = String(result.nextSpeaker).trim().toLowerCase();
-      const targetActor = state.actors.find(a => a.enabled && a.name.toLowerCase() === targetName);
-      if (targetActor) {
-        console.log(`[turns] Director routed next turn to actor: ${targetActor.name}`);
-        state.turnQueue = state.turnQueue.filter(id => id !== targetActor.id);
-        state.turnQueue.unshift(targetActor.id);
-        saveState();
-      }
-    }
-
-    // Repetition safeguard
-    const speakerMessages = state.messages.filter(m => m.speaker === speakerName && m.type !== "skip");
-    if (result.action !== "skip" && result.message && speakerMessages.length > 0) {
-      const lastMsg = speakerMessages[speakerMessages.length - 1];
-      if (lastMsg.content && lastMsg.content.trim() === result.message.trim()) {
-        console.warn(`[turns] Repetition safeguard triggered: forcing skip for Director ${speakerName}`);
-        result.action = "skip";
-      }
-    }
-
-    if (result.action === "skip") {
-      logTransition("skip_decision", { speaker: speakerName, reason: result.thought });
-      return addMessage({ type: "skip", speaker: state.dm.name, content: "Skipped.", thought: result.thought, color: "var(--gold)", toolCalls: result.toolCalls || [], docEdited, trace: result.trace, metrics: result.metrics });
-    }
-    return addMessage({ type: "dm", speaker: state.dm.name, content: result.message, thought: result.thought, color: "var(--gold)", toolCalls: result.toolCalls || [], docEdited, trace: result.trace, metrics: result.metrics });
-  }
-
   const actor = participant.data;
   actor.thoughts = appendMemory(actor.thoughts, result.thought);
 
-  // Manager: apply roster changes before next-speaker routing
-  if (actor.isManager && result.manageActors && typeof result.manageActors === "object") {
+  // Anchor suggestions (canDirect actors)
+  if (actor.canDirect && result.anchor && String(result.anchor).trim()) {
+    const anchorText = String(result.anchor).trim().slice(0, 160);
+    if (!state.anchors) state.anchors = [];
+    const alreadyAnchored = state.anchors.some(a => a.text === anchorText);
+    if (!alreadyAnchored) {
+      const pendingAnchor = { id: crypto.randomUUID(), text: anchorText, speaker: actor.name, color: actor.color, suggestedAt: new Date().toISOString() };
+      if (!state.memory.pendingAnchors) state.memory.pendingAnchors = [];
+      state.memory.pendingAnchors.push(pendingAnchor);
+      document.dispatchEvent(new CustomEvent("anchorSuggested", { detail: pendingAnchor }));
+      logTransition("anchor_suggested", { text: anchorText });
+    }
+  }
+
+  // Cast management (canManageCast actors — directors, managers, etc.)
+  if (actor.canManageCast && result.manageActors && typeof result.manageActors === "object") {
     applyActorManagement(result.manageActors, actor.name, actor.color);
   }
 
-  // Actor-driven next-speaker routing (mirrors the DM handler above)
+  // Next-speaker routing (any actor can route if the result includes it)
   if (result.nextSpeaker) {
     const targetName = String(result.nextSpeaker).trim().toLowerCase();
     const targetActor = state.actors.find(a => a.enabled && a.name.toLowerCase() === targetName);
     if (targetActor) {
-      console.log(`[turns] Actor ${actor.name} routed next turn to: ${targetActor.name}`);
+      console.debug(`[turns] ${actor.name} routed next turn to: ${targetActor.name}`);
       state.turnQueue = state.turnQueue.filter(id => id !== targetActor.id);
       state.turnQueue.unshift(targetActor.id);
       saveState();
     }
   }
 
-  // Repetition safeguard for actors
+  // Repetition safeguard
   const speakerMessages = state.messages.filter(m => m.speaker === speakerName && m.type !== "skip");
   if (result.action !== "skip" && result.message && speakerMessages.length > 0) {
     const lastMsg = speakerMessages[speakerMessages.length - 1];
     if (lastMsg.content && lastMsg.content.trim() === result.message.trim()) {
-      console.warn(`[turns] Repetition safeguard triggered: forcing skip for Actor ${speakerName}`);
+      console.warn(`[turns] Repetition safeguard triggered: forcing skip for ${speakerName}`);
       result.action = "skip";
     }
   }
 
+  // Message type: canDirect actors use "dm" for backward compatibility with transcripts
+  const msgType = actor.canDirect ? "dm" : "actor";
+
   if (result.action === "skip") {
     logTransition("skip_decision", { speaker: speakerName, reason: result.thought });
     actor.skipCount = (actor.skipCount || 0) + 1;
-    renderActors();
+    saveState();
     return addMessage({ type: "skip", actorId: actor.id, speaker: actor.name, content: "Skipped.", thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, metrics: result.metrics, nextSpeaker: result.nextSpeaker || "" });
   }
 
@@ -1379,8 +1334,8 @@ export async function applyAiResult(participant, result) {
   }
 
   actor.turnCount = (actor.turnCount || 0) + 1;
-  renderActors();
-  return addMessage({ type: "actor", actorId: actor.id, speaker: actor.name, content: result.message, thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, metrics: result.metrics, nextSpeaker: result.nextSpeaker || "" });
+  saveState();
+  return addMessage({ type: msgType, actorId: actor.id, speaker: actor.name, content: result.message, thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, metrics: result.metrics, nextSpeaker: result.nextSpeaker || "" });
 }
 
 function applyDocumentEdit(author, editText) {
@@ -1551,8 +1506,7 @@ function applyDocumentEdit(author, editText) {
   state.document.content = newContent;
   logTransition("document_edit", { author, operation: opLabel, prevLength: prev.length, newLength: newContent.length });
   saveState();
-  renderDocument();
-  console.log(`[document] ${author} ${opLabel} (${newContent.length} chars, ${state.document.versions.length} versions)`);
+  console.debug(`[document] ${author} ${opLabel} (${newContent.length} chars, ${state.document.versions.length} versions)`);
 }
 
 export function appendMemory(existing, thought) {

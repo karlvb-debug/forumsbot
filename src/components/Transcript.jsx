@@ -1,0 +1,229 @@
+import React, { useRef, useEffect, useMemo } from 'react';
+import * as Ic from './Icons';
+import { useForumState, mutateState } from '../hooks/useForumState';
+import { useStreaming } from '../hooks/useStreaming';
+
+function MessageCard({ msg, actor, showThoughts, onAnchor }) {
+  if (!actor) return null;
+
+  const timeStr = msg.createdAt
+    ? new Date(msg.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })
+    : msg.time || '';
+
+  if (msg.type === 'skip') {
+    return (
+      <article className="msg">
+        <span className="swatch" style={{ background: actor.color }}>{(actor.name || '?')[0]}</span>
+        <div className="msg-body">
+          <div className="msg-head">
+            <span className="msg-name">{actor.name}</span>
+            <span className="msg-role">{actor.role}</span>
+            <span className="msg-time">{timeStr}</span>
+          </div>
+          <div className="skipped">— skip — {msg.content || msg.text || msg.reason || ''}</div>
+        </div>
+      </article>
+    );
+  }
+
+  // Parse thought from AI JSON envelope
+  let thought = msg.thought || null;
+  let text = msg.content || msg.text || msg.message || '';
+
+  // Tool calls display
+  const toolCalls = msg.toolCalls || [];
+
+  return (
+    <article className="msg">
+      <span className="swatch" style={{ background: actor.color }}>{(actor.name || '?')[0]}</span>
+      <div className="msg-body">
+        <div className="msg-head">
+          <span className="msg-name">{actor.name}</span>
+          <span className="msg-role">{actor.role}</span>
+          <span className="msg-time">{timeStr}</span>
+          {msg.anchored && (
+            <span title="Anchored" style={{ color: "var(--info)", fontSize: 12 }}>
+              <Ic.Anchor width={12} height={12} />
+            </span>
+          )}
+        </div>
+
+        {toolCalls.length > 0 && toolCalls.map((tc, i) => (
+          <div className="tool-call" key={i} style={{ marginBottom: 8 }}>
+            <div className="tc-head">⌕ {tc.tool}{tc.query ? ` · "${tc.query}"` : ''}{tc.domain ? ` → ${tc.domain}` : ''}</div>
+          </div>
+        ))}
+
+        <div className="msg-text">{text}</div>
+
+        {thought && showThoughts && (
+          <div className="thought">
+            <span className="thought-label">private</span>
+            {thought}
+          </div>
+        )}
+
+        <div className="msg-actions">
+          <button className={msg.feedback === "up" ? "active" : ""} title="Helpful">👍</button>
+          <button className={msg.feedback === "down" ? "active" : ""} title="Unhelpful">👎</button>
+          <button
+            className={msg.anchored ? "active" : ""}
+            title="Anchor this claim"
+            onClick={() => onAnchor?.(msg.id)}
+          >
+            <Ic.Anchor width={13} height={13} />
+          </button>
+          <button title="Fork from here">⑂</button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function StreamingBubble({ streaming }) {
+  if (!streaming) return null;
+  return (
+    <article className="msg streaming">
+      <span className="swatch" style={{ background: streaming.color || 'var(--fg-mute)' }}>
+        {(streaming.speaker || '?')[0]}
+      </span>
+      <div className="msg-body">
+        <div className="msg-head">
+          <span className="msg-name">{streaming.speaker}</span>
+          <span className="msg-role">generating…</span>
+        </div>
+        <div className="msg-text">
+          {streaming.text || <span className="cursor-blink">▊</span>}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function RoundDivider({ round, time }) {
+  return (
+    <div className="round-divider">
+      Round {round}{time ? ` · ${time}` : ''}
+    </div>
+  );
+}
+
+export function Transcript({ showThoughts }) {
+  const messages = useForumState(s => s.messages || []);
+  const actors = useForumState(s => s.actors || []);
+  const autoRunning = useForumState(s => s.autoRunning);
+  const streaming = useStreaming();
+
+  const scrollRef = useRef(null);
+  const wasAtBottomRef = useRef(true);
+
+  // Build actor lookup map (by id and by name)
+  const actorMap = useMemo(() => {
+    const m = new Map();
+    actors.forEach(a => {
+      m.set(a.id, a);
+      m.set(a.name, a);
+    });
+    return m;
+  }, [actors]);
+
+  // Group messages by round and insert dividers
+  const displayItems = useMemo(() => {
+    const items = [];
+    let lastRound = 0;
+    messages.forEach(msg => {
+      const round = msg.round || 0;
+      if (round > lastRound && round > 0) {
+        const time = msg.createdAt
+          ? new Date(msg.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+          : '';
+        items.push({ type: 'divider', round, time, id: `divider-${round}` });
+        lastRound = round;
+      }
+      items.push({ type: 'message', msg, id: msg.id });
+    });
+    return items;
+  }, [messages]);
+
+  // Track scroll position
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      wasAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Auto-scroll when new messages arrive or streaming updates
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el && wasAtBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages.length, streaming?.text]);
+
+  const turnCount = messages.filter(m => m.type !== 'skip' && m.type !== 'system').length;
+  const anchoredCount = messages.filter(m => m.anchored).length;
+
+  const onAnchor = (msgId) => {
+    mutateState(s => {
+      const msg = s.messages.find(m => m.id === msgId);
+      if (msg) {
+        msg.anchored = !msg.anchored;
+        if (msg.anchored) {
+          if (!s.anchors) s.anchors = [];
+          s.anchors.push({
+            id: 'ank-' + Date.now(),
+            text: msg.content || msg.text || msg.message || '',
+            source: msg.speaker || 'Unknown',
+            createdAt: new Date().toISOString(),
+            messageId: msgId,
+          });
+        }
+      }
+    });
+  };
+
+  return (
+    <div className="transcript" ref={scrollRef}>
+      <div className="transcript-meta">
+        <span>● {autoRunning ? 'Auto running' : `${turnCount} turns`}</span>
+        <span className="sep" />
+        <span>{anchoredCount} anchored</span>
+      </div>
+
+      {displayItems.map(item => {
+        if (item.type === 'divider') {
+          return <RoundDivider key={item.id} round={item.round} time={item.time} />;
+        }
+        const msg = item.msg;
+        const actor = actorMap.get(msg.actorId) || actorMap.get(msg.speaker) || {
+          name: msg.speaker || 'System',
+          role: msg.type === 'dm' ? 'Director' : msg.type === 'user' ? 'You' : '',
+          color: msg.color || '#9aa0a6',
+        };
+        return (
+          <MessageCard
+            key={item.id}
+            msg={msg}
+            actor={actor}
+            showThoughts={showThoughts}
+            onAnchor={onAnchor}
+          />
+        );
+      })}
+
+      <StreamingBubble streaming={streaming} />
+
+      {!messages.length && !streaming && (
+        <div className="empty-transcript">
+          <div className="empty-transcript-icon">💬</div>
+          <div className="empty-transcript-text">No messages yet</div>
+          <div className="empty-transcript-hint">Send a message or press Next to start</div>
+        </div>
+      )}
+    </div>
+  );
+}

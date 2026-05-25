@@ -342,7 +342,7 @@ export function startConfluenceRiverAnimation(canvas) {
         name,
         count,
         share: count / lines.length,
-        color: actor?.color || (name === state.dm.name ? 'var(--gold)' : 'var(--accent)')
+        color: actor?.color || 'var(--accent)'
       };
     }).sort((a,b) => b.share - a.share);
 

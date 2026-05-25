@@ -1,4 +1,4 @@
-import { STORAGE_KEY, VALID_TABS, defaultState } from './constants.js';
+import { STORAGE_KEY, VALID_TABS, defaultState, colors } from './constants.js';
 import { normalizeQuickStartConfig, cleanStoredMessage, normalizeStringArray } from './utils.js';
 
 function normalizeState(value) {
@@ -95,6 +95,35 @@ function normalizeState(value) {
     merged.document.title = merged.scenario.title;
   }
 
+  // ── DM → Actor migration ──
+  // If old state has a `dm` object, convert it into an actor with permissions
+  if (merged.dm && typeof merged.dm === "object" && merged.dm.name) {
+    const dmActor = {
+      id: merged.dm.id || crypto.randomUUID(),
+      name: merged.dm.name || "Director",
+      role: "Discussion facilitator",
+      persona: merged.dm.persona || "",
+      goal: "Guide the group toward clear decisions and next steps.",
+      voice: "Calm, concise, neutral.",
+      thoughts: merged.dm.thoughts || "",
+      enabled: merged.dm.enabled !== false,
+      expanded: false,
+      color: "#c8a830",
+      canDirect: true,
+      canManageCast: true,
+      canResearch: false,
+      canSeeThoughts: !!merged.dm.seesPrivateThoughts,
+      temperature: 0.8,
+      relationships: {}
+    };
+    // Prepend Director to actors array if not already present
+    const hasDirector = merged.actors.some(a => a.canDirect || a.name === merged.dm.name);
+    if (!hasDirector) {
+      merged.actors.unshift(dmActor);
+    }
+    delete merged.dm;
+  }
+
   merged.actors = merged.actors.map((actor, index) => ({
     id: actor.id || crypto.randomUUID(),
     name: actor.name || `Actor ${index + 1}`,
@@ -106,9 +135,13 @@ function normalizeState(value) {
     relationships: (actor.relationships && typeof actor.relationships === "object") ? actor.relationships : {},
     enabled: actor.enabled !== false,
     expanded: actor.expanded || false,
-    isResearcher: !!actor.isResearcher,
     temperature: typeof actor.temperature === "number" ? actor.temperature : 0.8,
-    color: actor.color || defaultState.actors[index % defaultState.actors.length]?.color || "#18726d"
+    color: actor.color || colors[index % colors.length] || "#18726d",
+    // Permissions — migrate old flags to new model
+    canDirect: !!(actor.canDirect),
+    canManageCast: !!(actor.canManageCast || actor.isManager),
+    canResearch: !!(actor.canResearch || actor.isResearcher),
+    canSeeThoughts: !!(actor.canSeeThoughts)
   }));
   merged.ui.viewingVersionIndex = merged.document.versions.length;
   return merged;
@@ -132,10 +165,16 @@ export function setState(newState) {
   state = newState;
 }
 
+// Callback registered by useForumState to notify React on every save.
+let _onSaveCallback = null;
+export function registerSaveCallback(fn) {
+  _onSaveCallback = fn;
+}
+
 export function saveState() {
   const { messages, autoRunning, ...persisted } = state;
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...persisted, messages: [] }));
-  document.dispatchEvent(new CustomEvent("stateSaved"));
+  if (_onSaveCallback) _onSaveCallback();
 }
 
 export function logTransition(type, detail = {}) {

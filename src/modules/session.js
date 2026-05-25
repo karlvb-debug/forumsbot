@@ -1,6 +1,6 @@
 import { PRESET_VERSION, RECENT_MESSAGE_LIMIT, defaultState } from './constants.js';
 import { state, setState, normalizeState, saveState } from './state.js';
-import { render, syncFormFromState, els, switchSidebarTab, renderQuickStartPreview } from './render.js';
+import { saveState as _saveState } from '../hooks/useForumState.js';
 import { setStatus } from './api.js';
 import { clearMessages, clearChunks, putMessages, putChunk, countChunks, getRecentMessages, getAllMessages, getAllChunks, putSession, getAllSessions, deleteSession } from './db.js';
 import { chatCompletion, chatCompletionMessages } from './api.js';
@@ -30,7 +30,6 @@ export function savePreset() {
       dmState: state.memory.dmState
     },
     scenario: state.scenario,
-    dm: state.dm,
     actors: state.actors,
     autoStop: {
       ...state.autoStop,
@@ -41,13 +40,9 @@ export function savePreset() {
   downloadJson(`forum-preset-${slugDate()}.json`, preset);
 }
 
-export async function exportSession() {
+export async function exportSession(mode = 'debug') {
   const messages = await getAllMessages();
   const chunks = await getAllChunks();
-
-  // Read export mode from UI (falls back to 'debug' if element absent)
-  const modeEl = document.getElementById('exportModeSelect');
-  const mode = modeEl ? modeEl.value : 'debug';
 
   let payload;
 
@@ -236,7 +231,6 @@ export async function resetSession(fullReset = false) {
     const keepConfig = {
       settings: state.settings,
       scenario: state.scenario,
-      dm: { ...state.dm, thoughts: "" },
       actors: state.actors.map((actor) => ({ ...actor, thoughts: "" })),
       memory: {
         ...structuredClone(defaultState.memory),
@@ -254,9 +248,7 @@ export async function resetSession(fullReset = false) {
   }
 
   saveState();
-  syncFormFromState();
-  render();
-  switchSidebarTab("setup");
+
   setStatus(fullReset ? "Everything reset to defaults." : "Conversation cleared.", "ok");
 }
 
@@ -283,7 +275,6 @@ export function loadPresetFile(file) {
         memory: { ...state.memory, ...preset.memory },
         autoStop: { ...state.autoStop, ...preset.autoStop, roundsRun: 0 },
         scenario: { ...state.scenario, ...preset.scenario },
-        dm: { ...state.dm, ...preset.dm },
         actors: preset.actors || state.actors
       }));
       if (Array.isArray(preset.messages)) {
@@ -299,8 +290,6 @@ export function loadPresetFile(file) {
       }
       state.memory.archivedCount = await countChunks();
       saveState();
-      syncFormFromState();
-      render();
       setStatus("Preset loaded.", "ok");
     } catch {
       setStatus("That preset file could not be read.", "error");
@@ -321,7 +310,10 @@ export function addActor(isResearcher = false) {
       voice: "Objective, fact-driven, structured with clear source citations.",
       thoughts: "",
       enabled: true,
-      isResearcher: true,
+      canDirect: false,
+      canManageCast: false,
+      canResearch: true,
+      canSeeThoughts: false,
       color: "#6e4c99"
     });
   } else {
@@ -334,11 +326,14 @@ export function addActor(isResearcher = false) {
       voice: "",
       thoughts: "",
       enabled: true,
+      canDirect: false,
+      canManageCast: false,
+      canResearch: false,
+      canSeeThoughts: false,
       color: colors[index % colors.length]
     });
   }
   saveState();
-  render();
 }
 
 export function addManager() {
@@ -351,11 +346,13 @@ export function addManager() {
     voice: "Decisive and brief. State what you're doing and why in one sentence.",
     thoughts: "",
     enabled: true,
-    isManager: true,
+    canDirect: false,
+    canManageCast: true,
+    canResearch: false,
+    canSeeThoughts: false,
     color: "#1a7a6e"
   });
   saveState();
-  render();
 }
 
 export async function generateActorFromDescription() {
@@ -394,10 +391,13 @@ export async function generateActorFromDescription() {
       thoughts: "",
       enabled: true,
       expanded: true,
+      canDirect: false,
+      canManageCast: false,
+      canResearch: false,
+      canSeeThoughts: false,
       color: colors[index % colors.length]
     });
     saveState();
-    render();
     setStatus(`Actor "${parsed.name}" created.`, "ok");
   } catch (err) {
     setStatus(`Actor generation failed: ${err.message}`, "error");
@@ -423,8 +423,8 @@ export async function generateQuickStart() {
 
   const currentConfig = {
     scenario: state.scenario,
-    dm: { enabled: state.dm.enabled, name: state.dm.name, persona: state.dm.persona, seesPrivateThoughts: state.dm.seesPrivateThoughts },
-    actors: state.actors.map(a => ({ name: a.name, role: a.role, persona: a.persona, goal: a.goal, voice: a.voice, enabled: a.enabled, temperature: a.temperature, isResearcher: !!a.isResearcher, isManager: !!a.isManager })),
+    dm: (() => { const d = state.actors.find(a => a.canDirect); return d ? { enabled: d.enabled, name: d.name, persona: d.persona, canSeeThoughts: d.canSeeThoughts } : { enabled: false }; })(),
+    actors: state.actors.map(a => ({ name: a.name, role: a.role, persona: a.persona, goal: a.goal, voice: a.voice, enabled: a.enabled, temperature: a.temperature, canDirect: !!a.canDirect, canManageCast: !!a.canManageCast, canResearch: !!a.canResearch, canSeeThoughts: !!a.canSeeThoughts })),
     settings: {
       temperature: state.settings.temperature,
       maxTokens: state.settings.maxTokens ?? 2000,
@@ -453,18 +453,18 @@ export async function generateQuickStart() {
   };
 
   const patchChangesShape = `{
-  "addActors": [{"name":"","role":"","persona":"","goal":"","voice":"","temperature":0.8,"isResearcher":false,"isManager":false}],
+  "addActors": [{"name":"","role":"","persona":"","goal":"","voice":"","temperature":0.8,"canResearch":false,"canManageCast":false}],
   "removeActors": ["ActorName"],
   "modifyActors": [{"find":"ActorName","persona":"...","goal":"...","temperature":0.9}],
   "scenario": {"title":"...","premise":"...","objective":"...","mode":"problem|story|freeform"},
-  "dm": {"enabled":true,"name":"...","persona":"...","seesPrivateThoughts":false},
+  "dm": {"enabled":true,"name":"...","persona":"...","canSeeThoughts":false},
   "settings": {"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"toolsEnabled":true,"streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":true,"enableHypothesisSampling":false,"hypothesisSampleCount":2,"hypothesisAutoSelect":true,"enableCrossSessionMemory":true,"enableAdaptiveCompression":true,"turnDelay":0},
   "memory": {"addFacts":["fact text"],"removeFacts":["text to match and remove"],"sharedSummary":"...","openQuestions":"...","dmState":"..."},
   "autoStop": {"enabled":true,"goal":"...","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5},
   "document": {"enabled":false,"title":"..."}
 }`;
 
-  const fullSetupShape = `{"scenario":{"mode":"problem|story|freeform","title":"","premise":"","objective":""},"dm":{"enabled":true,"name":"","persona":"","seesPrivateThoughts":false},"actors":[{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"isResearcher":false,"isManager":false}],"memory":{"pinnedFacts":[],"sharedSummary":"","openQuestions":"","dmState":""},"settings":{"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"toolsEnabled":false,"streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":true,"enableHypothesisSampling":false,"hypothesisSampleCount":2,"hypothesisAutoSelect":true,"enableCrossSessionMemory":true,"enableAdaptiveCompression":true,"turnDelay":0},"document":{"enabled":false,"title":""},"autoStop":{"enabled":false,"goal":"","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5}}`;
+  const fullSetupShape = `{"scenario":{"mode":"problem|story|freeform","title":"","premise":"","objective":""},"dm":{"enabled":true,"name":"","persona":"","canSeeThoughts":false},"actors":[{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"canDirect":false,"canManageCast":false,"canResearch":false,"canSeeThoughts":false}],"memory":{"pinnedFacts":[],"sharedSummary":"","openQuestions":"","dmState":""},"settings":{"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"toolsEnabled":false,"streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":true,"enableHypothesisSampling":false,"hypothesisSampleCount":2,"hypothesisAutoSelect":true,"enableCrossSessionMemory":true,"enableAdaptiveCompression":true,"turnDelay":0},"document":{"enabled":false,"title":""},"autoStop":{"enabled":false,"goal":"","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5}}`;
 
   const system = [
     "You are the AI Assistant for Forum, a local multi-agent AI discussion app running LLM actors via LM Studio.",
@@ -485,10 +485,10 @@ export async function generateQuickStart() {
     "story mode disables web tools and uses roleplay framing.",
     "",
     "Actors: Each gets its own LLM call per turn. name, role, persona, goal, voice are core.",
-    "temperature per actor (0-2, default 0.8). isResearcher=true makes actor fetch live web data.",
-    "isManager=true lets actor create/silence/resume other actors mid-session.",
+    "temperature per actor (0-2, default 0.8). canResearch=true makes actor fetch live web data.",
+    "canManageCast=true lets actor create/silence/resume other actors mid-session. canDirect=true marks the director actor.",
     "",
-    "Director (dm): moderates discussion. seesPrivateThoughts=true gives director visibility into all actors' private reasoning.",
+    "Director: an actor with canDirect=true that moderates discussion. canSeeThoughts=true gives director visibility into all actors' private reasoning.",
     "",
     "Generation: temperature 0-2 (creativity), maxTokens 200-8000 (response length), topP 0.1-1 (nucleus sampling),",
     "repeatPenalty 1-1.5 (repetition reduction). toolsEnabled allows web search. streamingEnabled shows tokens live.",
@@ -641,15 +641,15 @@ export async function applyQuickStartConfig() {
   const normalized = normalizeQuickStartConfig(draft);
   const hadConversation = state.messages.length > 0;
   state.scenario = normalized.scenario;
-  state.dm = {
-    ...state.dm,
-    enabled: normalized.dm.enabled,
-    name: normalized.dm.name,
-    persona: normalized.dm.persona,
-    seesPrivateThoughts: normalized.dm.seesPrivateThoughts,
-    thoughts: ""
-  };
   state.actors = normalized.actors;
+  const directorActor = state.actors.find(a => a.canDirect);
+  if (directorActor && normalized.dm) {
+    directorActor.enabled = normalized.dm.enabled;
+    directorActor.name = normalized.dm.name || directorActor.name;
+    directorActor.persona = normalized.dm.persona || directorActor.persona;
+    directorActor.canSeeThoughts = !!normalized.dm.canSeeThoughts || !!normalized.dm.seesPrivateThoughts;
+    directorActor.thoughts = "";
+  }
   // Apply AI-suggested settings if present
   if (normalized.settings) {
     const ns = normalized.settings;
@@ -689,8 +689,6 @@ export async function applyQuickStartConfig() {
   updateAiAssistantApplyButton();
   state.ui.quickStartStatus = "Setup applied.";
   saveState();
-  syncFormFromState();
-  render();
   if (hadConversation) {
     // addMessage is in turns.js — import lazily to avoid circular dep
     const { addMessage } = await import('./turns.js');
@@ -701,7 +699,7 @@ export async function applyQuickStartConfig() {
       color: "var(--coral)"
     });
   }
-  switchSidebarTab("setup");
+
 }
 
 export function discardQuickStartConfig() {
@@ -710,7 +708,6 @@ export function discardQuickStartConfig() {
   state.ui.quickStartPrompt = "";
   const input = document.getElementById("aiAssistantInput");
   if (input) input.value = "";
-  if (els.quickStartPrompt) els.quickStartPrompt.value = "";
   state.ui.quickStartStatus = "";
   saveState();
   renderQuickStartChat();
@@ -723,16 +720,12 @@ export function setQuickStartBusy(value) {
   if (sendBtn) sendBtn.disabled = value;
   if (applyBtn) applyBtn.disabled = value;
   // Legacy sidebar elements (may not exist)
-  if (els.generateQuickStart) els.generateQuickStart.disabled = value;
-  if (els.applyQuickStart) els.applyQuickStart.disabled = value || !state.ui.quickStartDraft;
-  if (els.discardQuickStart) els.discardQuickStart.disabled = value || !state.ui.quickStartDraft;
 }
 
 export function setQuickStartStatus(message) {
   state.ui.quickStartStatus = message;
   const el = document.getElementById("aiAssistantStatus");
   if (el) el.textContent = message;
-  if (els.quickStartStatus) els.quickStartStatus.textContent = message;
   saveState();
 }
 
@@ -759,8 +752,10 @@ export function applyAssistantPatch(changes) {
       goal: a.goal || "",
       voice: a.voice || "",
       temperature: typeof a.temperature === "number" ? a.temperature : 0.8,
-      isResearcher: !!a.isResearcher,
-      isManager: !!a.isManager,
+      canDirect: false,
+      canManageCast: !!a.isManager || !!a.canManageCast,
+      canResearch: !!a.isResearcher || !!a.canResearch,
+      canSeeThoughts: !!a.canSeeThoughts,
       enabled: true,
       thoughts: "",
       color: colors[state.actors.length % colors.length]
@@ -789,7 +784,8 @@ export function applyAssistantPatch(changes) {
 
   // Director (partial)
   if (c.dm && typeof c.dm === "object") {
-    Object.assign(state.dm, c.dm);
+    const director = state.actors.find(a => a.canDirect);
+    if (director) Object.assign(director, c.dm);
   }
 
   // Settings (partial)
@@ -827,8 +823,6 @@ export function applyAssistantPatch(changes) {
   }
 
   saveState();
-  syncFormFromState();
-  render();
 }
 
 // ─── Session History ────────────────────────────────────────────────────────
@@ -850,7 +844,6 @@ export async function saveCurrentSession() {
     scenario: { ...state.scenario },
     memory: { ...state.memory },
     actors: state.actors,
-    dm: { ...state.dm }
   };
 
   // Keep at most 20 sessions; remove oldest others if over limit
@@ -877,13 +870,11 @@ export async function loadSession(session) {
   if (session.scenario) state.scenario = { ...state.scenario, ...session.scenario };
   if (session.memory) state.memory = { ...state.memory, ...session.memory };
   if (Array.isArray(session.actors)) state.actors = session.actors;
-  if (session.dm) state.dm = { ...state.dm, ...session.dm };
+  // Legacy dm migration: if session has a dm key, normalizeState will handle it on next load
 
   state._currentSessionId = session.id;
 
   saveState();
-  syncFormFromState();
-  render();
   setStatus(`Session "${session.scenarioTitle}" loaded.`, 'ok');
 }
 
@@ -922,13 +913,12 @@ export async function forkSessionAtMessage(messageId) {
 
   // Clear private thoughts that reference pre-fork context
   state.actors.forEach(a => { a.thoughts = ""; });
-  state.dm.thoughts = "";
+  // Director thoughts already cleared above with all actors
 
   // Reset turn-related ephemeral state
   state.turnQueue = [];
   state.autoRunning = false;
 
   saveState();
-  render();
   setStatus(`Forked from message ${idx + 1}. ${truncated.length} messages kept.`, 'ok');
 }

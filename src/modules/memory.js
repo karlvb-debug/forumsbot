@@ -1,7 +1,8 @@
 import { WORD_LIMITS, PROMPT_MESSAGE_LIMIT, RECALLED_CHUNK_LIMIT, PINNED_FACTS_WORD_CAP, DELTA_REWRITE_EVERY } from './constants.js';
 import { state, saveState, logTransition } from './state.js';
 import { chatCompletion, getEmbedding, getEmbeddingsBatch, setStatus } from './api.js';
-import { render, renderMemory, renderPendingFacts, renderActors, setBusy, getIsGenerating, els } from './render.js';
+import { saveState as _hookSaveState } from '../hooks/useForumState.js';
+import { setBusy, getBusy as getIsGenerating } from '../hooks/useActions.js';
 import { getAllChunks, putChunk, clearChunks, countChunks, getAllMessages } from './db.js';
 import { trimWords, stringifyList, normalizeStringArray, extractKeywords, stringifyBullets, stripCodeFence, extractBalancedObjects, sanitizeJsonString } from './utils.js';
 
@@ -168,7 +169,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
   state.memory.isSummarizing = true;
 
   if (isBackground) {
-    if (els.memoryStatus) els.memoryStatus.textContent = "Updating memory in background...";
+    state.memory.status = "Updating memory in background..."; saveState();
   } else {
     setBusy(true);
     setStatus("Updating memory...", "pending");
@@ -265,7 +266,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
 
       const content = await chatCompletion(system, user, { temperature: 0.2, maxTokens: 1600 });
       const parsed = parseMemoryJson(content);
-      console.log('[memory] Parsed keys:', Object.keys(parsed), 'sharedSummary type:', typeof parsed.sharedSummary, 'openQ type:', typeof parsed.openQuestions);
+      console.debug('[memory] Parsed keys:', Object.keys(parsed), 'sharedSummary type:', typeof parsed.sharedSummary, 'openQ type:', typeof parsed.openQuestions);
       const memoryUpdate = normalizeMemoryUpdate(parsed, usableMessages);
       await applyMemoryUpdate(memoryUpdate);
       applyActorRelationshipUpdates(memoryUpdate.actorRelationshipUpdates || {});
@@ -278,8 +279,6 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
     state.memory.lastSummaryMessageId = usableMessages[usableMessages.length - 1]?.id || state.memory.lastSummaryMessageId;
     state.memory.turnsSinceSummary = 0;
     saveState();
-    renderActors();
-    renderMemory();
     if (!isBackground) setStatus("Memory updated.", "ok");
 
   } catch (error) {
@@ -290,7 +289,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
     }
   } finally {
     state.memory.isSummarizing = false;
-    if (isBackground) renderMemory();
+    if (isBackground) saveState();
     else setBusy(false);
   }
 }
@@ -380,7 +379,8 @@ export function normalizeMemoryUpdate(update, sourceMessages) {
 export async function applyMemoryUpdate(update) {
   if (typeof update.sharedSummary === "string" && update.sharedSummary) state.memory.sharedSummary = update.sharedSummary;
   if (Array.isArray(update.openQuestions)) state.memory.openQuestions = update.openQuestions;
-  if (state.dm.enabled && typeof update.dmState === "string") state.memory.dmState = update.dmState;
+  const hasDirector = state.actors.some(a => a.canDirect && a.enabled);
+  if (hasDirector && typeof update.dmState === "string") state.memory.dmState = update.dmState;
   applyActorMemoryUpdates(update.actorMemoryUpdates);
   await applyPinnedFactSuggestions(update.pinnedFactSuggestions);
 }
@@ -550,11 +550,12 @@ export async function archiveMemoryChunk(update, sourceMessages) {
   }
 }
 
-export function approvePinnedFacts() {
-  const checks = Array.from(els.pendingFactsList.querySelectorAll(".pending-fact-check"));
-  const approved = checks
-    .filter((check) => check.checked)
-    .map((check) => state.memory.pendingPinnedFacts[Number(check.dataset.index)])
+export function approvePinnedFacts(approvedIndices) {
+  // approvedIndices is an array of indexes into pendingPinnedFacts to approve
+  // (passed from the React component's checkboxes)
+  const indices = approvedIndices || [];
+  const approved = indices
+    .map((i) => state.memory.pendingPinnedFacts[i])
     .filter(Boolean);
   if (!approved.length) return;
   state.memory.pinnedFacts = [...state.memory.pinnedFacts, ...approved];
@@ -563,7 +564,6 @@ export function approvePinnedFacts() {
     logTransition("fact_promoted", { fact });
   });
   saveState();
-  renderMemory();
   // Warn if approaching the word cap
   const wordCount = state.memory.pinnedFacts.join("\n").trim().split(/\s+/).length;
   if (wordCount > PINNED_FACTS_WORD_CAP * 0.8) {
@@ -604,9 +604,7 @@ export async function compactPinnedFacts() {
     const compacted = result.trim();
     if (compacted) {
       state.memory.pinnedFacts = normalizeStringArray(trimWords(compacted, PINNED_FACTS_WORD_CAP));
-      if (els.pinnedFacts) els.pinnedFacts.value = state.memory.pinnedFacts.join("\n");
       saveState();
-      renderMemory();
       const newCount = state.memory.pinnedFacts.join("\n").split(/\s+/).length;
       setStatus(`Facts compacted: ${wordCount} → ${newCount} words.`, "ok");
     }
@@ -622,7 +620,6 @@ export async function clearArchivedMemory() {
   state.memory.lastSummaryMessageId = "";
   state.memory.archivedCount = 0;
   saveState();
-  renderMemory();
   setStatus("Archived memory cleared.", "ok");
 }
 
@@ -668,7 +665,6 @@ export function formatCurrentOutcomes() {
 
 export function setOutcomeStatus(message) {
   state.outcomes.status = message;
-  els.outcomeStatus.textContent = message;
   saveState();
 }
 
@@ -691,7 +687,7 @@ export async function extractOutcomes() {
 
   state.outcomes.isExtracting = true;
   state.outcomes.isExtractingOutcomes = true;
-  const alreadyBusy = getIsGenerating ? getIsGenerating() : els.nextTurn.disabled;
+  const alreadyBusy = getIsGenerating();
   setBusy(true);
   setOutcomeStatus("Extracting outcomes...");
 
@@ -758,7 +754,6 @@ export async function extractOutcomes() {
         status: 'Outcomes extracted.'
       };
       saveState();
-      renderOutcomesLocal();
     } else {
       setOutcomeStatus('Could not extract outcomes after 3 attempts.');
     }
@@ -772,13 +767,6 @@ export async function extractOutcomes() {
 }
 
 function renderOutcomesLocal() {
-  // Inline version to avoid circular dep with render.js
-  const { outcomeRecommendation, outcomeDecisions, outcomeRationale, outcomeRejected, outcomeActions, outcomeRisks, outcomeStatus } = els;
-  outcomeRecommendation.value = state.outcomes.finalRecommendation;
-  outcomeDecisions.value = Array.isArray(state.outcomes.decisions) ? state.outcomes.decisions.join("\n") : (state.outcomes.decisions || "");
-  outcomeRationale.value = Array.isArray(state.outcomes.rationale) ? state.outcomes.rationale.join("\n") : (state.outcomes.rationale || "");
-  outcomeRejected.value = Array.isArray(state.outcomes.rejectedOptions) ? state.outcomes.rejectedOptions.join("\n") : (state.outcomes.rejectedOptions || "");
-  outcomeActions.value = Array.isArray(state.outcomes.actionItems) ? state.outcomes.actionItems.join("\n") : (state.outcomes.actionItems || "");
-  outcomeRisks.value = Array.isArray(state.outcomes.risks) ? state.outcomes.risks.join("\n") : (state.outcomes.risks || "");
-  outcomeStatus.textContent = state.outcomes.status || "No outcomes extracted yet.";
+  // React handles outcome rendering via state — just save.
+  saveState();
 }

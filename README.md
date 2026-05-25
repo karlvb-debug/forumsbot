@@ -19,10 +19,15 @@ All processing is local. No cloud, no API keys, no data leaving your machine.
 
 ```sh
 npm install
+
+# Terminal 1 — proxy server
+npm run server
+
+# Terminal 2 — dev server
 npm run dev
 ```
 
-Open **http://localhost:4173** in your browser.
+Open **http://localhost:5173** in your browser.
 
 In LM Studio, start the local server and load a model. The Forum server proxies all LLM calls to LM Studio — it never contacts the internet directly for AI requests.
 
@@ -40,7 +45,7 @@ Every session has three core fields that anchor all actor prompts:
 
 - **Premise** — the situation or context (e.g. *"Three product designers reviewing a new mobile checkout flow"*)
 - **Objective** — what the group should achieve or decide
-- **Mode** — Problem, Story, or Freeform (shapes default DM behaviour and system framing)
+- **Mode** — Problem, Story, or Freeform (shapes default behaviour and system framing)
 
 These fields are **non-compressible** — they always reach the model intact regardless of how large the prompt grows.
 
@@ -48,7 +53,7 @@ These fields are **non-compressible** — they always reach the model intact reg
 Describe the forum you want in plain English on the Setup tab. The AI will generate a full configuration — scenario, actors, memory seed — which you can review and apply or discard.
 
 ### Actors
-Add up to 8 actors. Each actor has:
+Add actors and configure each one:
 
 | Field | Purpose |
 |---|---|
@@ -58,11 +63,18 @@ Add up to 8 actors. Each actor has:
 | **Goal** | What this actor is personally trying to achieve |
 | **Voice** | Style note (e.g. "Calm, precise, concise") |
 | **Temperature** | Per-actor creativity override (0.1–1.5) |
-| **Private memory** | Internal monologue — updated by the memory system, visible only in the actor's prompt |
-| **Research Specialist** | Special mode: actor uses `[SEARCH: query]` in their thought field to run live web searches before responding |
 
-### Director (DM)
-An optional orchestrator agent that runs after each actor round. The Director can summarise, redirect the conversation, invite quieter actors, and maintain scenario continuity. It can optionally see all actors' private thoughts.
+### Permissions
+Every actor can have any combination of permission flags:
+
+| Permission | Effect |
+|---|---|
+| 🎬 **Direct** | Flow control — guides discussion, suggests next speaker, proposes anchors. Exempt from preflight skip-check. |
+| 🔧 **Manage** | Cast management — can create, silence, and resume other actors mid-session. |
+| 🔍 **Research** | Web search — uses `[SEARCH: query]` to run live web searches before responding. |
+| 🧠 **See Thoughts** | Sees all actors' private internal reasoning. |
+
+Permissions stack — a single actor can be both a Director and a Researcher. The "Director" quick-add button creates an actor with Direct + Manage pre-enabled.
 
 ---
 
@@ -72,7 +84,7 @@ An optional orchestrator agent that runs after each actor round. The Director ca
 | Button | Shortcut | Action |
 |---|---|---|
 | **Next AI** | `⌘⇧N` | One actor turn |
-| **Round** | `⌘⇧R` | All enabled actors + Director |
+| **Round** | `⌘⇧R` | All enabled actors |
 | **Auto** | — | Continuous rounds until a stop condition |
 | **Send** | `⌘↵` | Post your message, then run one round |
 
@@ -85,21 +97,20 @@ Give Auto a **goal**, then choose stop conditions:
 When the goal is detected as met, a **Stop or Continue** modal appears — you can stop, pause, or redirect with a new goal.
 
 ### Per-message features
-- **👍 / 👎 feedback** — rate contributions; thumbs-down reveals a reason tag (hallucination, off-topic, repetitive, poor quality)
+- **👍 / 👎 feedback** — rate contributions
 - **⚓ Anchor** — mark a settled claim; anchored statements are injected into every subsequent prompt as agreed ground truth
-- **💭 Private thought** — expandable block showing the actor's internal reasoning (toggle "Show private thoughts" to enable)
-- **Tool call blocks** — inline web search results when a Researcher or tools-enabled actor fetches live information
+- **💭 Private thought** — expandable block showing the actor's internal reasoning
+- **Tool call blocks** — inline web search results when a Research-enabled actor fetches live information
 
 ### Telemetry sidebar
 The **📊 Telemetry** sidebar tab shows real-time session health:
 
-- **Alignment dial** — semantic similarity between recent messages and the session objective (purple = on-track, gold = drifting, coral = critical). Shows a `keyword` badge when falling back to keyword-based scoring instead of embeddings.
+- **Alignment dial** — semantic similarity between recent messages and the session objective
 - **Session Health tiles** — alignment %, skip rate, outcome extraction rate, memory duplication score
 - **Tension Field Grid** — animated canvas visualisation of session drift
 - **Gravity Sensitivity** — the alignment threshold below which a "return to objective" warning is injected into actor prompts
-- **Preflight Skip Router** — pre-screens each actor's relevance before spending tokens on a full response; actors with low relevance skip instantly (saves significant tokens on long sessions)
-- **Hypothesis Sampling** — generate N candidate responses per turn and auto-select the best by composite quality metrics
-- **Trigger Steering Nudge** — immediately force all actors to pivot back to the objective
+- **Preflight Skip Router** — pre-screens each actor's relevance before spending tokens on a full response
+- **Hypothesis Sampling** — generate N candidate responses per turn and auto-select the best
 - **Influence Budget** — proportional bar showing which actors have driven the session's vocabulary
 
 ### Collaborative Document
@@ -126,19 +137,10 @@ Each cycle produces a **memory chunk** stored in IndexedDB with an embedding vec
 ### Memory fields
 | Field | Contents |
 |---|---|
-| **Pinned Facts** | Ground-truth statements injected into every prompt. Semantic dedup (cosine ≥ 0.88) prevents near-duplicate facts from accumulating. |
+| **Pinned Facts** | Ground-truth statements injected into every prompt. Semantic dedup prevents near-duplicates. |
 | **Shared Summary** | 300–500 word durable summary of the session |
 | **Open Questions** | Unresolved questions the group hasn't answered |
-| **DM State** | Director-private notes on pacing and actor dynamics |
 | **Pending Facts** | AI-suggested facts waiting for user approval |
-
-### Memory controls
-- **Summarize Now** — manually trigger a memory cycle
-- **Rebuild from History** — full rewrite from the complete message history
-- **Save Facts** — promote all pending suggestions to confirmed pinned facts
-- **Compact Facts** — merge and deduplicate pinned facts when they grow too long
-- **Clear Archive** — delete all archived chunks from IndexedDB
-- **Archive Browser** — inspect all stored chunks with timestamps, keywords, and embedding status
 
 ### Anchored Agreements
 Click ⚓ on any message to anchor a settled claim. Anchors are listed in the Memory tab and injected into every subsequent prompt, giving the whole group a shared reference point that persists regardless of memory compression.
@@ -162,11 +164,9 @@ After a session, click **Extract** in the Memory tab to have the LLM mine the tr
 
 | Action | Description |
 |---|---|
-| **Save** (preset) | Download current setup (actors, scenario, DM, memory seed) as a `.json` file |
+| **Save** (preset) | Download current setup (actors, scenario, memory seed) as a `.json` file |
 | **Load** (preset) | Load a preset file to restore a saved configuration |
 | **Export** | Download the full session — transcript, memory, metrics — as JSON |
-| **Export modes** | Debug (all traces), Shareable (redacted), Evaluation (metrics only) |
-| **Copy Session** | Copy the formatted transcript to the clipboard |
 | **Clear** | Wipe the transcript while preserving all setup and memory configuration |
 
 ---
@@ -175,23 +175,42 @@ After a session, click **Extract** in the Memory tab to have the LLM mine the tr
 
 ```
 Forum/
-├── server.js          # Node.js HTTP server — proxy only, no business logic
-└── public/
-    ├── index.html     # Single-page app shell
-    ├── main.js        # Entry point, event wiring, auto-run loop
-    ├── styles.css     # Vanilla CSS
+├── server.js              # Node.js HTTP proxy — no business logic
+├── vite.config.js         # Vite dev server config
+├── package.json
+└── src/
+    ├── index.html         # App shell
+    ├── main.jsx           # React entry point
+    ├── App.jsx            # Root component, routing, keyboard shortcuts
+    ├── styles/
+    │   └── index.css      # Design system and component styles
+    ├── components/
+    │   ├── Shell.jsx       # Layout shell
+    │   ├── Topbar.jsx      # Connection status, controls
+    │   ├── Transcript.jsx  # Message feed with streaming
+    │   ├── Composer.jsx    # User input area
+    │   ├── Rail.jsx        # Sidebar tab rail
+    │   ├── Icons.jsx       # SVG icon components
+    │   ├── CommandPalette.jsx
+    │   ├── inspector/      # Sidebar panels (Actors, Scenario, Memory, etc.)
+    │   └── shared/         # Reusable form controls
+    ├── hooks/
+    │   ├── useForumState.js  # React ↔ vanilla state bridge
+    │   ├── useActions.js     # Turn orchestration hooks
+    │   └── useStreaming.js   # SSE streaming state
     └── modules/
-        ├── api.js         # LLM call wrappers, tool call parsing
-        ├── constants.js   # App-wide constants and default state
-        ├── db.js          # IndexedDB access (chunks, actor-memory, messages)
-        ├── markdown.js    # Lightweight markdown renderer
-        ├── memory.js      # Summarisation, chunk archiving, recall, semantic dedup
-        ├── render.js      # All DOM rendering
-        ├── session.js     # Preset save/load, session export
-        ├── state.js       # Single mutable state object, persistence
-        ├── telemetry.js   # Drift detection, canvas animations, per-turn metrics
-        ├── turns.js       # Prompt assembly, dynamic budget scaling, orchestration
-        └── utils.js       # Pure utilities — parsing, normalisation, keyword extraction
+        ├── api.js          # LLM call wrappers, tool call parsing
+        ├── constants.js    # Default state shape, actor colors
+        ├── db.js           # IndexedDB access (chunks, messages)
+        ├── knowledge.js    # Cross-session knowledge base
+        ├── markdown.js     # Lightweight markdown renderer
+        ├── memory.js       # Summarisation, chunk archiving, semantic recall
+        ├── preflight.js    # Actor relevance pre-screening
+        ├── session.js      # Preset save/load, session management
+        ├── state.js        # Single mutable state object, persistence
+        ├── telemetry.js    # Drift detection, canvas animations, metrics
+        ├── turns.js        # Prompt assembly, budget scaling, orchestration
+        └── utils.js        # Pure utilities — parsing, normalisation
 ```
 
 ### Backend
@@ -227,4 +246,4 @@ The scenario block (premise + objective) is always reserved before any budget de
 - The server binds to `127.0.0.1` only — it is not accessible from other machines on your network
 - LM Studio accepts any non-empty API key for its local server; the default `lm-studio` works fine
 - All session data stays in your browser — closing and reopening the tab restores your full session
-- The embedding model is optional but significantly improves memory recall quality and drift detection accuracy. Any embedding model compatible with LM Studio's `/v1/embeddings` endpoint works.
+- The embedding model is optional but significantly improves memory recall quality and drift detection accuracy
