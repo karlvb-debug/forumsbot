@@ -1060,18 +1060,37 @@ export function labelForMode(mode) {
   return "Problem";
 }
 
-function actorPreviewText(actor) {
+function actorPreviewText(actor, wordShareMap) {
   const parts = [];
   const tc = actor.turnCount || 0;
   const sc = actor.skipCount || 0;
   if (tc || sc) parts.push(`${tc}t · ${sc}s`);
+  if (wordShareMap) {
+    const pct = wordShareMap.get(actor.id);
+    if (pct != null) parts.push(`${pct}%`);
+  }
   if (!actor.enabled) parts.push("disabled");
   return parts.join(" · ") || actor.role || "Participant";
+}
+
+function buildWordShareMap(actors) {
+  const counts = new Map();
+  for (const m of state.messages) {
+    if (m.type !== "actor" || !m.actorId || !m.content) continue;
+    const wc = m.content.trim().split(/\s+/).filter(Boolean).length;
+    counts.set(m.actorId, (counts.get(m.actorId) || 0) + wc);
+  }
+  const total = [...counts.values()].reduce((a, b) => a + b, 0);
+  if (!total) return null;
+  const pctMap = new Map();
+  for (const [id, wc] of counts) pctMap.set(id, Math.round((wc / total) * 100));
+  return pctMap;
 }
 
 export function renderActors() {
   const template = $("#actorTemplate");
   els.actorList.innerHTML = "";
+  const wordShareMap = buildWordShareMap(state.actors);
   state.actors.forEach((actor, index) => {
     const node = template.content.firstElementChild.cloneNode(true);
     node.dataset.actorId = actor.id;
@@ -1097,7 +1116,7 @@ export function renderActors() {
     // One-line preview shown in collapsed state
     const preview = $(".actor-card-preview", node);
     if (preview) {
-      preview.textContent = actorPreviewText(actor);
+      preview.textContent = actorPreviewText(actor, wordShareMap);
     }
     $(".actor-name", node).value = actor.name;
     $(".actor-role", node).value = actor.role;
