@@ -102,6 +102,7 @@
               <button class="sidebar-tab" data-sidebar="telemetry" type="button">📊 Telemetry</button>
               <button class="sidebar-tab" data-sidebar="document" type="button">📝 Doc</button>
               <button class="sidebar-tab" data-sidebar="sessions" type="button">📚 Sessions</button>
+              <button class="sidebar-tab" data-sidebar="knowledge" type="button">📖 KB</button>
             </div>
           </div>
 
@@ -634,6 +635,66 @@
               </div>
             </div>
           </div><!-- /sidebar-panel sessions -->
+
+          <!-- ── Knowledge Base panel ──────────────────────────── -->
+          <div class="sidebar-panel" data-sidebar-panel="knowledge" style="display:none">
+            <div class="kb-panel">
+              <div class="section-title">
+                <h2>Knowledge Base</h2>
+              </div>
+              <p class="section-hint">Documents and links injected into actor prompts. Assign to all actors or specific ones.</p>
+
+              <div class="kb-toolbar">
+                <button class="soft-button" id="kbAddDocBtn" type="button">+ Document</button>
+                <button class="soft-button" id="kbAddLinkBtn" type="button">+ Link</button>
+              </div>
+
+              <!-- Add Document form -->
+              <div id="kbAddDocForm" class="kb-add-form" style="display:none">
+                <label class="kb-field-label">Title
+                  <input id="kbDocTitle" type="text" placeholder="Document name" autocomplete="off">
+                </label>
+                <label class="kb-field-label">Content
+                  <textarea id="kbDocContent" rows="7" placeholder="Paste or type document content here…"></textarea>
+                </label>
+                <div class="kb-target-section">
+                  <span class="kb-target-label">Assign to</span>
+                  <div id="kbDocTargetPicker" class="kb-target-picker"></div>
+                </div>
+                <div class="btn-row">
+                  <button class="primary-button" id="kbDocSaveBtn" type="button">Save Document</button>
+                  <button class="quiet-button" id="kbDocCancelBtn" type="button">Cancel</button>
+                </div>
+              </div>
+
+              <!-- Add Link form -->
+              <div id="kbAddLinkForm" class="kb-add-form" style="display:none">
+                <label class="kb-field-label">URL
+                  <input id="kbLinkUrl" type="url" placeholder="https://…" autocomplete="off">
+                </label>
+                <div class="btn-row" style="margin-top:6px">
+                  <button class="soft-button" id="kbLinkFetchBtn" type="button">Fetch</button>
+                  <span class="status-line" id="kbLinkStatus" style="flex:1"></span>
+                </div>
+                <div id="kbLinkPreviewArea" style="display:none">
+                  <label class="kb-field-label">Title
+                    <input id="kbLinkTitle" type="text" placeholder="Page title" autocomplete="off">
+                  </label>
+                  <div class="kb-target-section">
+                    <span class="kb-target-label">Assign to</span>
+                    <div id="kbLinkTargetPicker" class="kb-target-picker"></div>
+                  </div>
+                  <div class="btn-row">
+                    <button class="primary-button" id="kbLinkSaveBtn" type="button">Save Link</button>
+                    <button class="quiet-button" id="kbLinkCancelBtn" type="button">Cancel</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Entry list (populated by renderKnowledgeBase) -->
+              <div id="kbEntryList" class="kb-entry-list"></div>
+            </div>
+          </div><!-- /sidebar-panel knowledge -->
 
           </div><!-- /sidebar-scroll-body -->
         </aside>

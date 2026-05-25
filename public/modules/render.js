@@ -1,6 +1,7 @@
 import { defaultState, DELTA_REWRITE_EVERY } from './constants.js';
 import { state, saveState, logWarning } from './state.js';
 import { calculateInfluenceBudget } from './telemetry.js';
+import { getAllKbEntries, putKbEntry, deleteKbEntry } from './knowledge.js';
 import { storageAvailable, storageWarning } from './db.js';
 import { publicMessageContent, normalizeStringArray } from './utils.js';
 import { renderMarkdown } from './markdown.js';
@@ -295,6 +296,7 @@ export function render() {
   renderTranscript();
   renderTelemetry();
   renderTurboState();
+  renderKnowledgeBase();
   els.auto.textContent = state.autoRunning ? "Pause" : "Auto";
 }
 
@@ -1951,4 +1953,68 @@ function updateSearchCount() {
     return;
   }
   el.textContent = `${_searchIndex + 1} / ${_searchMatches.length}`;
+}
+
+// ── Knowledge Base panel ─────────────────────────────────────────────────────
+
+export async function renderKnowledgeBase() {
+  const list = document.getElementById("kbEntryList");
+  if (!list) return;
+
+  const entries = await getAllKbEntries();
+  list.innerHTML = "";
+
+  if (!entries.length) {
+    const empty = document.createElement("p");
+    empty.className = "kb-empty";
+    empty.textContent = "No documents or links yet.";
+    list.appendChild(empty);
+    return;
+  }
+
+  for (const entry of entries) {
+    list.appendChild(buildKbEntryCard(entry));
+  }
+}
+
+function buildKbEntryCard(entry) {
+  const card = document.createElement("div");
+  card.className = "kb-entry-card" + (entry.enabled === false ? " kb-entry-disabled" : "");
+
+  const targetLabel = entry.target === "all"
+    ? "All actors"
+    : Array.isArray(entry.target)
+      ? entry.target.map(id => state.actors.find(a => a.id === id)?.name || "?").join(", ") || "No actors"
+      : "All actors";
+
+  const typeIcon = entry.type === "link" ? "🔗" : "📄";
+  const wc = entry.wordCount || 0;
+
+  card.innerHTML = `
+    <div class="kb-entry-head">
+      <span class="kb-type-icon">${typeIcon}</span>
+      <div class="kb-entry-info">
+        <div class="kb-entry-title">${escapeHtml(entry.title || "Untitled")}</div>
+        <div class="kb-entry-meta">${escapeHtml(targetLabel)} · ${wc.toLocaleString()} words</div>
+      </div>
+      <label class="toggle-row compact" style="margin:0" title="${entry.enabled === false ? "Disabled" : "Enabled"}">
+        <input type="checkbox" class="kb-toggle" ${entry.enabled !== false ? "checked" : ""}>
+      </label>
+      <button class="icon-button kb-delete" type="button" title="Delete entry" aria-label="Delete">×</button>
+    </div>
+  `;
+
+  card.querySelector(".kb-toggle").addEventListener("change", async (e) => {
+    entry.enabled = e.target.checked;
+    card.classList.toggle("kb-entry-disabled", !entry.enabled);
+    await putKbEntry(entry);
+  });
+
+  card.querySelector(".kb-delete").addEventListener("click", async () => {
+    if (!confirm(`Delete "${entry.title || "this entry"}"?`)) return;
+    await deleteKbEntry(entry.id);
+    renderKnowledgeBase();
+  });
+
+  return card;
 }
