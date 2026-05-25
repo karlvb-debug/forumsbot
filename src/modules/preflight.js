@@ -28,7 +28,7 @@ export async function preflightSkipCheck(actor, messages, scenario, opts = {}) {
   if (!state.settings.enablePreflightRouter) {
     return { shouldSkip: false, confidence: 1.0, reason: 'router disabled' };
   }
-  if (!actor || actor.isDirector) {
+  if (!actor || actor.canDirect) {
     return { shouldSkip: false, confidence: 1.0, reason: 'director exempt' };
   }
   if (!messages || messages.length < 2) {

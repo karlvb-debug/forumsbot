@@ -2,6 +2,7 @@ import { AVAILABLE_TOOLS, MAX_TOOL_ROUNDS } from './constants.js';
 import { state, saveState } from './state.js';
 import { parseAiJson, parseTextToolCalls, stripTextToolCalls, stripCodeFence } from './utils.js';
 import { setConnectionStatus } from '../hooks/useActions.js';
+import { notifyStateChange, mutateState } from '../hooks/useForumState.js';
 
 // Extract the message field content progressively from a streaming JSON buffer.
 // Handles {"thought":"...","action":"...","message":"..."} with proper JSON unescape.
@@ -61,9 +62,7 @@ function extractStreamingDisplay(accumulated) {
 let _currentSpeaker = "";
 export function setCurrentSpeaker(name) {
   _currentSpeaker = name || "";
-  if (typeof document !== "undefined") {
-    document.dispatchEvent(new CustomEvent("speakerChanged", { detail: { name: _currentSpeaker } }));
-  }
+  mutateState(s => { s.ui.currentSpeaker = _currentSpeaker; });
 }
 
 // Accumulate tool calls made during the current chatCompletion so the
@@ -194,7 +193,7 @@ export async function chatCompletion(system, user, { temperature = state.setting
       state.contextInfo.lastPromptTokens = promptTokens;
       state.contextInfo.lastCompletionTokens = completionTokens;
       // Notify render layer without importing render.js (circular dep avoidance)
-      document.dispatchEvent(new CustomEvent("tokenUsageUpdated"));
+      notifyStateChange();
     }
 
     // Path B: Prompt-based tool calls (fallback for models without native support)
@@ -268,7 +267,7 @@ export async function chatCompletionMessages(messages, { temperature = state.set
   if (data.usage) {
     state.contextInfo.lastPromptTokens = promptTokens;
     state.contextInfo.lastCompletionTokens = completionTokens;
-    document.dispatchEvent(new CustomEvent("tokenUsageUpdated"));
+    notifyStateChange();
   }
   return data?.choices?.[0]?.message?.content || "";
 }
@@ -362,7 +361,7 @@ export async function chatStream(system, user, { temperature = state.settings.te
     if (promptTokens) {
       state.contextInfo.lastPromptTokens = promptTokens;
       state.contextInfo.lastCompletionTokens = completionTokens;
-      document.dispatchEvent(new CustomEvent("tokenUsageUpdated"));
+      notifyStateChange();
     }
     return accumulated;
   } catch (err) {
@@ -719,7 +718,7 @@ export async function pingConnection(silent = false) {
         : models.find((m) => m.state === "loaded");
       if (current?.loaded_context_length || current?.max_context_length) {
         state.contextInfo.maxContextLength = current.loaded_context_length || current.max_context_length;
-        document.dispatchEvent(new CustomEvent("tokenUsageUpdated"));
+        notifyStateChange();
       }
     }).catch(() => {}); // non-critical
 
@@ -728,9 +727,7 @@ export async function pingConnection(silent = false) {
     (async () => {
       const embedModel = state.settings.embeddingModel || state.settings.model;
       if (!embedModel) {
-        document.dispatchEvent(new CustomEvent("embeddingProbeResult", {
-          detail: { ok: false, reason: "No model configured. Semantic memory recall and drift detection are disabled." }
-        }));
+        mutateState(s => { s.ui.embeddingProbeResult = { ok: false, reason: "No model configured. Semantic memory recall and drift detection are disabled." }; });
         return;
       }
       try {
@@ -745,15 +742,12 @@ export async function pingConnection(silent = false) {
         });
         const data = await resp.json();
         const ok = resp.ok && Array.isArray(data?.data?.[0]?.embedding);
-        document.dispatchEvent(new CustomEvent("embeddingProbeResult", {
-          detail: ok
-            ? { ok: true }
-            : { ok: false, reason: `Embedding model "${embedModel}" returned an error — semantic memory is in keyword-only mode.` }
-        }));
+        mutateState(s => { s.ui.embeddingProbeResult = ok
+          ? { ok: true }
+          : { ok: false, reason: `Embedding model "${embedModel}" returned an error — semantic memory is in keyword-only mode.` };
+        });
       } catch {
-        document.dispatchEvent(new CustomEvent("embeddingProbeResult", {
-          detail: { ok: false, reason: `Embedding probe failed — check that an embedding model is loaded in LM Studio.` }
-        }));
+        mutateState(s => { s.ui.embeddingProbeResult = { ok: false, reason: `Embedding probe failed — check that an embedding model is loaded in LM Studio.` }; });
       }
     })();
 

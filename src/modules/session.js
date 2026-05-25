@@ -580,38 +580,8 @@ export async function generateQuickStart(promptOverride = "") {
 }
 
 export function renderQuickStartChat() {
-  const container = document.getElementById("aiAssistantChat");
-  if (!container) return;
-  const history = Array.isArray(state.ui.quickStartHistory) ? state.ui.quickStartHistory : [];
-  container.innerHTML = "";
-  if (history.length === 0) return;
-  for (const entry of history) {
-    const div = document.createElement("div");
-    div.className = "qs-msg qs-msg--" + entry.role;
-    if (entry.role === "user") {
-      div.textContent = entry.content;
-    } else {
-      // AI message: show message text, then type badge
-      const msg = entry.message || (entry.type === "error" ? "Error" : "");
-      if (msg) {
-        const p = document.createElement("div");
-        p.className = "qs-msg-text";
-        p.textContent = msg;
-        div.appendChild(p);
-      }
-      if (entry.type && entry.type !== "chat" && entry.type !== "error") {
-        const badge = document.createElement("span");
-        badge.className = "qs-msg-badge qs-msg-badge--" + entry.type;
-        badge.textContent = entry.type === "patch" ? "\u2713 Applied" : entry.type === "fullSetup" ? "\u2191 Full setup \u2014 click Apply" : "";
-        div.appendChild(badge);
-      }
-      if (entry.type === "error") {
-        div.classList.add("qs-msg--error");
-      }
-    }
-    container.append(div);
-  }
-  container.scrollTop = container.scrollHeight;
+  // ScenarioPanel renders chat history declaratively from state.ui.quickStartHistory.
+  // saveState() \u2192 notifyStateChange() drives React re-render; no imperative DOM needed.
 }
 export function parseQuickStartConfig(content) {
   const cleaned = sanitizeJsonString(stripCodeFence(content));
@@ -715,29 +685,21 @@ export function discardQuickStartConfig() {
   updateAiAssistantApplyButton();
 }
 
-export function setQuickStartBusy(value) {
-  const sendBtn = document.getElementById("aiAssistantSendBtn");
-  const applyBtn = document.getElementById("aiAssistantApplyBtn");
-  if (sendBtn) sendBtn.disabled = value;
-  if (applyBtn) applyBtn.disabled = value;
-  // Legacy sidebar elements (may not exist)
+export function setQuickStartBusy() {
+  // ScenarioPanel controls button disabled state via its own quickStartBusy local state.
 }
 
 export function setQuickStartStatus(message) {
   state.ui.quickStartStatus = message;
-  const el = document.getElementById("aiAssistantStatus");
-  if (el) el.textContent = message;
   saveState();
 }
 
 export function updateAiAssistantApplyButton() {
-  const btn = document.getElementById("aiAssistantApplyBtn");
-  if (btn) btn.style.display = state.ui.quickStartDraft ? "" : "none";
+  // ScenarioPanel renders Apply button conditionally from state.ui.quickStartDraft.
 }
 
 export function openAiAssistantPanel() {
-  const panel = document.getElementById("aiAssistantPanel");
-  if (panel) panel.hidden = false;
+  // Panel is a card in ScenarioPanel — always visible. Nothing to open.
 }
 
 export function applyAssistantPatch(changes) {

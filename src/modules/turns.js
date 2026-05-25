@@ -1,7 +1,7 @@
 import { RECENT_MESSAGE_LIMIT, PROMPT_MESSAGE_LIMIT, WORD_LIMITS, ANCHOR_WORD_CAP, colors } from './constants.js';
 import { state, saveState, logTransition, logWarning } from './state.js';
 import { chatCompletion, chatJson, setStatus, setCurrentSpeaker, getLastToolCalls } from './api.js';
-import { saveState as _hookSaveState } from '../hooks/useForumState.js';
+import { saveState as _hookSaveState, mutateState } from '../hooks/useForumState.js';
 import { setBusy, getBusy as getIsGenerating } from '../hooks/useActions.js';
 import { showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble } from '../hooks/useStreaming.js';
 import { putMessage, getAllChunks, getActorMemory, putActorMemory } from './db.js';
@@ -523,110 +523,40 @@ export function normalizeGoalVerdict(value) {
   };
 }
 
+// Called by the React StopModal component when the user makes a decision.
+let _stopResolve = null;
+export function resolveStopOrContinue(shouldStop, newGoal = "") {
+  if (_stopResolve) { _stopResolve({ shouldStop, newGoal }); _stopResolve = null; }
+}
+
 export async function promptStopOrContinue(reason, options = {}) {
   state.autoRunning = false;
   setAutoStopStatus(reason);
   saveState();
 
-  const modal = typeof document !== "undefined" ? document.getElementById("stopOrContinueModal") : null;
-  const reasonEl = typeof document !== "undefined" ? document.getElementById("modalReason") : null;
-  const goalInput = typeof document !== "undefined" ? document.getElementById("modalGoalInput") : null;
-  const stopBtn = typeof document !== "undefined" ? document.getElementById("modalStopButton") : null;
-  const pauseBtn = typeof document !== "undefined" ? document.getElementById("modalPauseButton") : null;
-  const continueBtn = typeof document !== "undefined" ? document.getElementById("modalContinueButton") : null;
+  const { shouldStop, newGoal } = await new Promise(resolve => {
+    _stopResolve = resolve;
+    mutateState(s => { s.ui.stopModal = { reason, suggestedGoal: options.suggestedGoal || "" }; });
+  });
+  mutateState(s => { s.ui.stopModal = null; });
 
-  if (!modal || !reasonEl || !goalInput || !stopBtn || !pauseBtn || !continueBtn) {
-    // Graceful fallback to native browser prompts (e.g. testing or incomplete DOM)
-    const shouldStop = window.confirm(`${reason}\n\nOK = stop here.\nCancel = enter a new goal and continue.`);
-    if (shouldStop) {
-      state.autoStop.roundsRun = 0;
-      setAutoStopStatus(`Stopped: ${reason}`);
-      saveState();
-      return true;
-    }
-
-    const suggested = options.suggestedGoal || "";
-    const newGoal = window.prompt("New goal to continue toward:", suggested);
-    if (newGoal && newGoal.trim()) {
-      state.autoStop.goal = newGoal.trim();
-      state.autoStop.roundsRun = 0;
-      setAutoStopStatus(options.fromAuto ? "New goal saved. Continuing Auto." : "New goal saved. Press Auto to continue.");
-      if (options.fromAuto) state.autoRunning = true;
-      saveState();
-      return false;
-    }
-
+  if (shouldStop) {
     state.autoStop.roundsRun = 0;
-    setAutoStopStatus("Auto paused. No new goal was set.");
+    setAutoStopStatus(`Stopped: ${reason}`);
     saveState();
     return true;
   }
-
-  // Use the custom glassmorphic modal
-  return new Promise((resolve) => {
-    reasonEl.textContent = reason;
-    const suggested = options.suggestedGoal || "";
-    goalInput.value = suggested;
-
-    // Enable/disable Continue button dynamically based on input content
-    const updateButtonState = () => {
-      continueBtn.disabled = !goalInput.value.trim();
-    };
-    goalInput.addEventListener("input", updateButtonState);
-    updateButtonState();
-
-    // Show modal
-    modal.style.display = "flex";
-    // Trigger transition Reflow
-    modal.getBoundingClientRect();
-    modal.classList.add("active");
-    modal.setAttribute("aria-hidden", "false");
-
-    const cleanup = () => {
-      modal.classList.remove("active");
-      modal.setAttribute("aria-hidden", "true");
-      setTimeout(() => {
-        modal.style.display = "none";
-      }, 250); // Matches the CSS opacity transition duration
-
-      stopBtn.removeEventListener("click", handleStop);
-      pauseBtn.removeEventListener("click", handlePause);
-      continueBtn.removeEventListener("click", handleContinue);
-      goalInput.removeEventListener("input", updateButtonState);
-    };
-
-    function handleStop() {
-      cleanup();
-      state.autoStop.roundsRun = 0;
-      setAutoStopStatus(`Stopped: ${reason}`);
-      saveState();
-      resolve(true);
-    }
-
-    function handlePause() {
-      cleanup();
-      state.autoStop.roundsRun = 0;
-      setAutoStopStatus("Auto paused. No new goal was set.");
-      saveState();
-      resolve(true);
-    }
-
-    function handleContinue() {
-      const newGoal = goalInput.value.trim();
-      if (!newGoal) return; // Prevent empty goals (should be blocked by disabled state)
-      cleanup();
-      state.autoStop.goal = newGoal;
-      state.autoStop.roundsRun = 0;
-      setAutoStopStatus(options.fromAuto ? "New goal saved. Continuing Auto." : "New goal saved. Press Auto to continue.");
-      if (options.fromAuto) state.autoRunning = true;
-      saveState();
-      resolve(false);
-    }
-
-    stopBtn.addEventListener("click", handleStop);
-    pauseBtn.addEventListener("click", handlePause);
-    continueBtn.addEventListener("click", handleContinue);
-  });
+  if (newGoal.trim()) {
+    state.autoStop.goal = newGoal.trim();
+    state.autoStop.roundsRun = 0;
+    setAutoStopStatus(options.fromAuto ? "New goal saved. Continuing Auto." : "New goal saved. Press Auto to continue.");
+    if (options.fromAuto) { state.autoRunning = true; saveState(); }
+    return false;
+  }
+  state.autoStop.roundsRun = 0;
+  setAutoStopStatus("Auto paused.");
+  saveState();
+  return true;
 }
 
 export function setAutoStopStatus(message) {

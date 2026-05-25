@@ -6,10 +6,11 @@ import { Inspector } from './components/inspector/Inspector';
 import { Transcript } from './components/Transcript';
 import { Composer } from './components/Composer';
 import { CommandPalette } from './components/CommandPalette';
+import { StopModal } from './components/StopModal';
 // Importing state.js triggers loadState() at module level
 import './modules/state.js';
 import { setModuleRefs, useActions } from './hooks/useActions.js';
-import { mutateState, notifyStateChange, saveState } from './hooks/useForumState.js';
+import { mutateState, notifyStateChange, saveState, useForumState } from './hooks/useForumState.js';
 
 // Navigation items for the rail
 const NAV = [
@@ -47,6 +48,7 @@ export default function App() {
   const [cmdOpen, setCmdOpen] = useState(false);
 
   const { nextTurn, runRound, startAuto, stopGeneration } = useActions();
+  const stopModal = useForumState(s => s.ui?.stopModal || null);
 
   // Load modules on mount
   useEffect(() => {
@@ -182,6 +184,14 @@ export default function App() {
         onClose={() => setCmdOpen(false)}
         onSelect={handleCommand}
       />
+      {stopModal && (
+        <StopModal
+          reason={stopModal.reason}
+          suggestedGoal={stopModal.suggestedGoal}
+          onStop={() => import('./modules/turns.js').then(m => m.resolveStopOrContinue(true))}
+          onContinue={(g) => import('./modules/turns.js').then(m => m.resolveStopOrContinue(false, g))}
+        />
+      )}
     </Shell>
   );
 }

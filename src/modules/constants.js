@@ -104,7 +104,10 @@ export const defaultState = {
     quickStartDraft: null,
     quickStartStatus: "No generated setup yet.",
     quickStartHistory: [],
-    quickStartTemperature: 0.8
+    quickStartTemperature: 0.8,
+    stopModal: null,            // { reason, suggestedGoal } — set by promptStopOrContinue
+    embeddingProbeResult: null, // { ok, reason? } — set by pingConnection embedding probe
+    currentSpeaker: ""          // name of actor currently generating
   },
   memory: {
     enabled: true,

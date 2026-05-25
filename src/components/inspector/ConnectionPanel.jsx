@@ -20,6 +20,7 @@ export function ConnectionPanel() {
   const streaming = useForumState(s => s.settings?.streamingEnabled !== false);
   const availableModels = useForumState(s => s.ui?.availableModels || []);
   const tokenSpeed = useForumState(s => s.ui?.tokenSpeed || null);
+  const embeddingProbe = useForumState(s => s.ui?.embeddingProbeResult || null);
 
   const { pingConnection } = useActions();
 
@@ -55,6 +56,11 @@ export function ConnectionPanel() {
             {availableModels.map((id) => <option key={id} value={id}>{id}</option>)}
           </select>
         </Field>
+        {embeddingProbe && (
+          <div className={`field-hint${embeddingProbe.ok ? '' : ' hint-warn'}`}>
+            {embeddingProbe.ok ? '✓ Embedding model OK' : `⚠ ${embeddingProbe.reason}`}
+          </div>
+        )}
       </div>
 
       <div className="card">
