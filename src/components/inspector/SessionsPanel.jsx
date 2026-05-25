@@ -92,10 +92,13 @@ export function SessionsPanel() {
         <div className="card-title"><h3>Danger Zone</h3></div>
         <div className="btn-row">
           <button className="btn danger" onClick={async () => {
-            const db = await import('../../modules/db.js');
-            await db.clearMessages();
-            mutateState(s => { s.messages = []; });
-          }}><Ic.Trash width={13} height={13} /> Clear transcript</button>
+            const session = await import('../../modules/session.js');
+            const confirmed = await session.requestConfirmPublic(
+              'Clear the conversation, actor memories, summaries, and archived memory? Your setup (actors, scenario, settings) will be kept.',
+              'Clear'
+            );
+            if (confirmed) await session.resetSession(false);
+          }}><Ic.Trash width={13} height={13} /> Clear conversation</button>
           {pendingReset ? (
             <span className="confirm-inline">
               Reset all state?

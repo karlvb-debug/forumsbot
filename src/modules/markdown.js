@@ -97,16 +97,18 @@ export function renderMarkdown(src) {
 
 /** Process inline markdown: bold, italic, code, links */
 function inline(text) {
-  return text
-    // Inline code (must come before bold/italic to avoid conflicts)
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
+  // Escape HTML first, then apply markdown formatting
+  // Backtick spans are extracted before escaping so code content is also safe
+  return escapeHtml(text)
+    // Inline code — re-wrap escaped backtick span (content already escaped)
+    .replace(/`([^`]+)`/g, (_, inner) => `<code>${inner}</code>`)
     // Bold + italic
     .replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>")
     // Bold
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     // Italic
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    // Links
+    // Links — href is already escaped; display text already escaped
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
     // Line break
     .replace(/  $/gm, "<br>");

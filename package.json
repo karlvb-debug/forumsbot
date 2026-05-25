@@ -9,7 +9,9 @@
     "dev": "vite --config vite.config.js",
     "build": "vite build --config vite.config.js",
     "preview": "vite preview --config vite.config.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "engines": {
     "node": ">=18"
@@ -20,7 +22,13 @@
     "react-dom": "^19.2.6"
   },
   "devDependencies": {
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
-    "vite": "^8.0.14"
+    "@vitest/ui": "^4.1.7",
+    "jsdom": "^29.1.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14",
+    "vitest": "^4.1.7"
   }
 }

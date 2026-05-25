@@ -24,6 +24,10 @@ export function resolveConfirmModal(confirmed) {
   if (_confirmResolve) { _confirmResolve(confirmed); _confirmResolve = null; }
 }
 
+export async function requestConfirmPublic(message, confirmLabel = "Confirm") {
+  return requestConfirm(message, confirmLabel);
+}
+
 async function requestConfirm(message, confirmLabel = "Confirm") {
   return new Promise(resolve => {
     _confirmResolve = resolve;
@@ -789,8 +793,11 @@ export async function loadSession(session) {
 
   if (session.scenario) state.scenario = { ...state.scenario, ...session.scenario };
   if (session.memory) state.memory = { ...state.memory, ...session.memory };
-  if (Array.isArray(session.actors)) state.actors = session.actors;
-  // Legacy dm migration: if session has a dm key, normalizeState will handle it on next load
+  if (Array.isArray(session.actors)) {
+    // Run through normalizeState to migrate legacy flag names and fill missing fields
+    const normalized = normalizeState({ ...state, actors: session.actors });
+    state.actors = normalized.actors;
+  }
 
   state._currentSessionId = session.id;
 
