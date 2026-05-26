@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import * as Ic from '../Icons';
 import { Field, Toggle, Range } from '../shared/FormControls';
 import { useForumState, mutateState, saveState } from '../../hooks/useForumState';
@@ -78,7 +78,22 @@ const ACTOR_TEMPLATES = [
 
 export function ActorsPanel() {
   const actors = useForumState(s => s.actors);
+  const messages = useForumState(s => s.messages || []);
   const [expanded, setExpanded] = useState(null);
+
+  // Per-actor stats: turns taken and words spoken
+  const actorStats = useMemo(() => {
+    const stats = {};
+    messages.forEach(m => {
+      if (m.type === 'skip' || m.type === 'system' || m.type === 'user') return;
+      const key = m.actorId || m.speaker;
+      if (!key) return;
+      if (!stats[key]) stats[key] = { turns: 0, words: 0 };
+      stats[key].turns++;
+      stats[key].words += (m.content || m.text || '').trim().split(/\s+/).filter(Boolean).length;
+    });
+    return stats;
+  }, [messages]);
 
   const updateActor = useCallback((id, key, val) => {
     mutateState(s => {
@@ -140,6 +155,13 @@ export function ActorsPanel() {
           voice: 'Objective, fact-driven.',
           canResearch: true, temperature: 0.4, color: '#457b9d',
         })}><Ic.Globe width={14} height={14} /> Researcher</button>
+        <button className="btn" onClick={() => addActor({
+          name: 'Manager', role: 'Cast Orchestrator',
+          persona: 'Observe what expertise the discussion needs and adjust the roster. Create specialized actors when new skills are required and silence actors who have finished contributing.',
+          goal: "Ensure the right perspectives are in the room at the right time.",
+          voice: 'Decisive and brief. States what it is doing and why in one sentence.',
+          canManageCast: true, temperature: 0.7, color: '#1a7a6e',
+        })}>🔧 Manager</button>
       </div>
 
       <div style={{ marginBottom: 12 }}>
@@ -170,6 +192,7 @@ export function ActorsPanel() {
       {actors.map((a) => {
         const isOpen = expanded === a.id;
         const perms = activePerms(a);
+        const stats = actorStats[a.id] || actorStats[a.name] || null;
         return (
           <div key={a.id} className={"actor-card" + (isOpen ? " expanded" : "") + (a.enabled ? "" : " disabled")}>
             <div className="actor-card-head" onClick={() => setExpanded(isOpen ? null : a.id)}>
@@ -181,6 +204,11 @@ export function ActorsPanel() {
                   {perms.map(p => (
                     <span key={p.key} className="perm-badge" style={{ color: p.color, borderColor: p.color }}>{p.icon}</span>
                   ))}
+                  {stats && (
+                    <span className="actor-stats-badge" title={`${stats.turns} turns · ${stats.words} words spoken`}>
+                      {stats.turns}t · {stats.words}w
+                    </span>
+                  )}
                 </div>
               </div>
               <Toggle checked={a.enabled} onChange={(v) => { updateActor(a.id, 'enabled', v); }} />

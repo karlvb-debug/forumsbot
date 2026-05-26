@@ -6,9 +6,16 @@ import { renderMarkdown } from '../modules/markdown.js';
 
 const THOUGHT_COLLAPSE_THRESHOLD = 150;
 const THOUGHT_PREVIEW_LENGTH = 80;
+const MSG_COLLAPSE_WORDS = 250;
+const MSG_PREVIEW_WORDS = 80;
+
+function wordCount(str) {
+  return str.trim().split(/\s+/).filter(Boolean).length;
+}
 
 function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork }) {
   const [thoughtExpanded, setThoughtExpanded] = useState(false);
+  const [msgExpanded, setMsgExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
 
   if (!actor) return null;
@@ -47,6 +54,13 @@ function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork })
   let thought = msg.thought || null;
   let text = msg.content || msg.text || msg.message || '';
 
+  // Message collapse: >250 words collapses to 80
+  const totalWords = wordCount(text);
+  const isLongMsg = totalWords > MSG_COLLAPSE_WORDS;
+  const displayText = isLongMsg && !msgExpanded
+    ? text.trim().split(/\s+/).slice(0, MSG_PREVIEW_WORDS).join(' ') + '…'
+    : text;
+
   // Tool calls display
   const toolCalls = msg.toolCalls || [];
 
@@ -71,7 +85,16 @@ function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork })
           </div>
         ))}
 
-        <div className="msg-text md-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }} />
+        <div className="msg-text md-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(displayText) }} />
+        {isLongMsg && (
+          <button
+            className="chip-btn"
+            style={{ fontSize: 11, marginTop: 2 }}
+            onClick={() => setMsgExpanded(v => !v)}
+          >
+            {msgExpanded ? 'Show less' : `Show more (${totalWords}w)`}
+          </button>
+        )}
 
         {thought && showThoughts && (() => {
           const isLong = thought.length > THOUGHT_COLLAPSE_THRESHOLD;
