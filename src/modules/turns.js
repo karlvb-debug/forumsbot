@@ -699,7 +699,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
       actor.persona ? `Style: ${actor.persona}` : "",
       modeInstruction,
       castManagementBlock,
-      isStoryMode
+      sysCfg.stageDirectionsEnabled
         ? "Messages labelled [USER] in the transcript are from the human facilitator. You MUST incorporate their notes, instructions, or scene adjustments into your narration and DM guidance immediately. Do not ignore them."
         : "Messages labelled [USER] in the transcript are from the human facilitator. You MUST acknowledge, address, and respond to their messages, questions, or instructions directly in your public message. Do not ignore them or treat them as out-of-character meta-disruptions; respond to them directly.",
       "Do not dominate the forum. You may skip if the actors are already progressing.",
@@ -868,7 +868,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
     actor.voice ? `Voice: ${actor.voice}` : "",
     relationships,
     contextLine,
-    isStoryMode
+    sysCfg.stageDirectionsEnabled
       ? "Messages labelled [USER] in the transcript are instructions or questions from the human facilitator. You MUST incorporate their notes, instructions, or scenario changes into your character's actions and speech naturally on this turn. Do not ignore them."
       : "Messages labelled [USER] in the transcript are from the human facilitator. You MUST acknowledge, address, and respond to their messages, questions, or instructions directly in your public message. Do not ignore them or treat them as out-of-character meta-disruptions; respond to them directly.",
     skipAllowed
@@ -1091,7 +1091,7 @@ function buildDocumentsForPrompt(actorId) {
 
 export async function buildPromptContext({ kind, actor, dm, privateThoughts = "" }) {
   const participant = kind === "actor" ? actor : dm;
-  const isStoryMode = state.scenario.mode === "story" || state.scenario.mode === "freeform";
+  const sysCfg = resolveSystemSettings();
   const PROMPT_TOKEN_BUDGET = getPromptBudget();
   const workingMemoryN = getWorkingMemoryN();
   const messageSource = state.messages;
@@ -1140,10 +1140,10 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   const threshold = state.settings?.gravitySensitivity ?? 50;
   const isDrifting = alignment < threshold;
 
-  const periodicReminder = (state.scenario.objective && state.messages.length > 0 && state.messages.length % 5 === 0 && !isStoryMode)
+  const periodicReminder = (state.scenario.objective && state.messages.length > 0 && state.messages.length % 5 === 0 && !sysCfg.stageDirectionsEnabled)
     ? `[Reminder: the objective is "${state.scenario.objective}". Stay on track.]`
     : "";
-  const gravityWarning = (isDrifting && kind === "actor" && !actor.canResearch && !isStoryMode)
+  const gravityWarning = (isDrifting && kind === "actor" && !actor.canResearch && !sysCfg.stageDirectionsEnabled)
     ? `[The discussion has drifted off-topic (alignment ${alignment}%). Don't repeat what's already been said — challenge an assumption, ask a sharp question, or propose something concrete to get back to: "${state.scenario.objective || "the goal"}"]`
     : "";
 
@@ -1170,7 +1170,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
     const lastMsg = msgs[msgs.length - 1];
     const lastMsgIsFacilitator = lastMsg && (lastMsg.type === "user" || (lastMsg.type === "system" && lastMsg.speaker === "Moderator"));
     const facilitatorDirectAddress = lastMsgIsFacilitator
-      ? (isStoryMode
+      ? (sysCfg.stageDirectionsEnabled
           ? "IMPORTANT FACILITATOR DIRECTIVE: The very last message in the transcript is a note/instruction from the human facilitator (Moderator/USER). You MUST actively and immediately execute this note/instruction in your character's actions, thoughts, and speech on this turn. Incorporate it fully and visibly into the story now."
           : "IMPORTANT FACILITATOR DIRECTIVE: The very last message in the transcript is a direct question, instruction, or note from the human facilitator (Moderator/USER). You MUST address them directly, acknowledge the note, and respond to it in your public output. Do not ignore it or treat it as an out-of-character disruption.")
       : "";
