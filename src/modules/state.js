@@ -208,10 +208,13 @@ function loadState() {
   }
 }
 
-export let state = loadState();
+export const state = loadState();
 
 export function setState(newState) {
-  state = newState;
+  for (const key of Object.keys(state)) {
+    delete state[key];
+  }
+  Object.assign(state, newState);
 }
 
 // Callback registered by useForumState to notify React on every save.

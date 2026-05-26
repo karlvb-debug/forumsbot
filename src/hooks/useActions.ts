@@ -142,10 +142,12 @@ export function useActions() {
       speaker: 'You',
       color: 'var(--fg-dim)',
       text: text.trim(),
+      content: text.trim(),
       type: 'user' as const,
       createdAt: Date.now(),
     };
-    (state as { messages: unknown[] }).messages.push(message);
+    const stateWithMessages = state as { messages: unknown[] };
+    stateWithMessages.messages = [...stateWithMessages.messages, message];
     if (_db) await (_db.putMessage as (m: unknown) => Promise<void>)(message);
     saveState();
   }, []);

@@ -24,13 +24,14 @@ export function Composer({ showThoughts, onToggleThoughts }) {
     el.style.height = Math.min(200, el.scrollHeight) + 'px';
   }, []);
 
-  const handleSubmit = useCallback((e) => {
+  const handleSubmit = useCallback(async (e) => {
     e?.preventDefault();
-    if (!text.trim()) return;
-    sendMessage(text.trim());
+    if (!text.trim() || busy) return;
+    await sendMessage(text.trim());
     setText('');
     if (taRef.current) taRef.current.style.height = 'auto';
-  }, [text, sendMessage]);
+    runRound();
+  }, [text, sendMessage, runRound, busy]);
 
   const handleToggleTools = useCallback(() => {
     mutateState(s => { s.settings.toolsEnabled = !s.settings.toolsEnabled; });
@@ -52,7 +53,22 @@ export function Composer({ showThoughts, onToggleThoughts }) {
           placeholder="Join the forum — your message will trigger the next round…"
           rows={1}
           onKeyDown={(e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handleSubmit(e);
+            if (e.key === 'Enter') {
+              console.debug('[keydown] Enter pressed, text:', JSON.stringify(text), 'busy:', busy, 'meta:', e.metaKey, 'ctrl:', e.ctrlKey, 'shift:', e.shiftKey);
+              if (e.metaKey || e.ctrlKey) {
+                if (!text.trim()) {
+                  e.preventDefault();
+                  console.debug('[keydown] Empty input with Cmd/Ctrl+Enter -> runRound');
+                  if (!busy) runRound();
+                } else {
+                  handleSubmit(e);
+                }
+              } else if (!e.shiftKey && !text.trim()) {
+                e.preventDefault();
+                console.debug('[keydown] Empty input with simple Enter -> nextTurn');
+                if (!busy) nextTurn();
+              }
+            }
           }}
         />
         <div className="composer-row">
@@ -117,7 +133,7 @@ export function Composer({ showThoughts, onToggleThoughts }) {
               <Ic.Play width={11} height={11} /> Auto
             </button>
           )}
-          <button type="submit" className="send-btn" title="Send (⌘↵)" disabled={!text.trim()}>
+          <button type="submit" className="send-btn" title="Send (⌘↵)" disabled={!text.trim() || busy}>
             <Ic.Send width={13} height={13} /> Send
             <span className="kbd">⌘↵</span>
           </button>

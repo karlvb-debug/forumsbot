@@ -4,13 +4,15 @@ import DOMPurify from 'dompurify';
 marked.use({
   gfm: true,
   breaks: true,
-  renderer: (() => {
-    const r = new marked.Renderer();
-    // Open links in a new tab safely
-    r.link = ({ href, title, text }) =>
-      `<a href="${href}"${title ? ` title="${title}"` : ''} target="_blank" rel="noopener noreferrer">${text}</a>`;
-    return r;
-  })(),
+  renderer: {
+    link(token) {
+      const text = this.parser.parseInline(token.tokens);
+      return `<a href="${token.href}"${token.title ? ` title="${token.title}"` : ''} target="_blank" rel="noopener noreferrer">${text}</a>`;
+    },
+    html(token) {
+      return (token.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+  }
 });
 
 export function renderMarkdown(src) {

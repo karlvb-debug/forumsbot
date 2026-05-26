@@ -245,7 +245,15 @@ export function parseAiJson(content) {
 
 export function cleanStoredMessage(message) {
   if (!message || typeof message !== "object") return message;
-  if (message.type === "user" || !looksLikeEnvelope(message.content || "")) return message;
+  if (message.type === "user") {
+    const val = message.text || message.content || "";
+    return {
+      ...message,
+      text: val,
+      content: val
+    };
+  }
+  if (!looksLikeEnvelope(message.content || "")) return message;
 
   const parsed = parseAiJson(message.content);
   if (!parsed.message || parsed.message === message.content) return message;
@@ -261,7 +269,7 @@ export function cleanStoredMessage(message) {
 export function publicMessageContent(message) {
   if (!message) return "";
   const cleaned = cleanStoredMessage(message);
-  return cleaned?.content || "";
+  return cleaned?.content || cleaned?.text || cleaned?.message || "";
 }
 
 export function stringifyList(value) {
