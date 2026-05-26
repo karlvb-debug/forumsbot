@@ -77,8 +77,6 @@ export function scheduleEmbed(fn) {
   return slot;
 }
 
-// els reference removed — React manages UI
-
 // Track which actor/director is currently generating so tool status messages
 // can say "Architect is searching..." rather than a generic message.
 let _currentSpeaker = "";
@@ -102,7 +100,9 @@ function applySamplingParams(payload) {
   return payload;
 }
 
-export async function chatCompletion(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, useTools = false, jsonSchema = null } = {}) {
+// Internal (unscheduled) implementation — used by chatJson retry/correction
+// calls to avoid deadlocking the scheduler.
+async function _chatCompletionDirect(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, useTools = false, jsonSchema = null } = {}) {
   _lastToolCalls = []; // reset per-call log
   const isToolMode = useTools && state.settings.toolsEnabled && state.scenario.mode !== "story";
   const messages = [
@@ -247,6 +247,14 @@ export async function chatCompletion(system, user, { temperature = state.setting
   // If we exhausted rounds, return whatever we have
   const lastAssistant = messages.filter((m) => m.role === "assistant").pop();
   return lastAssistant?.content || "";
+}
+
+/**
+ * Public scheduled entry point — serializes concurrent LLM calls through the
+ * chat chain so no two generation requests run simultaneously.
+ */
+export function chatCompletion(system, user, options) {
+  return scheduleChat(() => _chatCompletionDirect(system, user, options));
 }
 
 /**
@@ -411,10 +419,10 @@ export async function chatStream(system, user, { temperature = state.settings.te
  */
 export function getEmbeddingsBatch(texts) {
   if (!texts || !texts.length) return Promise.resolve([]);
-  return scheduleEmbed(() => _getEmbeddingsBatch(texts));
+  return scheduleEmbed(() => _getEmbeddingsBatchDirect(texts));
 }
 
-async function _getEmbeddingsBatch(texts) {
+async function _getEmbeddingsBatchDirect(texts) {
   const modelToUse = state.settings.embeddingModel || state.settings.model;
   if (!modelToUse) throw new Error("No model selected.");
   const response = await fetch("/api/embeddings", {
@@ -472,7 +480,7 @@ ${result}
           "Incorporate these results into your response. If you need more detail from another URL, use [READ: https://exact-url] in your thought field.",
           "Return valid JSON with thought, action, and message fields."
         ].join("\n");
-        content = await chatCompletion(system, followUpUser, {
+        content = await _chatCompletionDirect(system, followUpUser, {
           temperature,
           maxTokens: resolvedMaxTokens,
           signal,
@@ -481,7 +489,7 @@ ${result}
       }
     }
   } else {
-    content = await chatCompletion(system, user, {
+    content = await _chatCompletionDirect(system, user, {
       temperature,
       maxTokens: resolvedMaxTokens,
       signal,
@@ -521,7 +529,7 @@ ${result}
           "```",
           "Resume and return ONLY the complete, valid JSON object. Do not repeat content already sent — just complete the JSON from where it was cut off, starting with the missing fields or closing braces."
         ].join("\n");
-        const retryContent = await chatCompletion(system, resumeUser, {
+        const retryContent = await _chatCompletionDirect(system, resumeUser, {
           temperature: 0.1, // deterministic for repair
           maxTokens: Math.min(resolvedMaxTokens * 2, 4000),
           signal,
@@ -547,6 +555,52 @@ ${result}
 
   let parsed = parseAiJson(finalContent);
 
+  // ── Schema correction ─────────────────────────────────────────────────────
+  // If the actor response is missing required fields (message/action), send one
+  // targeted correction prompt before giving up. Bypasses the scheduler (uses
+  // _chatCompletionDirect) to avoid deadlocking the chat chain.
+  {
+    const hasMessage = typeof parsed.message === "string";
+    const hasAction = parsed.action === "speak" || parsed.action === "skip";
+    const schemaOk = hasMessage && hasAction;
+
+    if (!schemaOk && !signal?.aborted) {
+      const missingFields = [
+        !hasAction && '"action" (must be "speak" or "skip")',
+        !hasMessage && '"message" (must be a string, empty when skipping)'
+      ].filter(Boolean).join(" and ");
+      const correctionUser = [
+        `Your previous response was missing required fields: ${missingFields}.`,
+        `Previous response: ${finalContent.slice(0, 300)}`,
+        `Return ONLY valid JSON with this exact shape: {"thought":"","action":"speak or skip","message":"your message here, empty if skipping"}`
+      ].join("\n");
+      try {
+        const correctionContent = await _chatCompletionDirect(system, correctionUser, {
+          temperature: 0.1,
+          maxTokens: Math.min(resolvedMaxTokens, 1200),
+          signal,
+          useTools: false
+        });
+        const corrected = parseAiJson(correctionContent);
+        const correctedOk = typeof corrected.message === "string" && (corrected.action === "speak" || corrected.action === "skip");
+        if (correctedOk) {
+          parsed = corrected;
+          finalContent = correctionContent;
+          if (!state.diagnostics) state.diagnostics = {};
+          if (!Array.isArray(state.diagnostics.schemaCorrections)) state.diagnostics.schemaCorrections = [];
+          state.diagnostics.schemaCorrections.push({
+            timestamp: new Date().toISOString(),
+            missingFields,
+            succeeded: true
+          });
+          if (state.diagnostics.schemaCorrections.length > 50) state.diagnostics.schemaCorrections.shift();
+        }
+      } catch {
+        // Correction attempt failed — fall through with what we have
+      }
+    }
+  }
+
   if (!isStrictJson) {
     if (!state.diagnostics) state.diagnostics = {};
     if (!Array.isArray(state.diagnostics.parseFailures)) state.diagnostics.parseFailures = [];
@@ -560,49 +614,6 @@ ${result}
       fallbackUsed: (finalContent.includes("thought") || finalContent.includes("message")) ? "regex_extraction" : "raw_message_injection"
     });
     if (state.diagnostics.parseFailures.length > 50) state.diagnostics.parseFailures.shift();
-  }
-
-  // Schema validation + correction retry.
-  // If the result is missing both action and message (a complete parse failure),
-  // send one targeted correction prompt before giving up.
-  const hasMessage = typeof parsed.message === "string";
-  const hasAction = parsed.action === "speak" || parsed.action === "skip";
-  const schemaOk = hasMessage && hasAction;
-
-  if (!schemaOk && !signal?.aborted) {
-    const missingFields = [
-      !hasAction && '"action" (must be "speak" or "skip")',
-      !hasMessage && '"message" (must be a string, empty when skipping)'
-    ].filter(Boolean).join(" and ");
-    const correctionUser = [
-      `Your previous response was missing required fields: ${missingFields}.`,
-      `Previous response: ${finalContent.slice(0, 300)}`,
-      `Return ONLY valid JSON with this exact shape: {"thought":"","action":"speak or skip","message":"your message here, empty if skipping"}`
-    ].join("\n");
-    try {
-      const correctionContent = await chatCompletion(system, correctionUser, {
-        temperature: 0.1,
-        maxTokens: Math.min(resolvedMaxTokens, 1200),
-        signal,
-        useTools: false
-      });
-      const corrected = parseAiJson(correctionContent);
-      const correctedOk = typeof corrected.message === "string" && (corrected.action === "speak" || corrected.action === "skip");
-      if (correctedOk) {
-        parsed = corrected;
-        finalContent = correctionContent;
-        if (!state.diagnostics) state.diagnostics = {};
-        if (!Array.isArray(state.diagnostics.schemaCorrections)) state.diagnostics.schemaCorrections = [];
-        state.diagnostics.schemaCorrections.push({
-          timestamp: new Date().toISOString(),
-          missingFields,
-          succeeded: true
-        });
-        if (state.diagnostics.schemaCorrections.length > 50) state.diagnostics.schemaCorrections.shift();
-      }
-    } catch {
-      // Correction attempt failed — fall through with what we have
-    }
   }
 
   Object.defineProperties(parsed, {
@@ -622,7 +633,7 @@ ${result}
  */
 export async function chatStructured(system, user, schema, { temperature = 0.2, maxTokens = null, signal = null } = {}) {
   try {
-    const raw = await chatCompletion(system, user, {
+    const raw = await _chatCompletionDirect(system, user, {
       temperature,
       maxTokens: maxTokens || state.settings.maxTokens,
       signal,
@@ -639,7 +650,7 @@ export async function chatStructured(system, user, schema, { temperature = 0.2, 
   } catch (err) {
     // If schema-constrained call fails (model doesn't support it), fall back to plain call
     console.warn("[api] chatStructured schema mode failed, falling back to plain completion:", err.message);
-    const raw = await chatCompletion(system, user, { temperature, maxTokens: maxTokens || state.settings.maxTokens, signal });
+    const raw = await _chatCompletionDirect(system, user, { temperature, maxTokens: maxTokens || state.settings.maxTokens, signal });
     const parsed = JSON.parse(raw);
     Object.defineProperties(parsed, {
       _rawCompletion: { value: raw, writable: true, enumerable: false },
@@ -856,7 +867,11 @@ export function restoreLastConnection() {
   } catch (_) {}
 }
 
-export async function getEmbedding(text) {
+export function getEmbedding(text) {
+  return scheduleEmbed(() => _getEmbeddingDirect(text));
+}
+
+async function _getEmbeddingDirect(text) {
   const modelToUse = state.settings.embeddingModel || state.settings.model;
   if (!modelToUse) {
     throw new Error("No model selected.");

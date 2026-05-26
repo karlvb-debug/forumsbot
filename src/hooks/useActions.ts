@@ -160,5 +160,9 @@ export function useActions() {
     if (_api) await (_api.loadModels as () => Promise<void>)();
   }, []);
 
-  return { nextTurn, runRound, startAuto, stopGeneration, sendMessage, pingConnection, loadModels };
+  const directorBrief = useCallback(async () => {
+    if (_turns) await (_turns.runDirectorBrief as () => Promise<void>)();
+  }, []);
+
+  return { nextTurn, runRound, startAuto, stopGeneration, sendMessage, pingConnection, loadModels, directorBrief };
 }

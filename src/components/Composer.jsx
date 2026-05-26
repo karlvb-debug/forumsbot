@@ -12,7 +12,7 @@ export function Composer({ showThoughts, onToggleThoughts }) {
   const autoRunning = useForumState(s => s.autoRunning);
   const contextInfo = useForumState(s => s.contextInfo || {});
 
-  const { nextTurn, runRound, startAuto, stopGeneration, sendMessage } = useActions();
+  const { nextTurn, runRound, startAuto, stopGeneration, sendMessage, directorBrief } = useActions();
 
   // Subscribe to busy state
   useSyncExternalStore(subscribeBusy, getBusyVersion);
@@ -95,6 +95,15 @@ export function Composer({ showThoughts, onToggleThoughts }) {
               <div className="token-bar"><div style={{ width: `${tokenPct}%` }} /></div>
             </span>
           )}
+          <button
+            type="button"
+            className="chip-btn"
+            onClick={directorBrief}
+            disabled={busy}
+            title="Ask the Director for a progress brief"
+          >
+            Brief
+          </button>
           <button
             type="button"
             className="chip-btn"
