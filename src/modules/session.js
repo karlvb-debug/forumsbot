@@ -1025,7 +1025,19 @@ export const SCENARIO_PRESETS = {
 export function applyScenarioPreset(key) {
   const preset = SCENARIO_PRESETS[key];
   if (!preset) return;
-  state.scenario = { ...state.scenario, ...preset };
+  state.scenario = {
+    ...state.scenario,
+    ...preset,
+    systems: {
+      ...state.scenario.systems,
+      ...(preset.systems || {}),
+      stageDirections: { ...state.scenario.systems?.stageDirections, ...(preset.systems?.stageDirections || {}) },
+      alignment:        { ...state.scenario.systems?.alignment,        ...(preset.systems?.alignment        || {}) },
+      turnRouting:      { ...state.scenario.systems?.turnRouting,      ...(preset.systems?.turnRouting      || {}) },
+      dmRole:           { ...state.scenario.systems?.dmRole,           ...(preset.systems?.dmRole           || {}) },
+      document:         { ...state.scenario.systems?.document,         ...(preset.systems?.document         || {}) },
+    },
+  };
   saveState();
 }
 

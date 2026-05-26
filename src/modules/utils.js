@@ -225,6 +225,9 @@ export function normalizeAiResult(result, fallback) {
   if (result.nextSpeaker) {
     normalized.nextSpeaker = String(result.nextSpeaker).trim();
   }
+  if (result.anchor && String(result.anchor).trim()) {
+    normalized.anchor = String(result.anchor).slice(0, 160).trim();
+  }
   // CAP-8: Fact pin
   if (result.pinFact && String(result.pinFact).trim()) {
     normalized.pinFact = String(result.pinFact).slice(0, 200).trim();
