@@ -59,7 +59,7 @@ export async function preflightSkipCheck(actor, messages, scenario, opts = {}) {
   // Build a stripped-down context: last 3 messages + objective + actor name
   const recentLines = messages
     .slice(-3)
-    .filter(m => m.type === 'actor' || m.type === 'dm' || m.type === 'user')
+    .filter(m => m.type === 'actor' || m.type === 'dm' || m.type === 'user' || (m.type === 'system' && m.speaker === 'Moderator'))
     .map(m => `${m.speaker}: ${trimWords(m.content, 40)}`)
     .join('\n');
 

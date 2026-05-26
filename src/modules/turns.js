@@ -1117,9 +1117,9 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   // Build sections and enforce token budget with graceful degradation.
   const buildSections = (chunks, msgs, memOverride = null) => {
     const lastMsg = msgs[msgs.length - 1];
-    const lastMsgIsUser = lastMsg && lastMsg.type === "user";
-    const userDirectAddress = lastMsgIsUser
-      ? "IMPORTANT FACILITATOR DIRECTIVE: The very last message in the transcript is a direct question or instruction from the human facilitator (USER). You MUST address them directly, acknowledge their message, and answer them in your public output. Do not ignore this message or treat it as an out-of-character disruption."
+    const lastMsgIsFacilitator = lastMsg && (lastMsg.type === "user" || (lastMsg.type === "system" && lastMsg.speaker === "Moderator"));
+    const facilitatorDirectAddress = lastMsgIsFacilitator
+      ? "IMPORTANT FACILITATOR DIRECTIVE: The very last message in the transcript is a direct question, instruction, or note from the human facilitator (Moderator/USER). You MUST address them directly, acknowledge the note, and respond to it in your public output. Do not ignore it or treat it as an out-of-character disruption."
       : "";
 
     return [
@@ -1141,7 +1141,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
             ? "You are the Researcher. Analyze the open questions, run a web search using `[SEARCH: query]` in your thought field if facts are needed, cite your sources, and skip your turn if no further research is required right now."
             : "Take your next turn now. Write as you would speak aloud in a real conversation — plain English, direct, natural rhythm. One to three sentences is usually enough. Do NOT use filler openers (e.g. 'Certainly', 'Absolutely', 'Great point', 'It's worth noting', 'In conclusion', 'I would argue that', 'Building on that'). Do NOT use hedging academic constructions. Say the thing directly.")
         : "Take the director turn now. Be brief and direct. Keep summaries and guidance to plain conversational English — no formal preamble.",
-      userDirectAddress
+      facilitatorDirectAddress
     ].filter(Boolean).join("\n\n");
   };
 
@@ -1253,7 +1253,7 @@ export function memoryBlock(recallChunks) {
 export function formatTranscript(messages, wordLimit = WORD_LIMITS.recentTranscript) {
   if (!messages.length) return "No public messages yet.";
   const text = messages
-    .filter((m) => m.type !== "system" && m.type !== "management") // system/management notices aren't part of the conversation
+    .filter((m) => (m.type !== "system" || m.speaker === "Moderator") && m.type !== "management") // system/management notices aren't part of the conversation, but Moderator notes are
     .map((message) => {
       const name = message.speaker || state.actors.find((a) => a.id === message.actorId)?.name || "Forum";
       if (message.type === "user")   return `[USER] ${name}: ${publicMessageContent(message)}`;

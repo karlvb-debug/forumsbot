@@ -100,13 +100,15 @@ export async function recallRelevantChunks(actor) {
 // (memory.js needs it, and turns.js imports memory.js)
 function formatTranscript(messages, wordLimit = WORD_LIMITS.recentTranscript) {
   if (!messages.length) return "No public messages yet.";
-  const text = messages.map((message) => {
-    const name = message.speaker || state.actors.find((actor) => actor.id === message.actorId)?.name || "Forum";
-    if (message.type === "dm") {
-      return `[DIRECTOR] ${name}: ${publicMsgContent(message)}`;
-    }
-    return `${name}: ${publicMsgContent(message)}`;
-  }).join("\n");
+  const text = messages
+    .filter((m) => (m.type !== "system" || m.speaker === "Moderator") && m.type !== "management")
+    .map((message) => {
+      const name = message.speaker || state.actors.find((actor) => actor.id === message.actorId)?.name || "Forum";
+      if (message.type === "dm") {
+        return `[DIRECTOR] ${name}: ${publicMsgContent(message)}`;
+      }
+      return `${name}: ${publicMsgContent(message)}`;
+    }).join("\n");
   return trimWords(text, wordLimit);
 }
 
