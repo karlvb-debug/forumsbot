@@ -148,6 +148,24 @@ export async function exportSession() {
     });
     const cleanState = { ...state };
     delete cleanState.diagnostics; // strip raw API logs
+    // Strip private actor thoughts (personal memory, session-internal reasoning)
+    cleanState.actors = (cleanState.actors || []).map(({ thoughts, ...rest }) => rest);
+    // Strip memory.dmState (can contain session-private director context)
+    if (cleanState.memory) {
+      cleanState.memory = { ...cleanState.memory };
+      delete cleanState.memory.dmState;
+    }
+    // Strip telemetry embedding vectors (large, private, non-reproducible)
+    if (cleanState.telemetry) {
+      cleanState.telemetry = { ...cleanState.telemetry };
+      delete cleanState.telemetry.objectiveEmbedding;
+    }
+    // Strip UI quick-start draft history (contains raw LLM output, not session content)
+    if (cleanState.ui) {
+      cleanState.ui = { ...cleanState.ui };
+      delete cleanState.ui.quickStartHistory;
+      delete cleanState.ui.quickStartDraft;
+    }
     payload = {
       version: PRESET_VERSION,
       exportedAt: new Date().toISOString(),
@@ -337,6 +355,73 @@ export function addActor(isResearcher = false) {
       color: colors[index % colors.length]
     });
   }
+  saveState();
+  render();
+}
+
+const ACTOR_TEMPLATES = {
+  critic: {
+    name: "Critic",
+    role: "Red-team challenger",
+    persona: "You stress-test every proposal by actively looking for flaws, risks, and unstated assumptions. You play devil's advocate even when you personally agree, because blind spots are more dangerous than counterarguments. You are not obstructionist — you challenge in order to strengthen.",
+    goal: "Expose weaknesses, edge cases, and hidden assumptions before they become problems. Your criticism should help the group arrive at more robust solutions.",
+    voice: "Precise and pointed. Name the specific failure mode. Short, sharp objections followed by one concrete alternative or question.",
+    color: "#c0392b"
+  },
+  synthesizer: {
+    name: "Synthesizer",
+    role: "Convergence facilitator",
+    persona: "You track all threads of the conversation simultaneously and identify patterns, agreements, and contradictions that others miss. When the group circles, you extract the common ground and bridge divides. You do not introduce new arguments — you clarify what has already been said and move toward resolution.",
+    goal: "Distill the discussion into clear conclusions, highlight genuine consensus, and surface remaining genuine disagreements so the group can make decisions.",
+    voice: "Calm, structured, precise. Uses explicit mapping language: 'X and Y both agree that…', 'The core tension is…', 'What remains unresolved is…'",
+    color: "#27ae60"
+  },
+  advocate: {
+    name: "User Advocate",
+    role: "End-user perspective",
+    persona: "You represent the people who will actually use, live with, or be affected by whatever this group decides. You think in terms of real human workflows, pain points, mental models, and the gap between intent and experience. You translate technical or abstract decisions into their human consequences.",
+    goal: "Ensure decisions are grounded in actual user needs, not assumptions. Surface the human impact of every proposal.",
+    voice: "Concrete and empathetic. Uses personas and scenarios: 'A user who does X will find that…'. Avoids jargon. Speaks plainly and specifically.",
+    color: "#2980b9"
+  },
+  implementer: {
+    name: "Implementer",
+    role: "Technical execution expert",
+    persona: "You think in terms of what it actually takes to build, ship, and maintain solutions. You have strong opinions about feasibility, complexity, tech debt, and operational reality. You push back on ideas that sound good but are harder than they appear, and you find pragmatic paths through constraints.",
+    goal: "Ground proposals in technical reality. Flag hidden complexity and integration costs. Identify the simplest path that actually works.",
+    voice: "Direct and grounded. Speaks in concrete engineering terms: timelines, dependencies, tradeoffs, failure modes. Calls out underestimated complexity immediately.",
+    color: "#8e44ad"
+  },
+  qa: {
+    name: "QA Tester",
+    role: "Quality and edge-case analyst",
+    persona: "You think adversarially about correctness: what inputs, states, timings, or users will break this? You systematically probe edge cases, error paths, boundary conditions, and the gap between spec and implementation. You are never satisfied with 'it works for the happy path'.",
+    goal: "Find the cases where proposals fail, and ensure the group has a plan for them. Push for testable, verifiable success criteria.",
+    voice: "Methodical and specific. Lists edge cases as bullet points. Asks 'what happens when…?' questions. Short and numbered.",
+    color: "#16a085"
+  },
+  expert: {
+    name: "Domain Expert",
+    role: "Subject-matter authority",
+    persona: "You bring deep specialized knowledge relevant to the current topic. You correct misconceptions, provide precise context, cite relevant precedents, and flag when the group is reinventing something that has already been solved — or repeating a well-documented mistake. You do not guess; you cite.",
+    goal: "Inject accurate domain knowledge and prevent the group from making decisions based on false premises or missing context.",
+    voice: "Authoritative but not condescending. Precise terminology, specific references, clear corrections. Acknowledges uncertainty honestly.",
+    color: "#d35400"
+  }
+};
+
+export function addActorFromTemplate(templateKey) {
+  const template = ACTOR_TEMPLATES[templateKey];
+  if (!template) return;
+  const index = state.actors.length;
+  state.actors.push({
+    id: crypto.randomUUID(),
+    thoughts: "",
+    enabled: true,
+    expanded: true,
+    color: template.color || colors[index % colors.length],
+    ...template
+  });
   saveState();
   render();
 }

@@ -205,6 +205,49 @@ button:disabled, textarea:disabled, input:disabled, select:disabled {
 .panel-section.section--actors             { border-left-color: var(--line); }
 .panel-section.section--actors::before     { display: none; }
 
+/* Actor template picker */
+.actor-templates-details {
+  margin: 6px 0 4px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+.actor-templates-summary {
+  padding: 5px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+.actor-templates-summary::-webkit-details-marker { display: none; }
+.actor-templates-summary::before { content: "▶ "; font-size: 0.6em; }
+.actor-templates-details[open] .actor-templates-summary::before { content: "▼ "; }
+.actor-templates-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 6px 8px 8px;
+}
+.actor-template-btn {
+  padding: 5px 8px;
+  font-size: 0.75rem;
+  text-align: left;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.actor-template-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+
 /* ── Section titles ─────────────────────────────────────────── */
 .section-title,
 .stage-header {

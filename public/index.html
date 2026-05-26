@@ -73,7 +73,7 @@
                 <input id="showThoughtsMirror" type="checkbox">
                 <span>💭</span>
               </label>
-              <label class="composer-toggle" title="Enable web tools">
+              <label class="composer-toggle" title="Web tools: actors can search the web and read pages. Fetched content is labeled as external data and actors are instructed not to follow embedded instructions.">
                 <input id="toolsEnabledMirror" type="checkbox">
                 <span>🔍</span>
               </label>
@@ -307,10 +307,21 @@
                   <h2>Actors</h2>
                   <div style="display:flex;gap:8px">
                     <button class="soft-button" id="addActorButton" type="button">+ Add</button>
-                    <button class="soft-button" id="addResearcherButton" type="button" title="Add Specialized Research Agent">+ Add Researcher</button>
-                    <button class="soft-button" id="addActorFromDescBtn" type="button" title="Describe an actor and let AI fill in the details">+ From description…</button>
+                    <button class="soft-button" id="addResearcherButton" type="button" title="Add Specialized Research Agent">+ Researcher</button>
+                    <button class="soft-button" id="addActorFromDescBtn" type="button" title="Describe an actor and let AI fill in the details">+ AI…</button>
                   </div>
                 </div>
+                <details class="actor-templates-details">
+                  <summary class="actor-templates-summary">Templates</summary>
+                  <div class="actor-templates-grid">
+                    <button class="actor-template-btn" data-template="critic" type="button" title="Red-team challenger — stress-tests proposals and surfaces flaws">⚔ Critic</button>
+                    <button class="actor-template-btn" data-template="synthesizer" type="button" title="Convergence facilitator — tracks threads and bridges divides">🔀 Synthesizer</button>
+                    <button class="actor-template-btn" data-template="advocate" type="button" title="End-user perspective — represents people affected by decisions">👤 User Advocate</button>
+                    <button class="actor-template-btn" data-template="implementer" type="button" title="Technical execution expert — grounds proposals in engineering reality">🔧 Implementer</button>
+                    <button class="actor-template-btn" data-template="qa" type="button" title="Quality and edge-case analyst — finds failure modes and boundary conditions">🧪 QA Tester</button>
+                    <button class="actor-template-btn" data-template="expert" type="button" title="Subject-matter authority — injects precise domain knowledge">🎓 Domain Expert</button>
+                  </div>
+                </details>
                 <div class="actor-list" id="actorList"></div>
               </section>
             </div><!-- /setup-grid -->

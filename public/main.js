@@ -59,6 +59,7 @@ import {
   confirmAndResetSession,
   confirmAndFullReset,
   addActor,
+  addActorFromTemplate,
   generateQuickStart,
   applyQuickStartConfig,
   discardQuickStartConfig,
@@ -467,6 +468,9 @@ function wireEvents() {
   els.addActor.addEventListener("click", () => addActor(false));
   els.addResearcher.addEventListener("click", () => addActor(true));
   document.getElementById("addActorFromDescBtn")?.addEventListener("click", generateActorFromDescription);
+  document.querySelectorAll(".actor-template-btn").forEach(btn => {
+    btn.addEventListener("click", () => addActorFromTemplate(btn.dataset.template));
+  });
   els.savePreset.addEventListener("click", savePreset);
   els.loadPreset.addEventListener("click", () => els.presetFile.click());
   els.exportSession.addEventListener("click", () => exportSession());
