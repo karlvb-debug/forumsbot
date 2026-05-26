@@ -212,9 +212,18 @@ export function normalizeAiResult(result, fallback) {
     action: action === "skip" || !message ? "skip" : "speak",
     message: message || fallback.trim()
   };
-  // Pass through optional documentEdit field for collaborative document feature
+  // Pass through document edit fields
   if (result.documentEdit) {
     normalized.documentEdit = String(result.documentEdit).trim();
+  }
+  if (Array.isArray(result.documentEdits) && result.documentEdits.length) {
+    normalized.documentEdits = result.documentEdits;
+  }
+  if (result.manageActors && typeof result.manageActors === "object") {
+    normalized.manageActors = result.manageActors;
+  }
+  if (result.nextSpeaker) {
+    normalized.nextSpeaker = String(result.nextSpeaker).trim();
   }
   return normalized;
 }

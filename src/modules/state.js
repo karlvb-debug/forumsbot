@@ -42,11 +42,15 @@ function normalizeState(value) {
   };
 
   // Migrate old document + knowledgeBase → unified documents[]
-  if (!Array.isArray(value.documents)) {
-    const docs = [];
-    // Old KB entries → read-only reference documents
-    for (const e of (Array.isArray(value.knowledgeBase) ? value.knowledgeBase : [])) {
-      docs.push(normalizeDocumentEntry({ ...e, aiEditable: false }));
+  // Also handles the case where value.documents is [] (empty array from an intermediate build)
+  // but value.document still has content that hasn't been migrated yet.
+  if (!Array.isArray(value.documents) || (value.documents.length === 0 && value.document?.content)) {
+    const docs = Array.isArray(value.documents) ? value.documents.map(normalizeDocumentEntry) : [];
+    // Old KB entries → read-only reference documents (only if not already migrated)
+    if (!Array.isArray(value.documents)) {
+      for (const e of (Array.isArray(value.knowledgeBase) ? value.knowledgeBase : [])) {
+        docs.push(normalizeDocumentEntry({ ...e, aiEditable: false }));
+      }
     }
     // Old single editable document → first editable document
     const d = value.document;
