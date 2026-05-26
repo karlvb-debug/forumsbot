@@ -1045,6 +1045,7 @@ function buildDocumentsForPrompt(actorId) {
 
 export async function buildPromptContext({ kind, actor, dm, privateThoughts = "" }) {
   const participant = kind === "actor" ? actor : dm;
+  const isStoryMode = state.scenario.mode === "story" || state.scenario.mode === "freeform";
   const PROMPT_TOKEN_BUDGET = getPromptBudget();
   const workingMemoryN = getWorkingMemoryN();
   const messageSource = state.messages;
@@ -1093,10 +1094,10 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   const threshold = state.settings?.gravitySensitivity ?? 50;
   const isDrifting = alignment < threshold;
 
-  const periodicReminder = (state.scenario.objective && state.messages.length > 0 && state.messages.length % 5 === 0)
+  const periodicReminder = (state.scenario.objective && state.messages.length > 0 && state.messages.length % 5 === 0 && !isStoryMode)
     ? `[Reminder: the objective is "${state.scenario.objective}". Stay on track.]`
     : "";
-  const gravityWarning = (isDrifting && kind === "actor" && !actor.canResearch)
+  const gravityWarning = (isDrifting && kind === "actor" && !actor.canResearch && !isStoryMode)
     ? `[The discussion has drifted off-topic (alignment ${alignment}%). Don't repeat what's already been said — challenge an assumption, ask a sharp question, or propose something concrete to get back to: "${state.scenario.objective || "the goal"}"]`
     : "";
 
@@ -1119,7 +1120,6 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   }
 
   // Build sections and enforce token budget with graceful degradation.
-  const isStoryMode = state.scenario.mode === "story" || state.scenario.mode === "freeform";
   const buildSections = (chunks, msgs, memOverride = null) => {
     const lastMsg = msgs[msgs.length - 1];
     const lastMsgIsFacilitator = lastMsg && (lastMsg.type === "user" || (lastMsg.type === "system" && lastMsg.speaker === "Moderator"));
