@@ -47,8 +47,16 @@ export function buildTurnQueue() {
 }
 
 export function nextParticipant() {
-  const enabled = new Set(state.actors.filter((actor) => actor.enabled).map((actor) => actor.id));
-  state.turnQueue = state.turnQueue.filter((id) => enabled.has(id));
+  const enabled = state.actors.filter((actor) => actor.enabled).map((actor) => actor.id);
+  const enabledSet = new Set(enabled);
+  state.turnQueue = state.turnQueue.filter((id) => enabledSet.has(id));
+
+  const queueSet = new Set(state.turnQueue);
+  const missing = enabled.filter(id => !queueSet.has(id));
+  if (missing.length) {
+    state.turnQueue.push(...missing);
+  }
+
   if (!state.turnQueue.length) buildTurnQueue();
 
   // @mention routing: if the user addressed a specific actor, route to them first
