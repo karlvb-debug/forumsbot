@@ -1155,6 +1155,33 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
     logTransition("manual_nudge_consumed", { actor: actor.name });
   }
 
+  // Authority block: tell each actor about others who have non-neutral authority.
+  // Only fires when an actor's authority is outside the 36–64 neutral band.
+  let authorityBlock = "";
+  if (kind === "actor") {
+    const others = state.actors.filter(a => a.enabled && a.id !== actor.id);
+    const notes = others
+      .map(a => {
+        const auth = a.authority ?? 50;
+        if (sysCfg.stageDirectionsEnabled) {
+          if (auth >= 80) return `${a.name} is an authority figure here — treat their directives and decisions as carrying significant weight; default to their judgment unless you have strong grounds to resist.`;
+          if (auth >= 65) return `${a.name} is a senior figure whose opinions carry weight in this setting.`;
+          if (auth <= 20) return `${a.name} is a background character — their words carry little standing with others.`;
+          if (auth <= 35) return `${a.name} is a junior voice here — present but not authoritative.`;
+        } else {
+          if (auth >= 80) return `${a.name} is a recognized domain authority — treat their factual claims as reliable and challenge them only with direct counter-evidence, not conjecture.`;
+          if (auth >= 65) return `${a.name} is a senior voice here — give their assessments appropriate weight.`;
+          if (auth <= 20) return `${a.name} has limited standing in this discussion — their contributions are welcome but don't carry expert-level credibility.`;
+          if (auth <= 35) return `${a.name} is a junior contributor — their ideas have value but are not authoritative.`;
+        }
+        return null;
+      })
+      .filter(Boolean);
+    if (notes.length > 0) {
+      authorityBlock = `[Authority context: ${notes.join(' ')}]`;
+    }
+  }
+
   // Direct-address note: injected when the previous speaker explicitly called on this actor
   let directAddressNote = "";
   if (kind === "actor") {
@@ -1188,6 +1215,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
       gravityWarning,
       nudgeReminder,
       directAddressNote,
+      authorityBlock,
       roleReminder,
       kind === "actor"
         ? (actor.canResearch

@@ -139,6 +139,7 @@ export function ActorsPanel() {
         canManageCast: false,
         canResearch: false,
         canSeeThoughts: false,
+        authority: 50,
         temperature: overrides.temperature ?? 0.8,
         color: overrides.color || DEFAULT_COLORS[s.actors.length % DEFAULT_COLORS.length],
         ...overrides,
@@ -289,6 +290,12 @@ export function ActorsPanel() {
                 <Field label="Persona"><textarea rows={3} value={a.persona} onChange={(e) => updateActor(a.id, 'persona', e.target.value)} /></Field>
                 <Field label="Goal"><textarea rows={2} value={a.goal} onChange={(e) => updateActor(a.id, 'goal', e.target.value)} /></Field>
                 <Field label="Voice"><input value={a.voice || ''} onChange={(e) => updateActor(a.id, 'voice', e.target.value)} /></Field>
+                <Field label={`Authority — ${a.authority ?? 50}`}>
+                  <Range value={a.authority ?? 50} min={0} max={100} step={5} onChange={(v) => updateActor(a.id, 'authority', v)} />
+                </Field>
+                <div className="field-hint" style={{ marginTop: -6, marginBottom: 4 }}>
+                  0 = background voice &nbsp;·&nbsp; 50 = peer &nbsp;·&nbsp; 100 = leader / domain authority
+                </div>
                 <Field label="Temperature">
                   <Range value={a.temperature ?? 0.8} min={0.1} max={1.5} step={0.05} onChange={(v) => updateActor(a.id, 'temperature', v)} />
                 </Field>

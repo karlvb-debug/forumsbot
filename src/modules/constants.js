@@ -219,7 +219,8 @@ export const defaultState = {
       canDirect: true,
       canManageCast: true,
       canResearch: false,
-      canSeeThoughts: false
+      canSeeThoughts: false,
+      authority: 50
     },
     {
       id: crypto.randomUUID(),
@@ -235,7 +236,8 @@ export const defaultState = {
       canDirect: false,
       canManageCast: false,
       canResearch: false,
-      canSeeThoughts: false
+      canSeeThoughts: false,
+      authority: 50
     },
     {
       id: crypto.randomUUID(),
@@ -251,7 +253,8 @@ export const defaultState = {
       canDirect: false,
       canManageCast: false,
       canResearch: false,
-      canSeeThoughts: false
+      canSeeThoughts: false,
+      authority: 50
     },
     {
       id: crypto.randomUUID(),
@@ -267,7 +270,8 @@ export const defaultState = {
       canDirect: false,
       canManageCast: false,
       canResearch: false,
-      canSeeThoughts: false
+      canSeeThoughts: false,
+      authority: 50
     }
   ],
   messages: [],

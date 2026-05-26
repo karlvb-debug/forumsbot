@@ -212,7 +212,8 @@ function normalizeState(value) {
     canDirect: !!(actor.canDirect),
     canManageCast: !!(actor.canManageCast || actor.isManager),
     canResearch: !!(actor.canResearch || actor.isResearcher),
-    canSeeThoughts: !!(actor.canSeeThoughts)
+    canSeeThoughts: !!(actor.canSeeThoughts),
+    authority: typeof actor.authority === "number" ? Math.max(0, Math.min(100, actor.authority)) : 50
   }));
   return merged;
 }
