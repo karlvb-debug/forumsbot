@@ -2,6 +2,17 @@ import React from 'react';
 import * as Ic from '../Icons';
 import { Field, Toggle, Seg } from '../shared/FormControls';
 import { useForumState, mutateState } from '../../hooks/useForumState';
+import { applyScenarioPreset } from '../../modules/session.js';
+
+const PRESET_OPTIONS = [
+  { value: '', label: '— Apply a preset —' },
+  { value: 'brainstorm', label: 'Brainstorm Session' },
+  { value: 'risk', label: 'Risk Assessment' },
+  { value: 'debate', label: 'Structured Debate' },
+  { value: 'retrospective', label: 'Project Retrospective' },
+  { value: 'story', label: 'Collaborative Story' },
+  { value: 'interview', label: 'Expert Panel Interview' },
+];
 
 export function ScenarioPanel() {
   const mode = useForumState(s => s.scenario?.mode || 'problem');
@@ -11,8 +22,30 @@ export function ScenarioPanel() {
 
   const updateScenario = (key, val) => mutateState(s => { s.scenario[key] = val; });
 
+  const handlePreset = (e) => {
+    const key = e.target.value;
+    if (!key) return;
+    applyScenarioPreset(key);
+    // Reset dropdown
+    e.target.value = '';
+  };
+
   return (
     <div>
+      <div className="card">
+        <div className="card-title"><h3>Scenario Presets</h3></div>
+        <select
+          style={{ width: '100%', marginBottom: 4 }}
+          defaultValue=""
+          onChange={handlePreset}
+        >
+          {PRESET_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <div className="field-hint">Selecting a preset fills in Mode, Title, Premise, and Objective.</div>
+      </div>
+
       <div className="card">
         <div className="card-title"><h3><Ic.Target /> Mode</h3></div>
         <Seg full

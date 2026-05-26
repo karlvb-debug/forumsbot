@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import * as Ic from './Icons';
 import { useForumState, mutateState } from '../hooks/useForumState';
 import { useActions, getConnectionStatus, getConnectionStatusVersion, subscribeBusy, getBusy, subscribeConnectionStatus } from '../hooks/useActions';
@@ -7,6 +7,16 @@ import { useSyncExternalStore } from 'react';
 export function Topbar({ onOpenCmd }) {
   const assistantOpen = useForumState(s => s.ui?.assistantOpen || false);
   const toggleAssistant = () => mutateState(s => { s.ui.assistantOpen = !s.ui.assistantOpen; });
+  const [mdCopied, setMdCopied] = useState(false);
+
+  const handleCopyMd = async () => {
+    const { copyMarkdownToClipboard } = await import('../modules/session.js');
+    const ok = await copyMarkdownToClipboard();
+    if (ok) {
+      setMdCopied(true);
+      setTimeout(() => setMdCopied(false), 2000);
+    }
+  };
   const mode = useForumState(s => s.scenario?.mode || 'problem');
   const title = useForumState(s => s.scenario?.title || 'Forum — Mission Control');
   const roundNum = useForumState(s => s.currentRound || 0);
@@ -53,6 +63,14 @@ export function Topbar({ onOpenCmd }) {
         )}
       </div>
 
+      <button
+        className="icon-btn"
+        onClick={handleCopyMd}
+        title="Copy session as Markdown"
+        style={{ fontSize: 11, fontWeight: 600 }}
+      >
+        {mdCopied ? '✓' : '⬇ MD'}
+      </button>
       <button
         className={`icon-btn${assistantOpen ? ' active' : ''}`}
         onClick={toggleAssistant}

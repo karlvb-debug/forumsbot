@@ -3,9 +3,12 @@ import * as Ic from './Icons';
 import { useForumState, mutateState } from '../hooks/useForumState';
 import { useActions, getBusy, getBusyVersion, subscribeBusy } from '../hooks/useActions';
 import { useSyncExternalStore } from 'react';
+import { addMessage } from '../modules/turns.js';
 
 export function Composer({ showThoughts, onToggleThoughts }) {
   const [text, setText] = useState('');
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteText, setNoteText] = useState('');
   const taRef = useRef(null);
 
   const toolsEnabled = useForumState(s => s.settings?.toolsEnabled !== false);
@@ -37,6 +40,14 @@ export function Composer({ showThoughts, onToggleThoughts }) {
     mutateState(s => { s.settings.toolsEnabled = !s.settings.toolsEnabled; });
   }, []);
 
+  const handleSubmitNote = useCallback(async () => {
+    const note = noteText.trim();
+    if (!note) return;
+    await addMessage({ type: 'system', speaker: 'Moderator', content: '📌 ' + note, color: '#666' });
+    setNoteText('');
+    setNoteOpen(false);
+  }, [noteText]);
+
   // Token meter
   const promptTokens = contextInfo.lastPromptTokens || 0;
   const maxCtx = contextInfo.maxContextLength || 0;
@@ -45,6 +56,27 @@ export function Composer({ showThoughts, onToggleThoughts }) {
 
   return (
     <form className="composer" onSubmit={handleSubmit}>
+      {noteOpen && (
+        <div className="composer-note-row" style={{ display: 'flex', gap: 6, padding: '4px 8px', borderBottom: '1px solid var(--border)' }}>
+          <input
+            autoFocus
+            style={{ flex: 1, fontSize: 13 }}
+            placeholder="Moderator note…"
+            value={noteText}
+            onChange={e => setNoteText(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { e.preventDefault(); handleSubmitNote(); }
+              if (e.key === 'Escape') { setNoteOpen(false); setNoteText(''); }
+            }}
+          />
+          <button type="button" className="chip-btn" onClick={handleSubmitNote} disabled={!noteText.trim()}>
+            Post
+          </button>
+          <button type="button" className="chip-btn" onClick={() => { setNoteOpen(false); setNoteText(''); }}>
+            Cancel
+          </button>
+        </div>
+      )}
       <div className="composer-inner">
         <textarea
           ref={taRef}
@@ -87,6 +119,14 @@ export function Composer({ showThoughts, onToggleThoughts }) {
             title="Allow actors to search the web"
           >
             <Ic.Globe width={12} height={12} /> Tools
+          </button>
+          <button
+            type="button"
+            className={"chip-btn" + (noteOpen ? " active" : "")}
+            onClick={() => setNoteOpen(v => !v)}
+            title="Inject a moderator note into the transcript"
+          >
+            📌 Note
           </button>
           <span className="grow" />
           {maxCtx > 0 && (

@@ -1,15 +1,31 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
 import * as Ic from './Icons';
 import { useForumState, mutateState } from '../hooks/useForumState';
 import { useStreaming } from '../hooks/useStreaming';
 import { renderMarkdown } from '../modules/markdown.js';
 
+const THOUGHT_COLLAPSE_THRESHOLD = 150;
+const THOUGHT_PREVIEW_LENGTH = 80;
+
 function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork }) {
+  const [thoughtExpanded, setThoughtExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+
   if (!actor) return null;
 
   const timeStr = msg.createdAt
     ? new Date(msg.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })
     : msg.time || '';
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(msg.content || msg.text || msg.message || '');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard not available
+    }
+  };
 
   if (msg.type === 'skip') {
     return (
@@ -57,14 +73,36 @@ function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork })
 
         <div className="msg-text md-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }} />
 
-        {thought && showThoughts && (
-          <div className="thought">
-            <span className="thought-label">private</span>
-            <div className="md-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(thought) }} />
-          </div>
-        )}
+        {thought && showThoughts && (() => {
+          const isLong = thought.length > THOUGHT_COLLAPSE_THRESHOLD;
+          const displayText = isLong && !thoughtExpanded
+            ? thought.slice(0, THOUGHT_PREVIEW_LENGTH) + '…'
+            : thought;
+          return (
+            <div className="thought">
+              <span className="thought-label">private</span>
+              <div className="md-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(displayText) }} />
+              {isLong && (
+                <button
+                  className="chip-btn"
+                  style={{ fontSize: 11, marginTop: 2 }}
+                  onClick={() => setThoughtExpanded(v => !v)}
+                >
+                  {thoughtExpanded ? 'Show less' : 'Show more'}
+                </button>
+              )}
+            </div>
+          );
+        })()}
 
         <div className="msg-actions">
+          <button
+            title={copied ? 'Copied!' : 'Copy message'}
+            style={{ opacity: copied ? 1 : undefined }}
+            onClick={handleCopy}
+          >
+            {copied ? '✓' : '📋'}
+          </button>
           <button className={msg.feedback === "up" ? "active" : ""} title="Helpful" onClick={() => onFeedback?.(msg.id, "up")}>👍</button>
           <button className={msg.feedback === "down" ? "active" : ""} title="Unhelpful" onClick={() => onFeedback?.(msg.id, "down")}>👎</button>
           <button

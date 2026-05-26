@@ -9,6 +9,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { StopModal } from './components/StopModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { AiAssistant } from './components/AiAssistant';
+import { ReadinessStrip } from './components/ReadinessStrip';
 // Importing state.js triggers loadState() at module level
 import './modules/state.js';
 import { setModuleRefs, useActions } from './hooks/useActions.js';
@@ -171,6 +172,7 @@ export default function App() {
             <div className="stage-inner">
               <Transcript showThoughts={showThoughts} />
             </div>
+            <ReadinessStrip />
             <Composer
               showThoughts={showThoughts}
               onToggleThoughts={() => mutateState(s => { s.settings.showThoughts = !s.settings.showThoughts; })}

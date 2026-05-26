@@ -168,10 +168,40 @@ export async function exportSession(mode = 'debug') {
     });
     const cleanState = { ...state };
     delete cleanState.diagnostics; // strip raw API logs
+    // Strip private actor thoughts (personal memory, session-internal reasoning)
+    cleanState.actors = (cleanState.actors || []).map(({ thoughts, ...rest }) => rest);
+    // Strip memory.dmState (can contain session-private director context)
+    if (cleanState.memory) {
+      cleanState.memory = { ...cleanState.memory };
+      delete cleanState.memory.dmState;
+    }
+    // Strip telemetry embedding vectors (large, private, non-reproducible)
+    if (cleanState.telemetry) {
+      cleanState.telemetry = { ...cleanState.telemetry };
+      delete cleanState.telemetry.objectiveEmbedding;
+    }
+    // Strip UI quick-start draft history (contains raw LLM output, not session content)
+    if (cleanState.ui) {
+      cleanState.ui = { ...cleanState.ui };
+      delete cleanState.ui.quickStartDraft;
+    }
+
+    // Audit for sensitive fields and add warnings
+    const exportWarnings = [];
+    if (cleanState.settings?.apiKey) {
+      exportWarnings.push("API key included in export — remove before sharing");
+    }
+    const baseUrl = cleanState.settings?.baseUrl || '';
+    const isDefaultOrLocal = !baseUrl || baseUrl.includes('127.0.0.1') || baseUrl.includes('localhost') || baseUrl === 'http://127.0.0.1:1234';
+    if (!isDefaultOrLocal) {
+      exportWarnings.push(`Non-local server URL included in export (${baseUrl}) — verify before sharing`);
+    }
+
     payload = {
       version: PRESET_VERSION,
       exportedAt: new Date().toISOString(),
       exportMode: 'shareable',
+      ...(exportWarnings.length ? { _warnings: exportWarnings } : {}),
       ...cleanState,
       messages: cleanMessages,
       chunks: cleanChunks

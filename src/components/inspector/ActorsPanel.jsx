@@ -1,7 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import * as Ic from '../Icons';
 import { Field, Toggle, Range } from '../shared/FormControls';
-import { useForumState, mutateState } from '../../hooks/useForumState';
+import { useForumState, mutateState, saveState } from '../../hooks/useForumState';
+import { putActorMemory } from '../../modules/db.js';
 
 const PERM_DEFS = [
   { key: 'canDirect',      label: 'Direct',    icon: '🎬', color: 'var(--gold)'  },
@@ -11,6 +12,69 @@ const PERM_DEFS = [
 ];
 
 const DEFAULT_COLORS = ['#2a9d8f', '#7c5cbf', '#4a7fd4', '#c97a40', '#e76f51', '#457b9d', '#c8a830'];
+
+const ACTOR_TEMPLATES = [
+  {
+    label: '🎓 Expert',
+    name: 'Domain Expert',
+    role: 'Subject-Matter Authority',
+    persona: "An authority in their field who grounds the discussion in precise factual detail. Cites sources, corrects misconceptions, provides quantitative backing.",
+    goal: "Ensure factual accuracy and domain depth.",
+    voice: "Precise, citation-rich, confident but not condescending.",
+    temperature: 0.7,
+    color: '#355f9f',
+  },
+  {
+    label: '👹 Devil\'s Advocate',
+    name: "Devil's Advocate",
+    role: 'Rigorous Contrarian',
+    persona: "A rigorous contrarian who stress-tests every proposal. Not negative for its own sake — identifies the strongest version of opposing arguments.",
+    goal: "Expose weaknesses before they become problems.",
+    voice: "Sharp, direct, challenges with questions rather than assertions.",
+    temperature: 0.85,
+    color: '#b84738',
+  },
+  {
+    label: '🔗 Synthesizer',
+    name: 'Synthesizer',
+    role: 'Bridge Builder',
+    persona: "Identifies patterns across contributions, builds bridges between opposing views, and proposes integrated solutions.",
+    goal: "Turn fragmented ideas into coherent proposals.",
+    voice: "Measured, integrative, acknowledges multiple sides before proposing synthesis.",
+    temperature: 0.75,
+    color: '#4f7d2d',
+  },
+  {
+    label: '🔨 Pragmatist',
+    name: 'Pragmatist',
+    role: 'Execution Realist',
+    persona: "Cuts through theory to ask: what can we ship? Focuses on constraints, resources, timelines, and execution risk.",
+    goal: "Keep the group grounded in what's feasible.",
+    voice: "Blunt, concrete, focuses on blockers and trade-offs.",
+    temperature: 0.7,
+    color: '#7a5c1e',
+  },
+  {
+    label: '🔭 Visionary',
+    name: 'Visionary',
+    role: 'Systems Thinker',
+    persona: "Thinks in systems and long time horizons. Challenges the group to consider second-order effects and transformative possibilities.",
+    goal: "Prevent local optimization at the expense of the larger opportunity.",
+    voice: "Expansive, provocative, asks 'what if' and 'what else'.",
+    temperature: 0.9,
+    color: '#6a3d9f',
+  },
+  {
+    label: '👤 User Advocate',
+    name: 'User Advocate',
+    role: 'End User Voice',
+    persona: "Grounds every decision in real user needs. Questions whether proposed solutions solve the actual problem or just the stated one.",
+    goal: "Ensure decisions serve real people, not just internal logic.",
+    voice: "Empathetic, specific, brings in concrete user scenarios.",
+    temperature: 0.75,
+    color: '#1a7a6e',
+  },
+];
 
 export function ActorsPanel() {
   const actors = useForumState(s => s.actors);
@@ -60,7 +124,7 @@ export function ActorsPanel() {
 
   return (
     <div>
-      <div className="btn-row" style={{ marginBottom: 12 }}>
+      <div className="btn-row" style={{ marginBottom: 8 }}>
         <button className="btn" onClick={() => addActor()}>
           <Ic.Plus /> Add
         </button>
@@ -76,6 +140,31 @@ export function ActorsPanel() {
           voice: 'Objective, fact-driven.',
           canResearch: true, temperature: 0.4, color: '#457b9d',
         })}><Ic.Globe width={14} height={14} /> Researcher</button>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 11, color: 'var(--fg-mute)', marginBottom: 4 }}>Templates</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {ACTOR_TEMPLATES.map(tpl => (
+            <button
+              key={tpl.name}
+              className="btn sm"
+              style={{ fontSize: 11, padding: '2px 6px' }}
+              title={`Add ${tpl.name}: ${tpl.goal}`}
+              onClick={() => addActor({
+                name: tpl.name,
+                role: tpl.role,
+                persona: tpl.persona,
+                goal: tpl.goal,
+                voice: tpl.voice,
+                temperature: tpl.temperature,
+                color: tpl.color,
+              })}
+            >
+              {tpl.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {actors.map((a) => {
@@ -109,6 +198,21 @@ export function ActorsPanel() {
                 <Field label="Temperature">
                   <Range value={a.temperature ?? 0.8} min={0.1} max={1.5} step={0.05} onChange={(v) => updateActor(a.id, 'temperature', v)} />
                 </Field>
+                <Field label="Max tokens">
+                  <input
+                    type="number"
+                    placeholder="default"
+                    min={100}
+                    max={8000}
+                    step={100}
+                    value={a.maxTokens ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? undefined : Math.min(8000, Math.max(100, Number(e.target.value)));
+                      updateActor(a.id, 'maxTokens', val);
+                    }}
+                    style={{ width: 100 }}
+                  />
+                </Field>
 
                 <div className="perm-row">
                   <span className="lbl">Permissions</span>
@@ -127,7 +231,20 @@ export function ActorsPanel() {
                   </div>
                 </div>
 
-                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+                  <button
+                    className="btn ghost sm"
+                    title="Clear this actor's private memory"
+                    onClick={async () => {
+                      await putActorMemory(a.id, '');
+                      mutateState(s => {
+                        const actor = s.actors.find(x => x.id === a.id);
+                        if (actor) actor.thoughts = '';
+                      });
+                    }}
+                  >
+                    🧹 Reset memory
+                  </button>
                   <button className="btn ghost sm" style={{ color: "var(--danger)" }} onClick={() => removeActor(a.id)}>
                     <Ic.Trash width={12} height={12} /> Remove
                   </button>
