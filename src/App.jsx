@@ -25,6 +25,7 @@ const NAV = [
   { id: 'goal',       label: 'Goal',        icon: 'Sliders',  group: 3 },
   { id: 'sessions',   label: 'Sessions',    icon: 'Sessions', group: 3 },
   { id: 'connection', label: 'Connection',  icon: 'Plug',     group: 4 },
+  { id: 'help',       label: 'Help',        icon: 'Info',     group: 4 },
 ];
 
 const NAV_TITLES = {
@@ -36,6 +37,7 @@ const NAV_TITLES = {
   goal:       { title: 'Goal',        sub: 'auto-stop & judges' },
   sessions:   { title: 'Sessions',    sub: 'save · load · export' },
   connection: { title: 'Connection',  sub: 'LM Studio · model · generation' },
+  help:       { title: 'Help',        sub: 'documentation · reference' },
 };
 
 export default function App() {
@@ -43,7 +45,7 @@ export default function App() {
   const [density, setDensity] = useState('comfy');
   const [accent, setAccent] = useState('amber');
   const [activePanel, setActivePanel] = useState('actors');
-  const [inspectorPos, setInspectorPos] = useState('right');
+  const [inspectorPos, setInspectorPos] = useState('left');
   const [ready, setReady] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const showThoughts = useForumState(s => s.settings?.showThoughts || false);

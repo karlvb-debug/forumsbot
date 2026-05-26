@@ -9,6 +9,7 @@ import { GoalPanel } from './GoalPanel';
 import { SessionsPanel } from './SessionsPanel';
 import { DocumentsPanel } from './DocumentsPanel';
 import { PromptViewerPanel } from './PromptViewerPanel';
+import { HelpPanel } from './HelpPanel';
 
 const PANELS = {
   connection: ConnectionPanel,
@@ -19,6 +20,7 @@ const PANELS = {
   goal: GoalPanel,
   sessions: SessionsPanel,
   documents: DocumentsPanel,
+  help: HelpPanel,
 };
 
 export function Inspector({ active, meta, nav }) {
