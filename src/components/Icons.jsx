@@ -223,7 +223,19 @@ export const Upload = (props) => (
 
 export const Cmd = (props) => (
   <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M7 7V5.5A1.5 1.5 0 1 0 5.5 7H7zm0 0v6m0-6h6m0 0V5.5A1.5 1.5 0 1 1 14.5 7H13zm0 0v6m0 0v1.5A1.5 1.5 0 1 0 14.5 13H13zm-6 0v1.5A1.5 1.5 0 1 1 5.5 13H7z" />
+    <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3z" />
+  </svg>
+);
+
+export const Robot = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <rect x="4" y="6" width="12" height="9" rx="2" />
+    <circle cx="8" cy="10.5" r="1" fill="currentColor" />
+    <circle cx="12" cy="10.5" r="1" fill="currentColor" />
+    <path d="M7 13h6" />
+    <path d="M10 6V3" />
+    <circle cx="10" cy="2.5" r="1" fill="currentColor" />
+    <path d="M2 10.5h2M16 10.5h2" />
   </svg>
 );
 

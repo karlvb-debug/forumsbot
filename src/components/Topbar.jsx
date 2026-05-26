@@ -85,7 +85,7 @@ export function Topbar({ onOpenCmd }) {
         onClick={toggleAssistant}
         title="AI Assistant · Alt+I"
       >
-        <Ic.Bolt width={16} height={16} />
+        <Ic.Robot width={16} height={16} />
       </button>
       <button className="icon-btn" onClick={onOpenCmd} title="Command palette · Ctrl+K">
         <Ic.Cmd width={16} height={16} />

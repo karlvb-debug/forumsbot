@@ -68,7 +68,7 @@ export function AiAssistant() {
       <div className="ai-assistant-panel" role="dialog" aria-label="AI Assistant">
         <div className="ai-assistant-header">
           <div className="ai-assistant-title">
-            <Ic.Bolt width={15} height={15} />
+            <Ic.Robot width={15} height={15} />
             <span>AI Assistant</span>
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -88,7 +88,7 @@ export function AiAssistant() {
         <div className="ai-assistant-messages">
           {history.length === 0 && (
             <div className="ai-assistant-empty">
-              <Ic.Bolt width={28} height={28} style={{ opacity: 0.25, marginBottom: 10 }} />
+              <Ic.Robot width={28} height={28} style={{ opacity: 0.25, marginBottom: 10 }} />
               <p>Ask me to set up a scenario, add or change actors, adjust settings, or anything else about your session.</p>
               <p className="ai-assistant-examples">
                 "Three philosophers debating free will"<br />
