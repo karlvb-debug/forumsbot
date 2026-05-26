@@ -59,10 +59,15 @@ export async function addMessage(message) {
 }
 
 export function buildTurnQueue() {
-  const enabledIds = state.actors.filter((actor) => actor.enabled).map((actor) => actor.id);
-  const queue = [...enabledIds];
-  state.turnQueue = queue;
-  return queue;
+  const enabledActors = state.actors.filter(a => a.enabled);
+  let enabledIds = enabledActors.map(a => a.id);
+  const strategy = state.scenario?.systems?.turnRouting?.strategy ?? 'round-robin';
+  if (strategy === 'dm-directed') {
+    const dirId = enabledActors.find(a => a.canDirect)?.id;
+    if (dirId) enabledIds = [dirId, ...enabledIds.filter(id => id !== dirId)];
+  }
+  state.turnQueue = [...enabledIds];
+  return state.turnQueue;
 }
 
 export function nextParticipant() {
@@ -681,6 +686,12 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
       ? "You are the narrative DM. Describe the environment, atmosphere, sounds, and consequences of the characters' actions using rich descriptive narration wrapped in asterisks. Frame scene beats, introduce complications, and advance the story. Do NOT speak for the characters—react to what they do and set the stage for their next moves."
       : "Help move the exchange forward. Surface decisions, conflicts, and next questions. Summarize when useful and invite quieter actors in without taking over.";
 
+    const dmRoleModifier = sysCfg.dmRole === 'observer'
+      ? "OBSERVER MODE: Only speak when directly and specifically addressed by name. Do not volunteer guidance, summaries, or questions. Remain completely silent unless an actor explicitly asks for your input."
+      : sysCfg.dmRole === 'arbiter'
+      ? "ARBITER MODE: Your role is to settle disputes and resolve deadlocks. When actors are at an impasse or in direct conflict, deliver a clear, unambiguous ruling. You have final authority — your verdicts are definitive. Do not hedge when judging."
+      : "";
+
     // Cast management: in story mode always; in problem mode only if canManageCast
     const castManagementBlock = (sysCfg.stageDirectionsEnabled || actor.canManageCast)
       ? [
@@ -698,12 +709,17 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
       `You are ${actor.name}, the DM/director for a local AI forum.`,
       actor.persona ? `Style: ${actor.persona}` : "",
       modeInstruction,
+      dmRoleModifier,
       castManagementBlock,
       sysCfg.stageDirectionsEnabled
         ? "Messages labelled [USER] in the transcript are from the human facilitator. You MUST incorporate their notes, instructions, or scene adjustments into your narration and DM guidance immediately. Do not ignore them."
         : "Messages labelled [USER] in the transcript are from the human facilitator. You MUST acknowledge, address, and respond to their messages, questions, or instructions directly in your public message. Do not ignore them or treat them as out-of-character meta-disruptions; respond to them directly.",
       "Do not dominate the forum. You may skip if the actors are already progressing.",
-      "CRITICAL SKIP RULE: If you have no new guidance, summaries, or questions to introduce, you MUST set action to \"skip\" and leave message empty. This keeps the debate focused on the active actors.",
+      sysCfg.dmRole === 'observer'
+        ? "CRITICAL SKIP RULE: You are in observer mode. You MUST skip unless an actor has directly addressed you by name in their most recent message."
+        : sysCfg.dmRole === 'arbiter'
+        ? "SKIP RULE: Speak when there is a dispute to resolve, a ruling to deliver, or a deadlock to break. Skip if the actors are making progress without conflict."
+        : "CRITICAL SKIP RULE: If you have no new guidance, summaries, or questions to introduce, you MUST set action to \"skip\" and leave message empty. This keeps the debate focused on the active actors.",
       "CONCISENESS RULE: Keep your directions, summaries, and questions brief and high-density. Avoid conversational padding (e.g. 'Excellent points everyone', 'Let's move on'). Aim for the minimum words required to guide the discussion or narrate scene beats. Do not dominate or generate words for the sake of it.",
       "You can describe physical actions, scenery changes, or narrator actions by surrounding them with asterisks, e.g. *the wind howls in the background* or *gestures to the map*.",
       "FLOW CONTROL: You can direct the conversation flow dynamically. If you want a specific actor to respond next, include their name in the optional \"nextSpeaker\" JSON field (case-insensitive, e.g. \"Anya\" or \"Ben\"). If you want the default turn order to continue, omit \"nextSpeaker\" or set it to empty.",
@@ -886,7 +902,12 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
     sysCfg.stageDirectionsEnabled
       ? [
           "ROLEPLAY RULE: Stay in character. Let your character's emotions, reactions, and actions breathe naturally — quality over brevity. Avoid meta-commentary or breaking the fourth wall. Actions go in *asterisks*, speech in dialogue. Never summarise the scene; live in it.",
-          `STAGE DIRECTIONS LIMIT: Physical *actions* should be at most ${Math.round(sysCfg.stageDirectionsMaxShare * 100)}% of your response by word count.`
+          `STAGE DIRECTIONS LIMIT: Physical *actions* should be at most ${Math.round(sysCfg.stageDirectionsMaxShare * 100)}% of your response by word count.`,
+          sysCfg.stageDirectionsIntensity === 'minimal'
+            ? "INTENSITY: Minimal — use physical actions only when they meaningfully convey emotion or advance the scene. One brief action beat per response at most; skip them entirely if the dialogue speaks for itself."
+            : sysCfg.stageDirectionsIntensity === 'immersive'
+            ? "INTENSITY: Immersive — paint the scene with rich sensory detail. Describe what your character sees, hears, smells, and feels. Let the environment breathe. Your physical presence should be as expressive as your dialogue."
+            : "INTENSITY: Moderate — balance spoken dialogue with regular action beats. Show what your character physically does alongside what they say."
         ].join("\n")
       : "CONCISENESS RULE: Keep your public message brief, direct, and high-density. Avoid conversational filler (e.g. 'I agree with Anya', 'That's a good point', 'As an expert in...'). Speak ONLY to introduce new arguments, data, or questions. If a simple 'Yes' or single-sentence response is sufficient, keep it to exactly that. Do not generate words for the sake of it.",
     (!showThoughts)
@@ -1140,12 +1161,23 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   const threshold = state.settings?.gravitySensitivity ?? 50;
   const isDrifting = alignment < threshold;
 
-  const periodicReminder = (state.scenario.objective && state.messages.length > 0 && state.messages.length % 5 === 0 && !sysCfg.stageDirectionsEnabled)
-    ? `[Reminder: the objective is "${state.scenario.objective}". Stay on track.]`
-    : "";
-  const gravityWarning = (isDrifting && kind === "actor" && !actor.canResearch && !sysCfg.stageDirectionsEnabled)
-    ? `[The discussion has drifted off-topic (alignment ${alignment}%). Don't repeat what's already been said — challenge an assumption, ask a sharp question, or propose something concrete to get back to: "${state.scenario.objective || "the goal"}"]`
-    : "";
+  const strictness = sysCfg.alignmentStrictness;
+  const periodicInterval = strictness === 'strict' ? 3 : 5;
+  const periodicReminder = (
+    strictness !== 'off' &&
+    state.scenario.objective &&
+    state.messages.length > 0 &&
+    state.messages.length % periodicInterval === 0 &&
+    !sysCfg.stageDirectionsEnabled
+  ) ? `[Reminder: the objective is "${state.scenario.objective}". Stay on track.]` : "";
+
+  const gravityWarning = (() => {
+    if (strictness === 'off' || !isDrifting || kind !== 'actor' || actor.canResearch || sysCfg.stageDirectionsEnabled) return '';
+    const obj = state.scenario.objective || 'the goal';
+    if (strictness === 'strict') return `[ALIGNMENT ALERT: The discussion has drifted significantly (${alignment}% aligned). You MUST pivot to: "${obj}". Do not continue the current thread.]`;
+    if (strictness === 'loose') return `[The conversation has drifted (${alignment}% aligned). Consider connecting your next point back to: "${obj}"]`;
+    return `[The discussion has drifted off-topic (alignment ${alignment}%). Don't repeat what's already been said — challenge an assumption, ask a sharp question, or propose something concrete to get back to: "${obj}"]`;
+  })();
 
   let nudgeReminder = "";
   if (state.telemetry?.nudgeTriggered && kind === "actor") {

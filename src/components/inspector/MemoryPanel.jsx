@@ -12,6 +12,7 @@ export function MemoryPanel() {
   const sharedSummary = useForumState(s => s.memory?.sharedSummary || '');
   const dmState = useForumState(s => s.memory?.dmState || '');
   const anchors = useForumState(s => s.anchors || []);
+  const pendingAnchors = useForumState(s => s.memory?.pendingAnchors || []);
   const outcomes = useForumState(s => s.outcomes || {});
   const cycleCount = useForumState(s => s.memory?.cycleCount || 0);
   const archivedCount = useForumState(s => s.memory?.archivedCount || 0);
@@ -130,17 +131,43 @@ export function MemoryPanel() {
       )}
 
       {section === "anchors" && (
-        <div className="card">
-          <div className="card-title"><h3><Ic.Anchor /> Anchored Agreements</h3><span className="badge">{anchors.length}</span></div>
-          <div className="field-hint" style={{ marginBottom: 10 }}>Settled claims injected into every subsequent prompt. Click ⚓ on any message to anchor it.</div>
-          {anchors.map((a, i) => (
-            <div className="anchor-item" key={a.id || i}>
-              <div className="src">{a.source || a.speaker} · {a.time || new Date(a.createdAt).toLocaleTimeString()}</div>
-              <div>{a.text}</div>
-              <span className="x" onClick={() => removeAnchor(i)} style={{ cursor: 'pointer' }}>×</span>
+        <div>
+          {pendingAnchors.length > 0 && (
+            <div className="card" style={{ marginBottom: 8 }}>
+              <div className="card-title">
+                <h3><Ic.Anchor /> Pending Approval</h3>
+                <span className="badge warn">{pendingAnchors.length}</span>
+              </div>
+              <div className="field-hint" style={{ marginBottom: 8 }}>Suggested by the Director — approve to lock in as a settled agreement, or dismiss.</div>
+              {pendingAnchors.map((a, i) => (
+                <div className="anchor-item" key={a.id || i} style={{ alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    <div className="src">{a.speaker} · {a.suggestedAt ? new Date(a.suggestedAt).toLocaleTimeString() : ''}</div>
+                    <div>{a.text}</div>
+                  </div>
+                  <button className="btn sm primary" style={{ marginLeft: 6, flexShrink: 0 }} onClick={() => mutateState(s => {
+                    const p = s.memory.pendingAnchors[i];
+                    if (p) { s.anchors.push(p); s.memory.pendingAnchors.splice(i, 1); }
+                  })}>⚓ Approve</button>
+                  <button className="btn sm ghost" style={{ marginLeft: 4, flexShrink: 0 }} onClick={() => mutateState(s => {
+                    s.memory.pendingAnchors.splice(i, 1);
+                  })}>Dismiss</button>
+                </div>
+              ))}
             </div>
-          ))}
-          {!anchors.length && <div className="empty">Click ⚓ on a message to anchor a new claim.</div>}
+          )}
+          <div className="card">
+            <div className="card-title"><h3><Ic.Anchor /> Anchored Agreements</h3><span className="badge">{anchors.length}</span></div>
+            <div className="field-hint" style={{ marginBottom: 10 }}>Settled claims injected into every subsequent prompt. Click ⚓ on any message to anchor it.</div>
+            {anchors.map((a, i) => (
+              <div className="anchor-item" key={a.id || i}>
+                <div className="src">{a.source || a.speaker} · {a.time || new Date(a.createdAt).toLocaleTimeString()}</div>
+                <div>{a.text}</div>
+                <span className="x" onClick={() => removeAnchor(i)} style={{ cursor: 'pointer' }}>×</span>
+              </div>
+            ))}
+            {!anchors.length && <div className="empty">Click ⚓ on a message to anchor a new claim.</div>}
+          </div>
         </div>
       )}
 

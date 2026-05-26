@@ -127,6 +127,9 @@ function normalizeState(value) {
   if (!Array.isArray(merged.memory.pendingPinnedFacts)) {
     merged.memory.pendingPinnedFacts = [];
   }
+  if (!Array.isArray(merged.memory.pendingAnchors)) {
+    merged.memory.pendingAnchors = [];
+  }
   if (!Array.isArray(merged.memory.recentDeltas)) {
     merged.memory.recentDeltas = [];
   }
