@@ -1,9 +1,8 @@
 import { PRESET_VERSION, RECENT_MESSAGE_LIMIT, defaultState } from './constants.js';
 import { state, setState, normalizeState, saveState } from './state.js';
 import { render, syncFormFromState, els, switchSidebarTab, renderQuickStartPreview } from './render.js';
-import { setStatus } from './api.js';
+import { setStatus, chatCompletion, scheduleChat } from './api.js';
 import { clearMessages, clearChunks, putMessages, putChunk, countChunks, getRecentMessages, getAllMessages, getAllChunks, putSession, getAllSessions, deleteSession } from './db.js';
-import { chatCompletion } from './api.js';
 import { colors } from './constants.js';
 import {
   cleanStoredMessage,
@@ -447,7 +446,7 @@ export async function generateActorFromDescription() {
   ].join("\n");
 
   try {
-    const raw = await chatCompletion(system, user, { temperature: 0.8, maxTokens: 400 });
+    const raw = await scheduleChat(() => chatCompletion(system, user, { temperature: 0.8, maxTokens: 400 }));
     const cleaned = sanitizeJsonString(stripCodeFence(raw));
     const parsed = JSON.parse(cleaned);
     if (!parsed?.name) throw new Error("Invalid actor JSON returned.");
@@ -500,7 +499,7 @@ export async function generateQuickStart() {
 
   try {
     const temp = state.ui.quickStartTemperature ?? 0.8;
-    const content = await chatCompletion(system, user, { temperature: temp, maxTokens: 1800 });
+    const content = await scheduleChat(() => chatCompletion(system, user, { temperature: temp, maxTokens: 1800 }));
     state.ui.quickStartDraft = normalizeQuickStartConfig(parseQuickStartConfig(content));
     state.ui.quickStartStatus = "Generated setup ready for review.";
     saveState();

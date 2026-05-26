@@ -1,6 +1,6 @@
 import { RECENT_MESSAGE_LIMIT, PROMPT_MESSAGE_LIMIT, WORD_LIMITS, ANCHOR_WORD_CAP } from './constants.js';
 import { state, saveState, logTransition, logWarning } from './state.js';
-import { chatCompletion, chatJson, setStatus, setCurrentSpeaker, getLastToolCalls } from './api.js';
+import { chatCompletion, chatJson, setStatus, setCurrentSpeaker, getLastToolCalls, scheduleChat } from './api.js';
 import { render, renderTranscript, renderAutoStop, renderDocument, readSettingsFromForm, readAutoStopFromForm, setBusy, getIsGenerating, els, labelForMode, showStreamingBubble, updateStreamingBubble, removeStreamingBubble, renderReadinessStrip, renderPromptViewer } from './render.js';
 import { putMessage, getAllChunks, getActorMemory, putActorMemory } from './db.js';
 import { summarizeMemory, recallRelevantChunks, formatCurrentOutcomes, parseOutcomeJson, extractOutcomes } from './memory.js';
@@ -472,7 +472,7 @@ export async function judgeGoal(roundMessages = [], options = {}) {
   ].join("\n\n");
 
   try {
-    const content = await chatCompletion(system, user, { temperature: 0.1, maxTokens: 500 });
+    const content = await scheduleChat(() => chatCompletion(system, user, { temperature: 0.1, maxTokens: 500 }));
     const parsed = parseOutcomeJson(content);
     const verdict = normalizeGoalVerdict(parsed);
     if (options.manual) {
@@ -652,7 +652,7 @@ export async function distillActorMemory(actorName, thought) {
   const user = `Thought: ${trimWords(thought, 80)}`;
 
   try {
-    const raw = await chatCompletion(system, user, { temperature: 0.2, maxTokens: 40 });
+    const raw = await scheduleChat(() => chatCompletion(system, user, { temperature: 0.2, maxTokens: 40 }));
     const sentence = (raw || '').trim().split('\n')[0].trim();
     if (!sentence) return;
 
@@ -1040,11 +1040,11 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
     const rawThoughts = actor.thoughts || "";
     if (rawThoughts.split(/\s+/).length > 30) {
       try {
-        const compressed = await chatCompletion(
+        const compressed = await scheduleChat(() => chatCompletion(
           "Compress character memory. Output ONLY the compressed text, nothing else. Maximum 80 words.",
           rawThoughts.slice(0, 800),
           { temperature: 0.1, maxTokens: 130 }
-        );
+        ));
         if (compressed?.trim()) {
           const compressedMem = `Your private actor memory (compressed):\n${compressed.trim()}`;
           assembled = buildSections([], recentMessages, compressedMem);
