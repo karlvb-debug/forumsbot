@@ -104,6 +104,9 @@ function formatTranscript(messages, wordLimit = WORD_LIMITS.recentTranscript) {
     .filter((m) => (m.type !== "system" || m.speaker === "Moderator") && m.type !== "management")
     .map((message) => {
       const name = message.speaker || state.actors.find((actor) => actor.id === message.actorId)?.name || "Forum";
+      if (message.type === "user" || (message.type === "system" && message.speaker === "Moderator")) {
+        return `[USER] ${name}: ${publicMsgContent(message)}`;
+      }
       if (message.type === "dm") {
         return `[DIRECTOR] ${name}: ${publicMsgContent(message)}`;
       }

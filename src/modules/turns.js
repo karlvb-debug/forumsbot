@@ -663,7 +663,9 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
       actor.persona ? `Style: ${actor.persona}` : "",
       modeInstruction,
       castManagementBlock,
-      "Messages labelled [USER] in the transcript are from the human facilitator. You MUST acknowledge, address, and respond to their messages, questions, or instructions directly in your public message. Do not ignore them or treat them as out-of-character meta-disruptions; respond to them directly.",
+      isStoryMode
+        ? "Messages labelled [USER] in the transcript are from the human facilitator. You MUST incorporate their notes, instructions, or scene adjustments into your narration and DM guidance immediately. Do not ignore them."
+        : "Messages labelled [USER] in the transcript are from the human facilitator. You MUST acknowledge, address, and respond to their messages, questions, or instructions directly in your public message. Do not ignore them or treat them as out-of-character meta-disruptions; respond to them directly.",
       "Do not dominate the forum. You may skip if the actors are already progressing.",
       "CRITICAL SKIP RULE: If you have no new guidance, summaries, or questions to introduce, you MUST set action to \"skip\" and leave message empty. This keeps the debate focused on the active actors.",
       "CONCISENESS RULE: Keep your directions, summaries, and questions brief and high-density. Avoid conversational padding (e.g. 'Excellent points everyone', 'Let's move on'). Aim for the minimum words required to guide the discussion or narrate scene beats. Do not dominate or generate words for the sake of it.",
@@ -829,7 +831,9 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
     actor.voice ? `Voice: ${actor.voice}` : "",
     relationships,
     contextLine,
-    "Messages labelled [USER] in the transcript are from the human facilitator. You MUST acknowledge, address, and respond to their messages, questions, or instructions directly in your public message. Do not ignore them or treat them as out-of-character meta-disruptions; respond to them directly.",
+    isStoryMode
+      ? "Messages labelled [USER] in the transcript are instructions or questions from the human facilitator. You MUST incorporate their notes, instructions, or scenario changes into your character's actions and speech naturally on this turn. Do not ignore them."
+      : "Messages labelled [USER] in the transcript are from the human facilitator. You MUST acknowledge, address, and respond to their messages, questions, or instructions directly in your public message. Do not ignore them or treat them as out-of-character meta-disruptions; respond to them directly.",
     skipAllowed
       ? (showThoughts
           ? "For every turn, think privately first, then either speak or skip."
@@ -1256,7 +1260,9 @@ export function formatTranscript(messages, wordLimit = WORD_LIMITS.recentTranscr
     .filter((m) => (m.type !== "system" || m.speaker === "Moderator") && m.type !== "management") // system/management notices aren't part of the conversation, but Moderator notes are
     .map((message) => {
       const name = message.speaker || state.actors.find((a) => a.id === message.actorId)?.name || "Forum";
-      if (message.type === "user")   return `[USER] ${name}: ${publicMessageContent(message)}`;
+      if (message.type === "user" || (message.type === "system" && message.speaker === "Moderator")) {
+        return `[USER] ${name}: ${publicMessageContent(message)}`;
+      }
       if (message.type === "dm")     return `[DIRECTOR] ${name}: ${publicMessageContent(message)}`;
       if (message.type === "skip")   return `[${name} skipped]`;
       return `${name}: ${publicMessageContent(message)}`;
