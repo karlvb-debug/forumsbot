@@ -505,7 +505,7 @@ export async function generateQuickStart(promptOverride = "") {
     "- Code Review Mode: Documents -> Import PR automatically sets up 4 specialist review actors and documents.",
     "",
     "## JSON SCHEMA RULES",
-    "Use type=patch for: adding/modifying/removing actors, modifying settings, memory, or scenario fields. Use type=fullSetup for brand-new scenarios. Use type=chat for pure questions. For patch and fullSetup, you MUST include a detailed, user-friendly markdown bulleted summary of all proposed changes inside the \"message\" field so the user can review them. Return ONLY valid JSON. No markdown fences. No commentary outside the JSON."
+    "Use type=patch for: adding/modifying/removing actors, modifying settings, memory, or scenario fields. Use type=fullSetup for brand-new scenarios. Use type=chat for pure questions. For patch and fullSetup, you MUST include a detailed, user-friendly markdown bulleted summary of all proposed changes inside the \"message\" field so the user can review them. JSON SAFETY: To prevent parsing errors, never use raw double quotes inside your \"message\" string (use single quotes ' instead, e.g. 'Skeptic'). Avoid raw backslashes. Return ONLY valid JSON. No markdown fences. No commentary outside the JSON."
   ].join("\n");
 
   const history = Array.isArray(state.ui.quickStartHistory) ? state.ui.quickStartHistory : [];
