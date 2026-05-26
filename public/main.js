@@ -21,6 +21,8 @@ import {
   getIsGenerating,
   validateEmbeddingModel,
   renderTurboState,
+  renderReadinessStrip,
+  renderPromptViewer,
   showTranscriptSearch,
   hideTranscriptSearch,
   runTranscriptSearch,
@@ -42,7 +44,8 @@ import {
   stopGeneration,
   addMessage,
   judgeGoal,
-  participantCycleCount
+  participantCycleCount,
+  getLastPromptParts
 } from './modules/turns.js';
 import {
   summarizeMemory,
@@ -155,7 +158,25 @@ function wireEvents() {
       if (name === "sessions") {
         getAllSessions().then(sessions => renderSessionsList(sessions));
       }
+      if (name === "prompt") {
+        renderPromptViewer(getLastPromptParts());
+      }
     });
+  });
+
+  // Copy prompt button
+  document.getElementById("copyPromptButton")?.addEventListener("click", async () => {
+    const parts = getLastPromptParts();
+    if (!parts) return;
+    const text = Object.entries(parts)
+      .filter(([, v]) => v?.trim())
+      .map(([k, v]) => `### ${k}\n${v}`)
+      .join("\n\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      const btn = document.getElementById("copyPromptButton");
+      if (btn) { btn.textContent = "✓ Copied"; setTimeout(() => { btn.textContent = "📋 Copy"; }, 1500); }
+    } catch { /* clipboard not available */ }
   });
 
   // Doc view toggle (Preview / Edit)

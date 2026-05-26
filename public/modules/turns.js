@@ -1,7 +1,7 @@
 import { RECENT_MESSAGE_LIMIT, PROMPT_MESSAGE_LIMIT, WORD_LIMITS, ANCHOR_WORD_CAP } from './constants.js';
 import { state, saveState, logTransition, logWarning } from './state.js';
 import { chatCompletion, chatJson, setStatus, setCurrentSpeaker, getLastToolCalls } from './api.js';
-import { render, renderTranscript, renderAutoStop, renderDocument, readSettingsFromForm, readAutoStopFromForm, setBusy, getIsGenerating, els, labelForMode, showStreamingBubble, updateStreamingBubble, removeStreamingBubble } from './render.js';
+import { render, renderTranscript, renderAutoStop, renderDocument, readSettingsFromForm, readAutoStopFromForm, setBusy, getIsGenerating, els, labelForMode, showStreamingBubble, updateStreamingBubble, removeStreamingBubble, renderReadinessStrip, renderPromptViewer } from './render.js';
 import { putMessage, getAllChunks, getActorMemory, putActorMemory } from './db.js';
 import { summarizeMemory, recallRelevantChunks, formatCurrentOutcomes, parseOutcomeJson, extractOutcomes } from './memory.js';
 import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, checkDrift } from './utils.js';
@@ -10,6 +10,7 @@ import { preflightSkipCheck } from './preflight.js';
 
 export let abortController = null;
 let _lastPromptParts = null;
+export function getLastPromptParts() { return _lastPromptParts; }
 // Round-start transcript snapshot for KV-cache prefix stability.
 // Set by runRound() before the actor loop; cleared after. When set,
 // all actors in the same round see the same transcript so their prompts
@@ -272,7 +273,14 @@ export async function runNextTurn(options = {}) {
           summarizeMemory("cycle");
         }
       }
+      // Update the prompt viewer with this turn's prompt parts
+      if (result._promptParts) {
+        _lastPromptParts = result._promptParts;
+        renderPromptViewer(_lastPromptParts);
+      }
+
       setStatus(`Last turn: ${participant.data.name}`, "ok");
+      renderReadinessStrip();
       setBusy(false);
       abortController = null;
       return true;

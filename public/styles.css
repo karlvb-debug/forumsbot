@@ -1880,6 +1880,120 @@ summary {
 .message-card:hover .fork-btn,
 .message-card:focus-within .fork-btn { opacity: 1; }
 
+/* Copy message button — shows on card hover, sits left of fork */
+.msg-copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 58px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--dim);
+  font-size: 0.72rem;
+  padding: 2px 5px;
+  cursor: pointer;
+  line-height: 1;
+}
+.msg-copy-btn:hover { background: var(--panel-strong); color: var(--text); border-color: var(--accent); }
+.message-card:hover .msg-copy-btn,
+.message-card:focus-within .msg-copy-btn { opacity: 1; }
+
+/* Readiness strip — shown above composer actions when blockers exist */
+.readiness-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 4px 10px;
+  background: color-mix(in srgb, var(--warn, #b59a00) 12%, transparent);
+  border-radius: 5px;
+  margin: 0 0 4px;
+}
+.readiness-blocker {
+  font-size: 0.74rem;
+  color: var(--warn-text, #c8a830);
+  font-weight: 600;
+}
+
+/* Prompt viewer panel */
+.prompt-viewer-panel {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  overflow-y: auto;
+}
+.prompt-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.prompt-viewer-title {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+}
+.prompt-viewer-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--dim);
+}
+.prompt-viewer-empty {
+  font-size: 0.8rem;
+  color: var(--dim);
+  margin: 0;
+}
+.prompt-viewer-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.prompt-section {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+.prompt-section-title {
+  padding: 6px 10px;
+  font-size: 0.73rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-muted);
+  background: var(--bg-card);
+}
+.prompt-section-len {
+  font-size: 0.65rem;
+  font-weight: 400;
+  color: var(--dim);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.prompt-section-body {
+  margin: 0;
+  padding: 8px 10px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.7rem;
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+}
+
 .feedback-btn {
   background: none !important;
   border: none !important;

@@ -263,7 +263,57 @@ export function render() {
   renderTranscript();
   renderTelemetry();
   renderTurboState();
+  renderReadinessStrip();
   els.auto.textContent = state.autoRunning ? "Pause" : "Auto";
+}
+
+export function renderReadinessStrip() {
+  const strip = document.getElementById("readinessStrip");
+  if (!strip) return;
+
+  const model = state.settings?.model?.trim();
+  const actors = (state.actors || []).filter(a => a.enabled);
+  const hasDm = state.dm?.enabled;
+
+  const blockers = [];
+  if (!model) blockers.push("No model selected");
+  if (!actors.length && !hasDm) blockers.push("No enabled actors");
+
+  if (!blockers.length) {
+    strip.style.display = "none";
+    return;
+  }
+
+  strip.style.display = "";
+  strip.innerHTML = blockers.map(b => `<span class="readiness-blocker">⚠ ${escapeHtml(b)}</span>`).join("");
+}
+
+export function renderPromptViewer(parts) {
+  const container = document.getElementById("promptViewerSections");
+  if (!container) return;
+  if (!parts) {
+    container.innerHTML = '<p class="prompt-viewer-empty">Run a turn to see the last assembled prompt.</p>';
+    return;
+  }
+
+  const sectionOrder = [
+    ["system", "System"],
+    ["persona", "Persona"],
+    ["scenario", "Scenario"],
+    ["proceduralMemory", "Procedural Memory"],
+    ["workMemory", "Work Memory"],
+    ["recentMessages", "Recent Messages"],
+    ["toolLogs", "Tool Logs"]
+  ];
+
+  container.innerHTML = sectionOrder
+    .filter(([key]) => parts[key]?.trim())
+    .map(([key, label]) => `
+      <details class="prompt-section" open>
+        <summary class="prompt-section-title">${escapeHtml(label)} <span class="prompt-section-len">${parts[key].length} chars</span></summary>
+        <pre class="prompt-section-body">${escapeHtml(parts[key])}</pre>
+      </details>
+    `).join("") || '<p class="prompt-viewer-empty">No prompt sections recorded.</p>';
 }
 
 /** Update the SVG circular alignment dial and score text. */
@@ -1307,6 +1357,26 @@ export function renderTranscript() {
         });
         node.insertBefore(bar, node.firstChild);
       }
+    }
+
+    // Copy button — shown on actor/dm messages
+    if (message.type === "actor" || message.type === "dm") {
+      const copyBtn = document.createElement("button");
+      copyBtn.className = "msg-copy-btn";
+      copyBtn.type = "button";
+      copyBtn.title = "Copy message to clipboard";
+      copyBtn.textContent = "📋";
+      copyBtn.addEventListener("click", async () => {
+        const text = publicMessageContent(message);
+        try {
+          await navigator.clipboard.writeText(text);
+          copyBtn.textContent = "✓";
+          setTimeout(() => { copyBtn.textContent = "📋"; }, 1500);
+        } catch {
+          copyBtn.title = "Copy failed — clipboard not available";
+        }
+      });
+      node.appendChild(copyBtn);
     }
 
     // Fork button — appears on hover on every substantive message

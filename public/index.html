@@ -63,6 +63,7 @@
               </div>
             </div>
             <div class="turbo-banner" id="turboBanner" style="display:none">⚡ Turbo Mode — memory, thoughts &amp; alignment suspended for speed</div>
+            <div class="readiness-strip" id="readinessStrip" style="display:none"></div>
             <div class="composer-actions">
               <button class="secondary-button" id="nextTurnButton" type="button" title="Next AI turn (⌘⇧N)">Next AI</button>
               <button class="secondary-button" id="roundButton" type="button" title="Run a full round (⌘⇧R)">Round</button>
@@ -93,6 +94,7 @@
               <button class="sidebar-tab" data-sidebar="telemetry" type="button">📊 Telemetry</button>
               <button class="sidebar-tab" data-sidebar="document" type="button">📝 Doc</button>
               <button class="sidebar-tab" data-sidebar="sessions" type="button">📚 Sessions</button>
+              <button class="sidebar-tab" data-sidebar="prompt" type="button">🔬 Prompt</button>
             </div>
           </div>
 
@@ -576,6 +578,20 @@
               </div>
             </div>
           </div><!-- /sidebar-panel document -->
+
+          <!-- ── Prompt viewer panel ──────────────────────────────────── -->
+          <div class="sidebar-panel" data-sidebar-panel="prompt" style="display:none">
+            <div class="prompt-viewer-panel">
+              <div class="prompt-viewer-header">
+                <h2 class="prompt-viewer-title">Last Assembled Prompt</h2>
+                <button class="quiet-button" id="copyPromptButton" type="button" title="Copy full prompt to clipboard">📋 Copy</button>
+              </div>
+              <p class="prompt-viewer-hint">Updated after each turn. Shows what was actually sent to the model.</p>
+              <div id="promptViewerSections" class="prompt-viewer-sections">
+                <p class="prompt-viewer-empty">Run a turn to see the last assembled prompt.</p>
+              </div>
+            </div>
+          </div><!-- /sidebar-panel prompt -->
 
           <!-- ── Sessions panel ────────────────────────────────────────── -->
           <div class="sidebar-panel" data-sidebar-panel="sessions" style="display:none">
