@@ -19,6 +19,8 @@ export function TelemetryPanel() {
   const extractRate = extractAttempts > 0 ? Math.round((extractSuccesses / extractAttempts) * 100) : null;
   const memDupLog = diagnostics.warnings || [];
   const memDups = memDupLog.filter(w => w.category === 'memory_dup' || w.msg?.includes('dup')).length;
+  const qualitySignals = diagnostics.qualitySignals || [];
+  const repeatFlags = qualitySignals.filter(s => s.flag === 'repeat' || s.flag === 'loop').length;
 
   // currentAlignmentScore is 0–100; default to 100 (on-track) before first check
   const alignmentPct = telemetry.currentAlignmentScore ?? 100;
@@ -123,6 +125,10 @@ export function TelemetryPanel() {
           <div className="metric-tile">
             <span className="metric-val">{alignmentPct}%</span>
             <span className="metric-lbl">Aligned</span>
+          </div>
+          <div className="metric-tile">
+            <span className="metric-val" style={{ color: repeatFlags > 0 ? 'var(--warn)' : undefined }}>{repeatFlags}</span>
+            <span className="metric-lbl">Repeats</span>
           </div>
         </div>
       </div>

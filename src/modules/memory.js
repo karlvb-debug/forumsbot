@@ -254,9 +254,9 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
         "For 'actorMemoryUpdates', summarize what each actor learned, their relationship changes, trust, and perspective of other actors.",
         "For 'actorRelationshipUpdates', update each actor's opinion of every OTHER actor they interacted with this session. Each entry is max 25 words. Only include actors who showed meaningful relationship change.",
         silentActorNote,
-        "Return only valid JSON with this exact shape (ALL values must be strings, not arrays or objects, EXCEPT actorMemoryUpdates which is an object):",
-        "{\"sharedSummary\":\"300-500 word durable summary\",\"openQuestions\":\"unresolved questions, one per line\",\"dmState\":\"scenario state, empty string if none\",\"chunkSummary\":\"100-150 word summary of the source turns\",\"actorMemoryUpdates\":{\"Actor Name\":\"short private memory update\"},\"pinnedFactSuggestions\":[\"facts to pin\"],\"keywords\":[\"lowercase keywords\"]}",
-        "CRITICAL: openQuestions, dmState, sharedSummary, and chunkSummary MUST be plain strings, never arrays or objects."
+        "Return only valid JSON with this exact shape (ALL values must be strings, not arrays or objects, EXCEPT actorMemoryUpdates and actorRelationshipUpdates which are objects):",
+        "{\"sharedSummary\":\"300-500 word durable summary\",\"openQuestions\":\"unresolved questions, one per line\",\"dmState\":\"scenario state, empty string if none\",\"chunkSummary\":\"100-150 word summary of the source turns\",\"actorMemoryUpdates\":{\"Actor Name\":\"short private memory update\"},\"actorRelationshipUpdates\":{\"Actor A\":{\"Actor B\":\"how A now sees B, max 25 words, or null if unchanged\"}},\"pinnedFactSuggestions\":[\"facts to pin\"],\"keywords\":[\"lowercase keywords\"]}",
+        "CRITICAL: openQuestions, dmState, sharedSummary, and chunkSummary MUST be plain strings, never arrays or objects. actorRelationshipUpdates and actorMemoryUpdates MUST be objects."
       ].join("\n");
       const user = [
         `Reason: ${reason}`,

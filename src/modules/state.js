@@ -34,7 +34,19 @@ function normalizeState(value) {
     diagnostics: { ...defaultState.diagnostics, ...value.diagnostics },
     outcomes: { ...defaultState.outcomes, ...value.outcomes },
     autoStop: { ...defaultState.autoStop, ...value.autoStop },
-    scenario: { ...defaultState.scenario, ...value.scenario },
+    scenario: {
+      ...defaultState.scenario,
+      ...value.scenario,
+      systems: {
+        ...defaultState.scenario.systems,
+        ...(value.scenario?.systems || {}),
+        stageDirections: { ...defaultState.scenario.systems.stageDirections, ...(value.scenario?.systems?.stageDirections || {}) },
+        alignment:        { ...defaultState.scenario.systems.alignment,        ...(value.scenario?.systems?.alignment        || {}) },
+        turnRouting:      { ...defaultState.scenario.systems.turnRouting,      ...(value.scenario?.systems?.turnRouting      || {}) },
+        dmRole:           { ...defaultState.scenario.systems.dmRole,           ...(value.scenario?.systems?.dmRole           || {}) },
+        document:         { ...defaultState.scenario.systems.document,         ...(value.scenario?.systems?.document         || {}) },
+      }
+    },
     dm: { ...defaultState.dm, ...value.dm },
     actors: Array.isArray(value.actors) && value.actors.length ? value.actors : structuredClone(defaultState.actors),
     messages: Array.isArray(value.messages) ? value.messages.map(cleanStoredMessage) : [],
@@ -87,7 +99,10 @@ function normalizeState(value) {
   if (!Array.isArray(merged.diagnostics.apiCallLogs)) merged.diagnostics.apiCallLogs = [];
   if (!Array.isArray(merged.diagnostics.parseFailures)) merged.diagnostics.parseFailures = [];
   if (!Array.isArray(merged.diagnostics.outcomeExtractionLog)) merged.diagnostics.outcomeExtractionLog = [];
+  if (!Array.isArray(merged.diagnostics.qualitySignals)) merged.diagnostics.qualitySignals = [];
   if (!Array.isArray(merged.anchors)) merged.anchors = [];
+  if (!Array.isArray(merged.pendingInjections)) merged.pendingInjections = [];
+  if (!Array.isArray(merged.pendingPrivateMessages)) merged.pendingPrivateMessages = [];
 
   merged.memory.isSummarizing = false;
   merged.memory.isDistilling = false;

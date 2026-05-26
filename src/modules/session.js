@@ -880,37 +880,105 @@ export const SCENARIO_PRESETS = {
     mode: "problem",
     title: "Brainstorm Session",
     premise: "A diverse panel is gathered to generate creative ideas around the user's topic without premature judgment.",
-    objective: "Generate at least 10 distinct ideas, cluster them into themes, and identify the top 3 most promising."
+    objective: "Generate at least 10 distinct ideas, cluster them into themes, and identify the top 3 most promising.",
+    systems: {
+      stageDirections: { enabled: false },
+      alignment: { strictness: "moderate", nudgeStyle: "gentle-nudge" },
+      turnRouting: { strategy: "dm-directed", allowDirectAddress: true },
+      dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false },
+      document: { schema: "decisions" }
+    }
   },
   risk: {
     mode: "problem",
     title: "Risk Assessment",
     premise: "The panel is analyzing a proposed plan or decision for risks, blind spots, and failure modes.",
-    objective: "Identify all significant risks, rate likelihood and impact, and recommend mitigations for the top 3."
+    objective: "Identify all significant risks, rate likelihood and impact, and recommend mitigations for the top 3.",
+    systems: {
+      stageDirections: { enabled: false },
+      alignment: { strictness: "strict", nudgeStyle: "hard-redirect" },
+      turnRouting: { strategy: "round-robin", allowDirectAddress: true },
+      dmRole: { role: "arbiter", narrates: false, canIntroduceElements: false },
+      document: { schema: "findings" }
+    }
   },
   debate: {
     mode: "problem",
     title: "Structured Debate",
     premise: "Two or more positions are presented. The panel must argue each side rigorously before reaching a verdict.",
-    objective: "Steelman every position, identify the strongest objections, and converge on a reasoned verdict."
+    objective: "Steelman every position, identify the strongest objections, and converge on a reasoned verdict.",
+    systems: {
+      stageDirections: { enabled: false },
+      alignment: { strictness: "strict", nudgeStyle: "hard-redirect" },
+      turnRouting: { strategy: "round-robin", allowDirectAddress: true },
+      dmRole: { role: "arbiter", narrates: false, canIntroduceElements: false },
+      document: { schema: "findings" }
+    }
   },
   retrospective: {
     mode: "problem",
     title: "Project Retrospective",
     premise: "The panel reviews a recently completed project or sprint to extract lessons.",
-    objective: "Surface what went well, what went wrong, and produce a concrete list of process improvements."
+    objective: "Surface what went well, what went wrong, and produce a concrete list of process improvements.",
+    systems: {
+      stageDirections: { enabled: false },
+      alignment: { strictness: "moderate", nudgeStyle: "gentle-nudge" },
+      turnRouting: { strategy: "round-robin", allowDirectAddress: true },
+      dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false },
+      document: { schema: "findings" }
+    }
   },
   story: {
     mode: "story",
     title: "Collaborative Story",
     premise: "A group of characters finds themselves in an unfolding situation. The DM narrates the world.",
-    objective: "Collaboratively build an engaging narrative with rising tension and satisfying resolution."
+    objective: "Collaboratively build an engaging narrative with rising tension and satisfying resolution.",
+    systems: {
+      stageDirections: { enabled: true, intensity: "immersive", maxTokenShare: 0.4 },
+      alignment: { strictness: "loose", anchorInPrompt: false, nudgeStyle: "question" },
+      turnRouting: { strategy: "narrative-flow", allowDirectAddress: true },
+      dmRole: { role: "narrator", narrates: true, canIntroduceElements: true },
+      document: { schema: "story-bible" }
+    }
   },
   interview: {
     mode: "freeform",
     title: "Expert Panel Interview",
     premise: "The user is interviewing a panel of specialists on their topic of choice.",
-    objective: "Surface deep insights, surface disagreements between experts, and synthesize practical takeaways."
+    objective: "Surface deep insights, surface disagreements between experts, and synthesize practical takeaways.",
+    systems: {
+      stageDirections: { enabled: false },
+      alignment: { strictness: "moderate", nudgeStyle: "gentle-nudge" },
+      turnRouting: { strategy: "dm-directed", allowDirectAddress: true },
+      dmRole: { role: "observer", narrates: false, canIntroduceElements: false },
+      document: { schema: "freeform" }
+    }
+  },
+  improv: {
+    mode: "story",
+    title: "Collaborative Improv",
+    premise: "Actors collaborate on an unscripted scene. There is no DM narration — characters drive the story themselves.",
+    objective: "Build a coherent, entertaining scene through reactive character play. Say 'yes, and' to keep momentum.",
+    systems: {
+      stageDirections: { enabled: true, intensity: "moderate", maxTokenShare: 0.3 },
+      alignment: { strictness: "loose", nudgeStyle: "question" },
+      turnRouting: { strategy: "narrative-flow", allowDirectAddress: true },
+      dmRole: { role: "observer", narrates: false, canIntroduceElements: false },
+      document: { schema: "freeform" }
+    }
+  },
+  problemsolving: {
+    mode: "problem",
+    title: "Problem Solving",
+    premise: "The panel is focused on solving a well-defined problem with concrete constraints and a clear success criterion.",
+    objective: "Arrive at a specific, actionable solution with clear implementation steps and trade-off rationale.",
+    systems: {
+      stageDirections: { enabled: false },
+      alignment: { strictness: "strict", anchorInPrompt: true, nudgeStyle: "hard-redirect" },
+      turnRouting: { strategy: "dm-directed", allowDirectAddress: true },
+      dmRole: { role: "arbiter", narrates: false, canIntroduceElements: false },
+      document: { schema: "findings" }
+    }
   }
 };
 

@@ -144,7 +144,8 @@ export const defaultState = {
     sessionsIndex: [],
     apiCallLogs: [],
     parseFailures: [],
-    outcomeExtractionLog: []  // Sprint 6: { at, attempt, success, error? }
+    outcomeExtractionLog: [], // Sprint 6: { at, attempt, success, error? }
+    qualitySignals: []        // CAP-14: per-turn quality ratings from actors
   },
   outcomes: {
     finalRecommendation: "",
@@ -170,11 +171,37 @@ export const defaultState = {
     status: "Auto-stop ready."
   },
   documents: [],
+  pendingInjections: [],     // CAP-1: director prompt injection queue
+  pendingPrivateMessages: [], // CAP-2: actor-to-actor private message queue
   scenario: {
     mode: "problem",
     title: "Design council",
     premise: "A small group of local AI actors are gathered to discuss the user's topic.",
-    objective: "Ask clarifying questions, challenge weak assumptions, and converge on practical next steps."
+    objective: "Ask clarifying questions, challenge weak assumptions, and converge on practical next steps.",
+    systems: {
+      stageDirections: {
+        enabled: false,
+        intensity: "moderate",    // "minimal" | "moderate" | "immersive"
+        maxTokenShare: 0.2
+      },
+      alignment: {
+        strictness: "moderate",   // "strict" | "moderate" | "loose" | "off"
+        anchorInPrompt: false,
+        nudgeStyle: "gentle-nudge" // "hard-redirect" | "gentle-nudge" | "question"
+      },
+      turnRouting: {
+        strategy: "round-robin",  // "round-robin" | "dm-directed" | "narrative-flow"
+        allowDirectAddress: true
+      },
+      dmRole: {
+        role: "facilitator",      // "narrator" | "facilitator" | "arbiter" | "observer"
+        narrates: false,
+        canIntroduceElements: false
+      },
+      document: {
+        schema: "freeform"        // "freeform" | "decisions" | "story-bible" | "findings"
+      }
+    }
   },
   actors: [
     {

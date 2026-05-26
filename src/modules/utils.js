@@ -225,6 +225,22 @@ export function normalizeAiResult(result, fallback) {
   if (result.nextSpeaker) {
     normalized.nextSpeaker = String(result.nextSpeaker).trim();
   }
+  // CAP-8: Fact pin
+  if (result.pinFact && String(result.pinFact).trim()) {
+    normalized.pinFact = String(result.pinFact).slice(0, 200).trim();
+  }
+  // CAP-14: Quality signal
+  if (result.rateSignal && typeof result.rateSignal === "object") {
+    normalized.rateSignal = result.rateSignal;
+  }
+  // CAP-1: Prompt injections (director-initiated)
+  if (Array.isArray(result.promptInjections) && result.promptInjections.length) {
+    normalized.promptInjections = result.promptInjections;
+  }
+  // CAP-2: Private messages (actor-to-actor)
+  if (Array.isArray(result.privateMessages) && result.privateMessages.length) {
+    normalized.privateMessages = result.privateMessages;
+  }
   return normalized;
 }
 

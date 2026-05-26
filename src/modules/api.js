@@ -104,7 +104,8 @@ function applySamplingParams(payload) {
 // calls to avoid deadlocking the scheduler.
 async function _chatCompletionDirect(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, useTools = false, jsonSchema = null } = {}) {
   _lastToolCalls = []; // reset per-call log
-  const isToolMode = useTools && state.settings.toolsEnabled && state.scenario.mode !== "story";
+  const stageDir = state.scenario?.systems?.stageDirections?.enabled ?? (state.scenario?.mode === 'story');
+  const isToolMode = useTools && state.settings.toolsEnabled && !stageDir;
   const messages = [
     { role: "system", content: system },
     { role: "user", content: user }
@@ -444,7 +445,8 @@ export async function chatJson(system, user, temperature, signal, onStream = nul
   // Stream when a callback is provided and streaming is enabled.
   // Previously !isToolMode blocked streaming for most users (toolsEnabled=true by default).
   // Tool calls are now detected post-stream; the vast majority of turns have none.
-  const isToolMode = state.settings.toolsEnabled && state.scenario.mode !== "story";
+  const stageDir2 = state.scenario?.systems?.stageDirections?.enabled ?? (state.scenario?.mode === 'story');
+  const isToolMode = state.settings.toolsEnabled && !stageDir2;
   const canStream = onStream && state.settings.streamingEnabled !== false;
   const resolvedMaxTokens = maxTokens || state.settings.maxTokens;
 

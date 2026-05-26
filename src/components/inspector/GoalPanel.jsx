@@ -1,11 +1,12 @@
 import React from 'react';
 import { Field, Toggle } from '../shared/FormControls';
-import { useForumState, mutateState } from '../../hooks/useForumState';
+import { useForumState, mutateState, saveState } from '../../hooks/useForumState';
 
 export function GoalPanel() {
   const autoStop = useForumState(s => s.autoStop || {});
   const messages = useForumState(s => s.messages || []);
   const model = useForumState(s => s.settings?.model || '');
+  const objective = useForumState(s => s.scenario?.objective || '');
 
   const update = (key, val) => mutateState(s => { s.autoStop[key] = val; });
 
@@ -14,11 +15,19 @@ export function GoalPanel() {
     await turns.judgeGoal(messages.slice(-turns.participantCycleCount()), { manual: true });
   };
 
+  const handleCopyObjective = () => {
+    if (!objective) return;
+    mutateState(s => { s.autoStop.goal = objective; });
+    saveState();
+  };
+
   const canCheck = !!model && !!autoStop.goal?.trim() && messages.length > 0;
   const checkTitle = !model ? 'Choose a model first (Connection panel)'
     : !autoStop.goal?.trim() ? 'Enter a goal above first'
     : messages.length === 0 ? 'No conversation to judge yet'
     : 'Run goal judge against recent messages';
+
+  const goalCheckMissingGoal = (autoStop.goalCheckEnabled ?? true) && !autoStop.goal?.trim();
 
   return (
     <div>
@@ -27,6 +36,16 @@ export function GoalPanel() {
         <Field label="Goal to reach" hint="LLM judge checks this after each round">
           <textarea rows={4} value={autoStop.goal || ''} onChange={(e) => update('goal', e.target.value)} />
         </Field>
+        {goalCheckMissingGoal && (
+          <div className="field-hint hint-warn" style={{ marginTop: 4 }}>
+            Goal check is enabled but no goal is set.{' '}
+            {objective && (
+              <button className="chip-btn" style={{ fontSize: 11 }} onClick={handleCopyObjective}>
+                Use objective
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="card">
