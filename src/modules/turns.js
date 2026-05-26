@@ -1,6 +1,6 @@
 import { RECENT_MESSAGE_LIMIT, PROMPT_MESSAGE_LIMIT, WORD_LIMITS, ANCHOR_WORD_CAP, colors } from './constants.js';
 import { state, saveState, logTransition, logWarning } from './state.js';
-import { chatCompletion, chatJson, setStatus, setCurrentSpeaker, getLastToolCalls, scheduleChat } from './api.js';
+import { chatCompletion, chatJson, setStatus, setCurrentSpeaker, getLastToolCalls } from './api.js';
 import { saveState as _hookSaveState, mutateState } from '../hooks/useForumState.js';
 import { setBusy, getBusy as getIsGenerating } from '../hooks/useActions.js';
 import { showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble } from '../hooks/useStreaming.js';
@@ -508,7 +508,7 @@ export async function judgeGoal(roundMessages = [], options = {}) {
   ].join("\n\n");
 
   try {
-    const content = await scheduleChat(() => chatCompletion(system, user, { temperature: 0.1, maxTokens: 500 }));
+    const content = await chatCompletion(system, user, { temperature: 0.1, maxTokens: 500 });
     const parsed = parseOutcomeJson(content);
     const verdict = normalizeGoalVerdict(parsed);
     if (options.manual) {
@@ -611,7 +611,7 @@ export async function distillActorMemory(actorName, thought) {
   const user = `Thought: ${trimWords(thought, 80)}`;
 
   try {
-    const raw = await scheduleChat(() => chatCompletion(system, user, { temperature: 0.2, maxTokens: 40 }));
+    const raw = await chatCompletion(system, user, { temperature: 0.2, maxTokens: 40 });
     const sentence = (raw || '').trim().split('\n')[0].trim();
     if (!sentence) return;
 
@@ -1189,11 +1189,11 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
     const rawThoughts = actor.thoughts || "";
     if (rawThoughts.split(/\s+/).length > 30) {
       try {
-        const compressed = await scheduleChat(() => chatCompletion(
+        const compressed = await chatCompletion(
           "Compress character memory. Output ONLY the compressed text, nothing else. Maximum 80 words.",
           rawThoughts.slice(0, 800),
           { temperature: 0.1, maxTokens: 130 }
-        ));
+        );
         if (compressed?.trim()) {
           const compressedMem = `Your private actor memory (compressed):\n${compressed.trim()}`;
           assembled = buildSections([], recentMessages, compressedMem);

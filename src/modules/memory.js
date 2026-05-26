@@ -1,6 +1,6 @@
 import { WORD_LIMITS, PROMPT_MESSAGE_LIMIT, RECALLED_CHUNK_LIMIT, PINNED_FACTS_WORD_CAP, DELTA_REWRITE_EVERY } from './constants.js';
 import { state, saveState, logTransition } from './state.js';
-import { chatCompletion, getEmbedding, getEmbeddingsBatch, setStatus, scheduleChat } from './api.js';
+import { chatCompletion, getEmbedding, getEmbeddingsBatch, setStatus } from './api.js';
 import { saveState as _hookSaveState } from '../hooks/useForumState.js';
 import { setBusy, getBusy as getIsGenerating } from '../hooks/useActions.js';
 import { getAllChunks, putChunk, clearChunks, countChunks, getAllMessages } from './db.js';
@@ -209,7 +209,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
         `New turns to summarise:\n${formatTranscript(usableMessages, 900)}`
       ].join("\n\n");
 
-      const content = await scheduleChat(() => chatCompletion(deltaSystem, deltaUser, { temperature: 0.2, maxTokens: 400 }));
+      const content = await chatCompletion(deltaSystem, deltaUser, { temperature: 0.2, maxTokens: 400 });
       const raw = parseMemoryJson(content);
       const delta = trimWords(stringifyList(raw.delta), WORD_LIMITS.cycleDelta);
 
@@ -264,7 +264,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
         `Source turns:\n${formatTranscript(usableMessages, 1600)}`
       ].filter(Boolean).join("\n\n");
 
-      const content = await scheduleChat(() => chatCompletion(system, user, { temperature: 0.2, maxTokens: 1600 }));
+      const content = await chatCompletion(system, user, { temperature: 0.2, maxTokens: 1600 });
       const parsed = parseMemoryJson(content);
       console.debug('[memory] Parsed keys:', Object.keys(parsed), 'sharedSummary type:', typeof parsed.sharedSummary, 'openQ type:', typeof parsed.openQuestions);
       const memoryUpdate = normalizeMemoryUpdate(parsed, usableMessages);
@@ -600,7 +600,7 @@ export async function compactPinnedFacts() {
       "Return ONLY the bullet list — no JSON, no preamble."
     ].join("\n");
     const user = `Current pinned facts:\n${state.memory.pinnedFacts.join("\n")}`;
-    const result = await scheduleChat(() => chatCompletion(system, user, { temperature: 0.1, maxTokens: 600 }));
+    const result = await chatCompletion(system, user, { temperature: 0.1, maxTokens: 600 });
     const compacted = result.trim();
     if (compacted) {
       state.memory.pinnedFacts = normalizeStringArray(trimWords(compacted, PINNED_FACTS_WORD_CAP));
@@ -742,7 +742,7 @@ export async function extractOutcomes() {
     for (let i = 0; i < attempts.length; i++) {
       const { temperature, maxTokens, prompt } = attempts[i];
       try {
-        const content = await scheduleChat(() => chatCompletion(system, prompt, { temperature, maxTokens }));
+        const content = await chatCompletion(system, prompt, { temperature, maxTokens });
         const parsed = normalizeOutcomeUpdate(parseOutcomeJson(content));
         // Success if we got at least a finalRecommendation
         if (parsed.finalRecommendation) {
