@@ -1119,11 +1119,14 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   }
 
   // Build sections and enforce token budget with graceful degradation.
+  const isStoryMode = state.scenario.mode === "story" || state.scenario.mode === "freeform";
   const buildSections = (chunks, msgs, memOverride = null) => {
     const lastMsg = msgs[msgs.length - 1];
     const lastMsgIsFacilitator = lastMsg && (lastMsg.type === "user" || (lastMsg.type === "system" && lastMsg.speaker === "Moderator"));
     const facilitatorDirectAddress = lastMsgIsFacilitator
-      ? "IMPORTANT FACILITATOR DIRECTIVE: The very last message in the transcript is a direct question, instruction, or note from the human facilitator (Moderator/USER). You MUST address them directly, acknowledge the note, and respond to it in your public output. Do not ignore it or treat it as an out-of-character disruption."
+      ? (isStoryMode
+          ? "IMPORTANT FACILITATOR DIRECTIVE: The very last message in the transcript is a note/instruction from the human facilitator (Moderator/USER). You MUST actively and immediately execute this note/instruction in your character's actions, thoughts, and speech on this turn. Incorporate it fully and visibly into the story now."
+          : "IMPORTANT FACILITATOR DIRECTIVE: The very last message in the transcript is a direct question, instruction, or note from the human facilitator (Moderator/USER). You MUST address them directly, acknowledge the note, and respond to it in your public output. Do not ignore it or treat it as an out-of-character disruption.")
       : "";
 
     return [
