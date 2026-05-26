@@ -16,6 +16,8 @@
   --fg-dim: oklch(0.78 0.006 250);
   --fg-mute: oklch(0.60 0.008 250);
   --fg-faint: oklch(0.46 0.008 250);
+  --fg-talk: #ffffff;
+  --fg-action: var(--accent);
 
   --accent: oklch(0.78 0.13 65);
   --accent-soft: oklch(0.78 0.13 65 / 0.16);
@@ -59,6 +61,8 @@
   --fg-dim: oklch(0.36 0.008 250);
   --fg-mute: oklch(0.52 0.008 250);
   --fg-faint: oklch(0.66 0.008 250);
+  --fg-talk: oklch(0.15 0.008 250);
+  --fg-action: oklch(0.55 0.13 65);
   --shadow-1: 0 1px 0 0 oklch(1 0 0 / 0.8) inset, 0 1px 2px oklch(0 0 0 / 0.06);
   --shadow-2: 0 10px 40px -10px oklch(0 0 0 / 0.12);
   --accent-fg: oklch(0.18 0.04 65);
@@ -306,7 +310,7 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); fon
   font-family: var(--font-mono);
 }
 .msg-time { font-size: 11px; color: var(--fg-faint); font-family: var(--font-mono); margin-left: 4px; }
-.msg-text { color: var(--fg-dim); line-height: 1.55; font-size: var(--fs); }
+.msg-text { color: var(--fg-talk); line-height: 1.55; font-size: var(--fs); }
 .msg-text strong { color: var(--fg); font-weight: 600; }
 
 /* ── Markdown body — scoped to .md-body ────────────────── */
@@ -327,7 +331,7 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); fon
 .md-body li { margin: 0.18em 0; }
 .md-body li p { margin: 0; }
 .md-body strong { color: var(--fg); font-weight: 600; }
-.md-body em { font-style: italic; color: var(--fg-dim); }
+.md-body em { font-style: italic; color: var(--fg-action); }
 .md-body del { opacity: 0.6; }
 .md-body a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
 .md-body a:hover { opacity: 0.8; }
