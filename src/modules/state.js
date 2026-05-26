@@ -90,6 +90,8 @@ function normalizeState(value) {
   if (!Array.isArray(merged.anchors)) merged.anchors = [];
 
   merged.memory.isSummarizing = false;
+  merged.memory.isDistilling = false;
+  merged.memory.distillingActor = "";
   if (!value.settings?.baseUrl || value.settings.baseUrl === "http://localhost:1234/v1") {
     merged.settings.baseUrl = defaultState.settings.baseUrl;
   }

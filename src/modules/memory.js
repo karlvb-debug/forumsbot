@@ -779,6 +779,7 @@ export async function extractOutcomes() {
   } finally {
     state.outcomes.isExtracting = false;
     state.outcomes.isExtractingOutcomes = false;
+    saveState();
     if (!alreadyBusy) setBusy(false);
   }
 }

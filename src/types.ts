@@ -129,6 +129,8 @@ export interface Memory {
   migratedLegacyMessages: boolean;
   archivedCount: number;
   isSummarizing: boolean;
+  isDistilling?: boolean;
+  distillingActor?: string;
 }
 
 export interface Anchor {

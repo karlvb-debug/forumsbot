@@ -610,6 +610,10 @@ export function wait(ms) {
 export async function distillActorMemory(actorName, thought) {
   if (!thought?.trim() || !actorName) return;
 
+  state.memory.isDistilling = true;
+  state.memory.distillingActor = actorName;
+  saveState();
+
   // Cheap distillation prompt — one sentence only
   const system = [
     `You distill a private character thought into one short persistent memory sentence for ${actorName}.`,
@@ -621,17 +625,22 @@ export async function distillActorMemory(actorName, thought) {
   try {
     const raw = await chatCompletion(system, user, { temperature: 0.2, maxTokens: 40 });
     const sentence = (raw || '').trim().split('\n')[0].trim();
-    if (!sentence) return;
-
-    // Append to existing memory, keep last 10 sentences, word-cap at 200
-    const existing = await getActorMemory(actorName) || '';
-    const sentences = existing
-      ? [...existing.split('\n').filter(Boolean), sentence].slice(-10)
-      : [sentence];
-    const memory = trimWords(sentences.join('\n'), 200);
-    await putActorMemory(actorName, memory);
-  } catch {
+    if (sentence) {
+      // Append to existing memory, keep last 10 sentences, word-cap at 200
+      const existing = await getActorMemory(actorName) || '';
+      const sentences = existing
+        ? [...existing.split('\n').filter(Boolean), sentence].slice(-10)
+        : [sentence];
+      const memory = trimWords(sentences.join('\n'), 200);
+      await putActorMemory(actorName, memory);
+    }
+  } catch (err) {
     // Silently fail — never interrupt a turn
+    console.warn('[cross-session-memory] distill failed:', err.message);
+  } finally {
+    state.memory.isDistilling = false;
+    state.memory.distillingActor = '';
+    saveState();
   }
 }
 

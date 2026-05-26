@@ -217,6 +217,27 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); fon
 .status-pill.err .dot { background: var(--danger); }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
+.status-pill.bg-task {
+  color: var(--accent);
+  border-color: var(--accent-soft);
+  background: var(--accent-soft);
+  font-weight: 500;
+}
+.status-pill.bg-task .spinner-icon {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--accent);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 2px;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+
 .run-controls {
   display: inline-flex;
   border: 1px solid var(--border);

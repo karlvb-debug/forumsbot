@@ -31,6 +31,20 @@ export function Topbar({ onOpenCmd }) {
   const turboMode = useForumState(s => s.settings?.turboMode || false);
   const { nextTurn, runRound, startAuto, stopGeneration } = useActions();
 
+  const isSummarizing = useForumState(s => s.memory?.isSummarizing || false);
+  const isExtracting = useForumState(s => s.outcomes?.isExtracting || false);
+  const isDistilling = useForumState(s => s.memory?.isDistilling || false);
+  const distillingActor = useForumState(s => s.memory?.distillingActor || "");
+
+  let bgTaskText = "";
+  if (isSummarizing) {
+    bgTaskText = "updating memory...";
+  } else if (isExtracting) {
+    bgTaskText = "extracting outcomes...";
+  } else if (isDistilling) {
+    bgTaskText = distillingActor ? `distilling ${distillingActor}...` : "distilling memory...";
+  }
+
   return (
     <header className="topbar">
       <div className="session-title">
@@ -40,6 +54,12 @@ export function Topbar({ onOpenCmd }) {
       <span className="topbar-spacer" />
 
       <div className="status-cluster">
+        {bgTaskText && (
+          <span className="status-pill bg-task" title="Background AI processing">
+            <span className="spinner-icon" />
+            {bgTaskText}
+          </span>
+        )}
         <span className={`status-pill ${connClass}`} title="Connection status">
           <span className="dot" />{connStatus.message}
         </span>

@@ -126,7 +126,9 @@ export const defaultState = {
     lastSummaryMessageId: "",
     migratedLegacyMessages: false,
     archivedCount: 0,
-    isSummarizing: false
+    isSummarizing: false,
+    isDistilling: false,
+    distillingActor: ""
   },
   telemetry: {
     objectiveEmbedding: null,
