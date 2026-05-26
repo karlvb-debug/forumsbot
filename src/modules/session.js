@@ -477,10 +477,10 @@ export async function generateQuickStart(promptOverride = "") {
     '{"type":"chat","message":"Your answer here (markdown supported)"}',
     "",
     'type="patch" — for targeted changes to the current session (all fields optional):',
-    '{"type":"patch","message":"Short description of what changed","changes":' + patchChangesShape + '}',
+    '{"type":"patch","message":"### Proposed Config Modifications\\n\\nDetailed markdown list of all proposed changes (e.g. bullets listing actors added/edited, settings modified, etc.) with reasons.","changes":' + patchChangesShape + '}',
     "",
     'type="fullSetup" — ONLY when creating an entirely new scenario from scratch:',
-    '{"type":"fullSetup","message":"Created [title]",' + fullSetupShape.slice(1),
+    '{"type":"fullSetup","message":"### New Scenario Setup: [Title]\\n\\nDetailed markdown summary of the new scenario, including premise, goal, and the proposed character cast list.","changes":' + fullSetupShape.slice(1),
     "",
     "## HOW FORUM WORKS",
     "Forum runs AI personas (actors) who discuss a topic in a structured transcript. Each actor is a separate LLM call. A round runs every enabled actor once. Auto mode runs rounds continuously.",
@@ -505,7 +505,7 @@ export async function generateQuickStart(promptOverride = "") {
     "- Code Review Mode: Documents -> Import PR automatically sets up 4 specialist review actors and documents.",
     "",
     "## JSON SCHEMA RULES",
-    "Use type=patch for: adding/modifying/removing actors, modifying settings, memory, or scenario fields. Use type=fullSetup for brand-new scenarios. Use type=chat for pure questions. Return ONLY valid JSON. No markdown fences. No commentary outside the JSON."
+    "Use type=patch for: adding/modifying/removing actors, modifying settings, memory, or scenario fields. Use type=fullSetup for brand-new scenarios. Use type=chat for pure questions. For patch and fullSetup, you MUST include a detailed, user-friendly markdown bulleted summary of all proposed changes inside the \"message\" field so the user can review them. Return ONLY valid JSON. No markdown fences. No commentary outside the JSON."
   ].join("\n");
 
   const history = Array.isArray(state.ui.quickStartHistory) ? state.ui.quickStartHistory : [];
