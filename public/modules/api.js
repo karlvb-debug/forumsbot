@@ -348,18 +348,19 @@ async function _getEmbeddingsBatch(texts) {
   return items.map(item => item.embedding).filter(Array.isArray);
 }
 
-export async function chatJson(system, user, temperature, signal, onStream = null) {
+export async function chatJson(system, user, temperature, signal, onStream = null, maxTokens = null) {
   // Stream when a callback is provided and streaming is enabled.
   // Previously !isToolMode blocked streaming for most users (toolsEnabled=true by default).
   // Tool calls are now detected post-stream; the vast majority of turns have none.
   const isToolMode = state.settings.toolsEnabled && state.scenario.mode !== "story";
   const canStream = onStream && state.settings.streamingEnabled !== false;
+  const resolvedMaxTokens = maxTokens || state.settings.maxTokens;
 
   let content;
   if (canStream) {
     content = await chatStream(system, user, {
       temperature,
-      maxTokens: state.settings.maxTokens,
+      maxTokens: resolvedMaxTokens,
       signal
     }, (_delta, accumulated) => {
       onStream(extractStreamingDisplay(accumulated));
@@ -389,7 +390,7 @@ ${result}
         ].join("\n");
         content = await chatCompletion(system, followUpUser, {
           temperature,
-          maxTokens: state.settings.maxTokens,
+          maxTokens: resolvedMaxTokens,
           signal,
           useTools: false
         });
@@ -398,7 +399,7 @@ ${result}
   } else {
     content = await chatCompletion(system, user, {
       temperature,
-      maxTokens: state.settings.maxTokens,
+      maxTokens: resolvedMaxTokens,
       signal,
       useTools: true
     });
@@ -438,7 +439,7 @@ ${result}
         ].join("\n");
         const retryContent = await chatCompletion(system, resumeUser, {
           temperature: 0.1, // deterministic for repair
-          maxTokens: Math.min(state.settings.maxTokens * 2, 4000),
+          maxTokens: Math.min(resolvedMaxTokens * 2, 4000),
           signal,
           useTools: false
         });
@@ -497,7 +498,7 @@ ${result}
     try {
       const correctionContent = await chatCompletion(system, correctionUser, {
         temperature: 0.1,
-        maxTokens: Math.min(state.settings.maxTokens, 1200),
+        maxTokens: Math.min(resolvedMaxTokens, 1200),
         signal,
         useTools: false
       });

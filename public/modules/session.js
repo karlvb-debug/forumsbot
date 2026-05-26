@@ -409,6 +409,114 @@ const ACTOR_TEMPLATES = {
   }
 };
 
+export function addManager() {
+  const index = state.actors.length;
+  state.actors.push({
+    id: crypto.randomUUID(),
+    name: "Manager",
+    role: "Cast Orchestrator",
+    canManageCast: true,
+    persona: "Observe the discussion and adjust the cast. Create specialist actors when new expertise is needed and silence actors who have finished contributing.",
+    goal: "Ensure the right perspectives are in the room at the right time.",
+    voice: "Decisive and brief. State what you're doing and why in one sentence.",
+    thoughts: "",
+    relationships: {},
+    enabled: true,
+    expanded: false,
+    isResearcher: false,
+    temperature: 0.7,
+    color: "#1a7a6e"
+  });
+  saveState();
+  render();
+}
+
+const SCENARIO_PRESETS = {
+  brainstorm: {
+    mode: "problem",
+    title: "Brainstorm Session",
+    premise: "A diverse panel is gathered to generate creative ideas around the user's topic without premature judgment.",
+    objective: "Generate at least 10 distinct ideas, cluster them into themes, and identify the top 3 most promising."
+  },
+  risk: {
+    mode: "problem",
+    title: "Risk Assessment",
+    premise: "The panel is analyzing a proposed plan or decision for risks, blind spots, and failure modes.",
+    objective: "Identify all significant risks, rate likelihood and impact, and recommend mitigations for the top 3."
+  },
+  debate: {
+    mode: "problem",
+    title: "Structured Debate",
+    premise: "Two or more positions are presented. The panel must argue each side rigorously before reaching a verdict.",
+    objective: "Steelman every position, identify the strongest objections, and converge on a reasoned verdict."
+  },
+  retrospective: {
+    mode: "problem",
+    title: "Project Retrospective",
+    premise: "The panel reviews a recently completed project or sprint to extract lessons.",
+    objective: "Surface what went well, what went wrong, and produce a concrete list of process improvements."
+  },
+  story: {
+    mode: "story",
+    title: "Collaborative Story",
+    premise: "A group of characters finds themselves in an unfolding situation. The DM narrates the world.",
+    objective: "Collaboratively build an engaging narrative with rising tension and satisfying resolution."
+  },
+  interview: {
+    mode: "freeform",
+    title: "Expert Panel Interview",
+    premise: "The user is interviewing a panel of specialists on their topic of choice.",
+    objective: "Surface deep insights, surface disagreements between experts, and synthesize practical takeaways."
+  }
+};
+
+export function applyScenarioPreset(key) {
+  const preset = SCENARIO_PRESETS[key];
+  if (!preset) return;
+  state.scenario = { ...state.scenario, ...preset };
+  saveState();
+  render();
+}
+
+export async function copyMarkdownToClipboard() {
+  const { getAllMessages } = await import('./db.js');
+  const messages = await getAllMessages();
+
+  const lines = [
+    `# ${state.scenario.title || 'Forum Session'}`,
+    state.scenario.premise ? `**Premise:** ${state.scenario.premise}` : '',
+    state.scenario.objective ? `**Objective:** ${state.scenario.objective}` : '',
+    '---'
+  ].filter(Boolean);
+
+  let turnNum = 0;
+  for (const msg of messages) {
+    if (msg.type === 'system') continue;
+    if (msg.type === 'skip') { lines.push(`\n*[${msg.speaker} passed]*`); continue; }
+    turnNum++;
+    const speakerLabel = msg.type === 'dm' ? `${msg.speaker} (Director)` : (msg.speaker || 'Unknown');
+    lines.push(`\n## ${speakerLabel} — Turn ${turnNum}`);
+    if (state.settings.showThoughts && msg.thought) {
+      lines.push(`> ${msg.thought.replace(/\n/g, '\n> ')}`);
+      lines.push('');
+    }
+    if (msg.content) lines.push(msg.content);
+  }
+
+  if (Array.isArray(state.anchors) && state.anchors.length) {
+    lines.push('\n---\n## Anchored Agreements');
+    state.anchors.forEach(a => lines.push(`- **[${a.speaker}]** ${a.text}`));
+  }
+
+  const text = lines.join('\n');
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function addActorFromTemplate(templateKey) {
   const template = ACTOR_TEMPLATES[templateKey];
   if (!template) return;

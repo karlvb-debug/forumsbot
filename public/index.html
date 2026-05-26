@@ -35,6 +35,8 @@
             </div>
             <div class="turn-toolbar" aria-label="Conversation controls">
               <button class="secondary-button" id="toggleSidebarButton" type="button" aria-expanded="true" aria-label="Toggle sidebar">📁 Sidebar</button>
+              <button class="secondary-button" id="directorBriefButton" type="button" title="Ask the Director for a concise progress summary">📋 Brief</button>
+              <button class="secondary-button" id="copyMarkdownButton" type="button" title="Copy conversation as formatted markdown">⬇ MD</button>
               <button class="secondary-button" id="copySessionButton" type="button">Copy Session</button>
               <button class="danger-button" id="clearConversationButton" type="button">Clear</button>
             </div>
@@ -64,11 +66,17 @@
             </div>
             <div class="turbo-banner" id="turboBanner" style="display:none">⚡ Turbo Mode — memory, thoughts &amp; alignment suspended for speed</div>
             <div class="readiness-strip" id="readinessStrip" style="display:none"></div>
+            <div class="inject-note-form" id="injectNoteForm" style="display:none">
+              <input id="injectNoteInput" type="text" placeholder="Inject a note or fact into the conversation (no AI turn)…">
+              <button class="secondary-button" id="injectNoteSubmit" type="button">Inject</button>
+              <button class="quiet-button" id="injectNoteCancel" type="button">✕</button>
+            </div>
             <div class="composer-actions">
               <button class="secondary-button" id="nextTurnButton" type="button" title="Next AI turn (⌘⇧N)">Next AI</button>
               <button class="secondary-button" id="roundButton" type="button" title="Run a full round (⌘⇧R)">Round</button>
               <button class="secondary-button" id="autoButton" type="button">Auto</button>
               <button class="quiet-button" id="stopButton" type="button">Stop</button>
+              <button class="quiet-button" id="injectNoteButton" type="button" title="Inject a moderator note without triggering an AI turn">📌</button>
               <div class="spacer"></div>
               <label class="composer-toggle" title="Show private thoughts">
                 <input id="showThoughtsMirror" type="checkbox">
@@ -191,6 +199,18 @@
                     <option value="freeform">Freeform</option>
                   </select>
                   <label>
+                    Preset
+                    <select id="scenarioPresetSelect">
+                      <option value="">— choose a preset —</option>
+                      <option value="brainstorm">Brainstorm Session</option>
+                      <option value="risk">Risk Assessment</option>
+                      <option value="debate">Structured Debate</option>
+                      <option value="retrospective">Project Retrospective</option>
+                      <option value="story">Collaborative Story</option>
+                      <option value="interview">Expert Panel Interview</option>
+                    </select>
+                  </label>
+                  <label>
                     Title
                     <input id="titleInput" maxlength="80" placeholder="Untitled forum">
                   </label>
@@ -307,9 +327,10 @@
               <section class="panel-section section--actors actors-section">
                 <div class="section-title">
                   <h2>Actors</h2>
-                  <div style="display:flex;gap:8px">
+                  <div style="display:flex;gap:6px;flex-wrap:wrap">
                     <button class="soft-button" id="addActorButton" type="button">+ Add</button>
                     <button class="soft-button" id="addResearcherButton" type="button" title="Add Specialized Research Agent">+ Researcher</button>
+                    <button class="soft-button" id="addManagerButton" type="button" title="Add Cast Manager — creates, silences, and resumes actors mid-session">+ Manager</button>
                     <button class="soft-button" id="addActorFromDescBtn" type="button" title="Describe an actor and let AI fill in the details">+ AI…</button>
                   </div>
                 </div>
@@ -654,6 +675,8 @@
           <span class="actor-name-display"></span>
           <span class="role-badge"></span>
           <span class="researcher-badge" style="display:none">🔍 Researcher</span>
+          <span class="manager-badge" style="display:none">🎭 Manager</span>
+          <span class="actor-stats-badge" style="display:none"></span>
           <button class="actor-expand-toggle" type="button" aria-label="Expand actor details" title="Expand">▼</button>
           <button class="icon-button remove-actor" type="button" aria-label="Remove actor" title="Remove actor">
             <span aria-hidden="true">×</span>
@@ -670,10 +693,16 @@
               <input class="actor-role" maxlength="70">
             </label>
           </div>
-          <label class="toggle-row" style="margin:8px 0 0 0;text-transform:none">
-            <input class="actor-is-researcher" type="checkbox">
-            <span>Research Specialist mode</span>
-          </label>
+          <div class="two-column" style="margin:8px 0 0 0">
+            <label class="toggle-row compact" style="text-transform:none">
+              <input class="actor-is-researcher" type="checkbox">
+              <span>Researcher</span>
+            </label>
+            <label class="toggle-row compact" style="text-transform:none">
+              <input class="actor-can-manage-cast" type="checkbox">
+              <span>Cast Manager</span>
+            </label>
+          </div>
           <label>
             Persona
             <textarea class="actor-persona" rows="3"></textarea>
@@ -693,8 +722,12 @@
               <span class="slider-value actor-temperature-display">0.80</span>
             </div>
           </label>
+          <label>
+            Max tokens (leave blank for default)
+            <input class="actor-max-tokens" type="number" min="200" max="8000" step="100" placeholder="Default">
+          </label>
           <details class="notes-block">
-            <summary>Private memory</summary>
+            <summary>Private memory <button class="actor-reset-memory soft-button" type="button" style="margin-left:8px;font-size:11px;padding:2px 6px">Reset</button></summary>
             <textarea class="actor-thoughts" rows="3"></textarea>
           </details>
           <details class="notes-block actor-relationships-block" style="display:none">

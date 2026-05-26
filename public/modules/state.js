@@ -107,6 +107,8 @@ function normalizeState(value) {
     enabled: actor.enabled !== false,
     expanded: actor.expanded || false,
     isResearcher: !!actor.isResearcher,
+    canManageCast: !!actor.canManageCast,
+    maxTokens: typeof actor.maxTokens === "number" && actor.maxTokens > 0 ? actor.maxTokens : undefined,
     temperature: typeof actor.temperature === "number" ? actor.temperature : 0.8,
     color: actor.color || defaultState.actors[index % defaultState.actors.length]?.color || "#18726d"
   }));

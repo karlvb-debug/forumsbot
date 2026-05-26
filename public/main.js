@@ -45,7 +45,8 @@ import {
   addMessage,
   judgeGoal,
   participantCycleCount,
-  getLastPromptParts
+  getLastPromptParts,
+  runDirectorBrief
 } from './modules/turns.js';
 import {
   summarizeMemory,
@@ -63,6 +64,9 @@ import {
   confirmAndFullReset,
   addActor,
   addActorFromTemplate,
+  addManager,
+  applyScenarioPreset,
+  copyMarkdownToClipboard,
   generateQuickStart,
   applyQuickStartConfig,
   discardQuickStartConfig,
@@ -687,6 +691,81 @@ function wireEvents() {
       renderTranscript();
     });
   }
+
+  // ── Feature 2: @mention routing — parse @Name from user input ────
+  els.composer.addEventListener("submit", () => {
+    const raw = els.userInput.value;
+    const mention = raw.match(/^@(\S+)/);
+    if (mention) {
+      const targetName = mention[1].toLowerCase();
+      const target = state.actors.find(a => a.enabled && a.name.toLowerCase().startsWith(targetName));
+      if (target) {
+        if (!state.ui) state.ui = {};
+        state.ui.mentionTarget = target.id;
+      }
+    }
+  }, true); // capture phase so it runs before the existing submit handler
+
+  // ── Feature 3: Inject conversation note ──────────────────────────
+  const injectNoteBtn = document.getElementById("injectNoteButton");
+  const injectNoteForm = document.getElementById("injectNoteForm");
+  const injectNoteInput = document.getElementById("injectNoteInput");
+  const injectNoteSubmit = document.getElementById("injectNoteSubmit");
+  const injectNoteCancel = document.getElementById("injectNoteCancel");
+  if (injectNoteBtn) {
+    injectNoteBtn.addEventListener("click", () => {
+      const visible = injectNoteForm.style.display !== "none";
+      injectNoteForm.style.display = visible ? "none" : "";
+      if (!visible) injectNoteInput.focus();
+    });
+  }
+  if (injectNoteSubmit) {
+    injectNoteSubmit.addEventListener("click", async () => {
+      const note = injectNoteInput.value.trim();
+      if (!note) return;
+      await addMessage({ type: "system", speaker: "Moderator", content: `📌 ${note}`, color: "#666" });
+      injectNoteInput.value = "";
+      injectNoteForm.style.display = "none";
+    });
+  }
+  if (injectNoteInput) {
+    injectNoteInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") injectNoteSubmit?.click();
+      if (e.key === "Escape") injectNoteCancel?.click();
+    });
+  }
+  if (injectNoteCancel) {
+    injectNoteCancel.addEventListener("click", () => {
+      injectNoteForm.style.display = "none";
+      injectNoteInput.value = "";
+    });
+  }
+
+  // ── Feature 5: Director Brief button ─────────────────────────────
+  document.getElementById("directorBriefButton")?.addEventListener("click", () => {
+    runDirectorBrief().then(() => saveCurrentSession().catch(console.warn));
+  });
+
+  // ── Feature 7: Scenario presets ──────────────────────────────────
+  document.getElementById("scenarioPresetSelect")?.addEventListener("change", (e) => {
+    if (!e.target.value) return;
+    applyScenarioPreset(e.target.value);
+    e.target.value = ""; // reset to placeholder after applying
+    syncFormFromState();
+  });
+
+  // ── Feature 8: Copy conversation as markdown ──────────────────────
+  document.getElementById("copyMarkdownButton")?.addEventListener("click", async () => {
+    const btn = document.getElementById("copyMarkdownButton");
+    const ok = await copyMarkdownToClipboard();
+    if (btn) {
+      btn.textContent = ok ? "✓ Copied" : "✗ Failed";
+      setTimeout(() => { btn.textContent = "⬇ MD"; }, 1800);
+    }
+  });
+
+  // ── Feature 10: Manager actor button ─────────────────────────────
+  document.getElementById("addManagerButton")?.addEventListener("click", addManager);
 }
 
 async function startApp() {

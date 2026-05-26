@@ -1009,6 +1009,27 @@ export function renderActors() {
     $(".actor-swatch", node).style.background = actor.color;
     $(".actor-name-display", node).textContent = actor.name || `Actor ${index + 1}`;
     $(".role-badge", node).textContent = actor.role || "Participant";
+
+    // Actor turn stats badge
+    const actorMsgs = state.messages.filter(m => m.actorId === actor.id && m.type === "actor");
+    const actorWords = actorMsgs.reduce((sum, m) => sum + (m.content || "").trim().split(/\s+/).filter(Boolean).length, 0);
+    const statsBadge = $(".actor-stats-badge", node);
+    if (statsBadge) {
+      if (actorMsgs.length) {
+        statsBadge.textContent = `${actorMsgs.length}t · ${actorWords}w`;
+        statsBadge.style.display = "";
+      } else {
+        statsBadge.style.display = "none";
+      }
+    }
+
+    // Manager badge
+    const managerBadge = $(".manager-badge", node);
+    if (managerBadge) {
+      managerBadge.style.display = actor.canManageCast ? "" : "none";
+    }
+    node.classList.toggle("manager-agent", !!actor.canManageCast);
+
     $(".actor-name", node).value = actor.name;
     $(".actor-role", node).value = actor.role;
     $(".actor-persona", node).value = actor.persona;
@@ -1051,9 +1072,14 @@ export function renderActors() {
       saveState();
     });
 
+    // Per-actor max tokens
+    const maxTokInput = $(".actor-max-tokens", node);
+    if (maxTokInput) maxTokInput.value = actor.maxTokens || "";
+
     node.addEventListener("input", () => {
       actor.enabled = $(".actor-enabled", node).checked;
       actor.isResearcher = $(".actor-is-researcher", node).checked;
+      actor.canManageCast = $(".actor-can-manage-cast", node)?.checked || false;
       actor.name = $(".actor-name", node).value.trim() || `Actor ${index + 1}`;
       actor.role = $(".actor-role", node).value.trim();
       actor.persona = $(".actor-persona", node).value.trim();
@@ -1061,15 +1087,32 @@ export function renderActors() {
       actor.voice = $(".actor-voice", node).value.trim();
       actor.thoughts = $(".actor-thoughts", node).value.trim();
       actor.temperature = Number($(".actor-temperature", node).value || 0.8);
+      const mtVal = Number($(".actor-max-tokens", node)?.value || 0);
+      actor.maxTokens = mtVal > 0 ? mtVal : undefined;
       // Sync display elements
       $(".actor-name-display", node).textContent = actor.name;
       $(".role-badge", node).textContent = actor.role || "Participant";
       $(".researcher-badge", node).style.display = actor.isResearcher ? "" : "none";
+      const mb = $(".manager-badge", node);
+      if (mb) mb.style.display = actor.canManageCast ? "" : "none";
       node.classList.toggle("researcher-agent", actor.isResearcher);
+      node.classList.toggle("manager-agent", actor.canManageCast);
       $(".actor-temperature-display", node).textContent = actor.temperature.toFixed(2);
       saveState();
       renderTranscript();
     });
+
+    // Reset actor memory button
+    const resetMemBtn = $(".actor-reset-memory", node);
+    if (resetMemBtn) {
+      resetMemBtn.addEventListener("click", () => {
+        if (!confirm(`Clear ${actor.name}'s private memory?`)) return;
+        actor.thoughts = "";
+        $(".actor-thoughts", node).value = "";
+        saveState();
+        import("./db.js").then(({ putActorMemory }) => putActorMemory(actor.name, ""));
+      });
+    }
 
     $(".remove-actor", node).addEventListener("click", () => {
       state.actors = state.actors.filter((item) => item.id !== actor.id);
@@ -1136,7 +1179,33 @@ export function renderTranscript() {
     }
 
     $(".message-time", node).textContent = formatTime(message.createdAt);
-    $(".message-content", node).innerHTML = formatMessageHtml(publicMessageContent(message), actorColor);
+    const msgText = publicMessageContent(message);
+    const msgWordCount = msgText.trim().split(/\s+/).filter(Boolean).length;
+    const COLLAPSE_THRESHOLD = 250;
+    if (msgWordCount > COLLAPSE_THRESHOLD && message.type !== "skip" && message.type !== "system") {
+      const words = msgText.trim().split(/\s+/);
+      const preview = words.slice(0, 80).join(" ");
+      const rest = words.slice(80).join(" ");
+      const contentEl = $(".message-content", node);
+      contentEl.innerHTML = formatMessageHtml(preview, actorColor);
+      const restSpan = document.createElement("span");
+      restSpan.className = "msg-collapsed-rest";
+      restSpan.innerHTML = " " + formatMessageHtml(rest, actorColor);
+      restSpan.style.display = "none";
+      const toggleBtn = document.createElement("button");
+      toggleBtn.className = "msg-collapse-btn";
+      toggleBtn.type = "button";
+      toggleBtn.textContent = `… Show more (${msgWordCount}w)`;
+      toggleBtn.addEventListener("click", () => {
+        const expanded = restSpan.style.display !== "none";
+        restSpan.style.display = expanded ? "none" : "";
+        toggleBtn.textContent = expanded ? `… Show more (${msgWordCount}w)` : "Show less";
+      });
+      contentEl.appendChild(restSpan);
+      contentEl.appendChild(toggleBtn);
+    } else {
+      $(".message-content", node).innerHTML = formatMessageHtml(msgText, actorColor);
+    }
 
     // Thought block — always show as collapsible <details> when there's a thought.
     // showThoughts setting controls whether it renders auto-expanded (open attr).

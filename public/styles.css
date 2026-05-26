@@ -2435,3 +2435,63 @@ summary {
   border-radius: 50%;
   flex-shrink: 0;
 }
+
+/* ── Feature 1: Message collapse ─────────────────────────────── */
+.msg-collapse-btn {
+  display: inline-block;
+  margin-top: 6px;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+.msg-collapse-btn:hover { color: var(--accent-strong); }
+
+/* ── Feature 3: Inject note form ────────────────────────────── */
+.inject-note-form {
+  display: flex;
+  gap: 6px;
+  padding: 6px 0 2px;
+  align-items: center;
+}
+.inject-note-form input {
+  flex: 1;
+  padding: 5px 10px;
+  font-size: 0.85rem;
+}
+
+/* ── Feature 4: Actor stats badge ────────────────────────────── */
+.actor-stats-badge {
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin-left: 4px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--panel-strong);
+  white-space: nowrap;
+}
+
+/* ── Feature 10: Manager badge ───────────────────────────────── */
+.manager-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #1a4a46;
+  color: #2fada1;
+  margin-left: 4px;
+}
+.actor-card.manager-agent {
+  border-left-color: #1a7a6e;
+}
+
+/* ── Manager system message chip ─────────────────────────────── */
+.message-card.system .message-content {
+  font-style: italic;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
