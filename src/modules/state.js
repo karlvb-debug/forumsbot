@@ -12,7 +12,7 @@ function normalizeDocumentEntry(e) {
     enabled: e.enabled !== false,
     createdAt: e.createdAt || new Date().toISOString(),
     updatedAt: e.updatedAt || e.createdAt || new Date().toISOString(),
-    wordCount: e.wordCount || 0,
+    wordCount: typeof e.wordCount === "number" ? e.wordCount : (e.content||"").trim().split(/\s+/).filter(Boolean).length,
     aiEditable: e.aiEditable === true,
     versions: Array.isArray(e.versions) ? e.versions : [],
     maxVersions: typeof e.maxVersions === "number" ? e.maxVersions : 20,
@@ -21,7 +21,7 @@ function normalizeDocumentEntry(e) {
   };
 }
 
-export { normalizeDocumentEntry };
+
 
 function normalizeState(value) {
   const merged = {
@@ -184,6 +184,7 @@ function normalizeState(value) {
     relationships: (actor.relationships && typeof actor.relationships === "object") ? actor.relationships : {},
     enabled: actor.enabled !== false,
     expanded: actor.expanded || false,
+    maxTokens: typeof actor.maxTokens === "number" && actor.maxTokens > 0 ? actor.maxTokens : undefined,
     temperature: typeof actor.temperature === "number" ? actor.temperature : 0.8,
     color: actor.color || colors[index % colors.length] || "#18726d",
     // Permissions — migrate old flags to new model
@@ -195,7 +196,7 @@ function normalizeState(value) {
   return merged;
 }
 
-export { normalizeState };
+export { normalizeState, normalizeDocumentEntry };
 
 function loadState() {
   try {

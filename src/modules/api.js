@@ -31,6 +31,7 @@ function extractJsonField(accumulated, fieldName) {
   }
   return result;
 }
+
 function extractStreamingMessage(accumulated) {
   return extractJsonField(accumulated, "message");
 }
@@ -53,6 +54,27 @@ function extractStreamingDisplay(accumulated) {
     return wordCount > 5 ? `💭 Thinking\u2026 (${wordCount}w)` : "💭 Thinking\u2026";
   }
   return ""; // preamble — keep cursor blinking
+}
+
+// ── Request scheduler ────────────────────────────────────────────────────────
+// Prevents concurrent LLM generation calls from racing (e.g. a memory
+// summarization firing while an actor turn is in-flight). Each queue is a
+// promise chain — the next call starts only after the previous one settles.
+// Callers opt in by wrapping their async fn with scheduleChat / scheduleEmbed.
+
+let _chatChain = Promise.resolve();
+export function scheduleChat(fn) {
+  const slot = _chatChain.then(() => fn());
+  // Advance the chain even if fn() rejects, so the queue never stalls.
+  _chatChain = slot.catch(() => {});
+  return slot;
+}
+
+let _embedChain = Promise.resolve();
+export function scheduleEmbed(fn) {
+  const slot = _embedChain.then(() => fn());
+  _embedChain = slot.catch(() => {});
+  return slot;
 }
 
 // els reference removed — React manages UI
@@ -387,8 +409,12 @@ export async function chatStream(system, user, { temperature = state.settings.te
  * Batch embedding request — embeds multiple texts in a single API call.
  * Returns an array of embedding vectors in the same order as the input texts.
  */
-export async function getEmbeddingsBatch(texts) {
-  if (!texts || !texts.length) return [];
+export function getEmbeddingsBatch(texts) {
+  if (!texts || !texts.length) return Promise.resolve([]);
+  return scheduleEmbed(() => _getEmbeddingsBatch(texts));
+}
+
+async function _getEmbeddingsBatch(texts) {
   const modelToUse = state.settings.embeddingModel || state.settings.model;
   if (!modelToUse) throw new Error("No model selected.");
   const response = await fetch("/api/embeddings", {
@@ -406,18 +432,19 @@ export async function getEmbeddingsBatch(texts) {
   return items.map(item => item.embedding).filter(Array.isArray);
 }
 
-export async function chatJson(system, user, temperature, signal, onStream = null) {
+export async function chatJson(system, user, temperature, signal, onStream = null, maxTokens = null) {
   // Stream when a callback is provided and streaming is enabled.
   // Previously !isToolMode blocked streaming for most users (toolsEnabled=true by default).
   // Tool calls are now detected post-stream; the vast majority of turns have none.
   const isToolMode = state.settings.toolsEnabled && state.scenario.mode !== "story";
   const canStream = onStream && state.settings.streamingEnabled !== false;
+  const resolvedMaxTokens = maxTokens || state.settings.maxTokens;
 
   let content;
   if (canStream) {
     content = await chatStream(system, user, {
       temperature,
-      maxTokens: state.settings.maxTokens,
+      maxTokens: resolvedMaxTokens,
       signal
     }, (_delta, accumulated) => {
       onStream(extractStreamingDisplay(accumulated));
@@ -447,7 +474,7 @@ ${result}
         ].join("\n");
         content = await chatCompletion(system, followUpUser, {
           temperature,
-          maxTokens: state.settings.maxTokens,
+          maxTokens: resolvedMaxTokens,
           signal,
           useTools: false
         });
@@ -456,7 +483,7 @@ ${result}
   } else {
     content = await chatCompletion(system, user, {
       temperature,
-      maxTokens: state.settings.maxTokens,
+      maxTokens: resolvedMaxTokens,
       signal,
       useTools: true
     });
@@ -496,7 +523,7 @@ ${result}
         ].join("\n");
         const retryContent = await chatCompletion(system, resumeUser, {
           temperature: 0.1, // deterministic for repair
-          maxTokens: Math.min(state.settings.maxTokens * 2, 4000),
+          maxTokens: Math.min(resolvedMaxTokens * 2, 4000),
           signal,
           useTools: false
         });
@@ -518,7 +545,7 @@ ${result}
     }
   }
 
-  const parsed = parseAiJson(finalContent);
+  let parsed = parseAiJson(finalContent);
 
   if (!isStrictJson) {
     if (!state.diagnostics) state.diagnostics = {};
@@ -533,6 +560,49 @@ ${result}
       fallbackUsed: (finalContent.includes("thought") || finalContent.includes("message")) ? "regex_extraction" : "raw_message_injection"
     });
     if (state.diagnostics.parseFailures.length > 50) state.diagnostics.parseFailures.shift();
+  }
+
+  // Schema validation + correction retry.
+  // If the result is missing both action and message (a complete parse failure),
+  // send one targeted correction prompt before giving up.
+  const hasMessage = typeof parsed.message === "string";
+  const hasAction = parsed.action === "speak" || parsed.action === "skip";
+  const schemaOk = hasMessage && hasAction;
+
+  if (!schemaOk && !signal?.aborted) {
+    const missingFields = [
+      !hasAction && '"action" (must be "speak" or "skip")',
+      !hasMessage && '"message" (must be a string, empty when skipping)'
+    ].filter(Boolean).join(" and ");
+    const correctionUser = [
+      `Your previous response was missing required fields: ${missingFields}.`,
+      `Previous response: ${finalContent.slice(0, 300)}`,
+      `Return ONLY valid JSON with this exact shape: {"thought":"","action":"speak or skip","message":"your message here, empty if skipping"}`
+    ].join("\n");
+    try {
+      const correctionContent = await chatCompletion(system, correctionUser, {
+        temperature: 0.1,
+        maxTokens: Math.min(resolvedMaxTokens, 1200),
+        signal,
+        useTools: false
+      });
+      const corrected = parseAiJson(correctionContent);
+      const correctedOk = typeof corrected.message === "string" && (corrected.action === "speak" || corrected.action === "skip");
+      if (correctedOk) {
+        parsed = corrected;
+        finalContent = correctionContent;
+        if (!state.diagnostics) state.diagnostics = {};
+        if (!Array.isArray(state.diagnostics.schemaCorrections)) state.diagnostics.schemaCorrections = [];
+        state.diagnostics.schemaCorrections.push({
+          timestamp: new Date().toISOString(),
+          missingFields,
+          succeeded: true
+        });
+        if (state.diagnostics.schemaCorrections.length > 50) state.diagnostics.schemaCorrections.shift();
+      }
+    } catch {
+      // Correction attempt failed — fall through with what we have
+    }
   }
 
   Object.defineProperties(parsed, {
