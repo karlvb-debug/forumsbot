@@ -545,58 +545,31 @@
 
           <!-- ── Document panel ───────────────────────────────────────── -->
           <div class="sidebar-panel" data-sidebar-panel="document" style="display:none">
-            <div class="doc-header">
-              <label class="toggle-row compact">
-                <input id="documentEnabledInput" type="checkbox">
-                <span>Active</span>
-              </label>
-              <div class="doc-view-toggle">
-                <button class="doc-view-btn active" data-doc-view="preview" type="button">Preview</button>
-                <button class="doc-view-btn" data-doc-view="edit" type="button">Edit</button>
-              </div>
-            </div>
-            <div class="document-panel-fields">
-              <label style="margin-bottom: 4px;">
-                Title
-                <input id="documentTitleInput" placeholder="e.g. Design Brief, Study Guide">
-              </label>
-
-              <div class="doc-controls-row" style="margin-bottom: 8px;">
-                <label class="toggle-row compact">
-                  <input id="documentShowAttributionInput" type="checkbox">
-                  <span>Show Attribution</span>
+            <!-- GitHub PR Import -->
+            <details class="doc-import-details" id="prImportDetails">
+              <summary class="doc-import-summary">📥 Import GitHub PR</summary>
+              <div class="doc-import-form">
+                <label>PR URL
+                  <input id="prUrlInput" type="url" placeholder="https://github.com/owner/repo/pull/123" autocomplete="off">
                 </label>
-              </div>
-
-              <div id="documentConfluenceContainer" class="document-confluence-container" style="display:none; margin-bottom: 8px;">
-                <span class="confluence-title">Document Confluence River</span>
-                <canvas id="documentConfluenceCanvas"></canvas>
-              </div>
-
-              <div id="documentAttributionContainer" class="document-attribution-bar" style="display:none"></div>
-
-              <div id="documentHistoryContainer" class="document-history-scrubber" style="display:none">
-                <div class="slider-row history-row">
-                  <span class="scrub-label">History Scrubber:</span>
-                  <input id="documentHistorySlider" type="range" min="0" max="0" step="1" value="0">
-                  <button class="soft-button compact-button" id="documentRestoreButton" type="button" style="display:none">Restore</button>
+                <label>Token (optional, for private repos)
+                  <input id="prTokenInput" type="password" placeholder="ghp_… (never stored)">
+                </label>
+                <div style="display:flex;gap:8px;margin-top:6px">
+                  <button class="primary-button" id="importPrButton" type="button">Import</button>
+                  <button class="quiet-button" id="cancelPrButton" type="button">Cancel</button>
                 </div>
-                <div id="documentHistoryStatus" class="history-status-line"></div>
+                <p id="prImportStatus" class="status-line" style="display:none"></p>
               </div>
+            </details>
 
-              <div class="doc-edit-view" style="display:none">
-                <textarea id="documentContent" rows="20" placeholder="Start typing or let agents draft..."></textarea>
-              </div>
-              <div class="doc-preview-view">
-                <div id="documentPreview" class="document-rendered"></div>
-              </div>
-              <div class="document-meta">
-                <span id="documentVersionCount" class="muted-text">0 versions</span>
-                <div class="document-meta-actions">
-                  <button class="quiet-button" id="documentCopyButton" type="button" title="Copy document to clipboard">📋 Copy</button>
-                  <button class="quiet-button" id="documentClearButton" type="button" title="Clear document content">🗑 Clear</button>
-                </div>
-              </div>
+            <!-- Documents list -->
+            <div id="documentsList" class="documents-list"></div>
+
+            <!-- Add document -->
+            <div class="doc-add-actions">
+              <button class="soft-button" id="addDocumentButton" type="button">+ Working Doc</button>
+              <button class="soft-button" id="addReferenceButton" type="button">+ Reference</button>
             </div>
           </div><!-- /sidebar-panel document -->
 

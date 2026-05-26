@@ -288,12 +288,47 @@ async function serveStatic(req, res) {
   }
 }
 
+async function githubPr(req, res) {
+  const { url, token } = await readJson(req);
+  const match = String(url || '').match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+  if (!match) return sendJson(res, 400, { error: "Not a valid GitHub PR URL." });
+  const [, owner, repo, number] = match;
+  const base = `https://api.github.com/repos/${owner}/${repo}`;
+  const headers = {
+    accept: "application/vnd.github.v3+json",
+    "user-agent": "Forum/1.0",
+    ...(token ? { authorization: `Bearer ${token}` } : {})
+  };
+  const prRes = await fetch(`${base}/pulls/${number}`, { headers, signal: AbortSignal.timeout(10000) });
+  if (!prRes.ok) return sendJson(res, prRes.status, { error: `GitHub API: ${prRes.status}` });
+  const pr = await prRes.json();
+  const filesRes = await fetch(`${base}/pulls/${number}/files?per_page=100`, { headers, signal: AbortSignal.timeout(10000) });
+  const files = filesRes.ok ? await filesRes.json() : [];
+  const FILE_PATCH_CAP = 4000;
+  const TOTAL_DIFF_CAP = 40000;
+  let totalDiff = 0;
+  const processedFiles = [];
+  for (const f of files) {
+    const patch = f.patch ? f.patch.slice(0, FILE_PATCH_CAP) : '';
+    totalDiff += patch.length;
+    if (totalDiff > TOTAL_DIFF_CAP) break;
+    processedFiles.push({ filename: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch });
+  }
+  sendJson(res, 200, {
+    title: pr.title, body: pr.body || '', state: pr.state,
+    base: pr.base?.ref, head: pr.head?.ref,
+    additions: pr.additions, deletions: pr.deletions, changed_files: pr.changed_files,
+    user: pr.user?.login, files: processedFiles
+  });
+}
+
 const server = createServer(async (req, res) => {
   if (req.method === "POST" && req.url === "/api/models") return proxyModels(req, res);
   if (req.method === "POST" && req.url === "/api/model-info") return proxyModelInfo(req, res);
   if (req.method === "POST" && req.url === "/api/chat") return proxyChat(req, res);
   if (req.method === "POST" && req.url === "/api/embeddings") return proxyEmbeddings(req, res);
   if (req.method === "POST" && req.url === "/api/tool-execute") return toolExecute(req, res);
+  if (req.method === "POST" && req.url === "/api/github-pr") return githubPr(req, res);
   if (req.method === "GET") return serveStatic(req, res);
   sendJson(res, 405, { error: "Method not allowed." });
 });

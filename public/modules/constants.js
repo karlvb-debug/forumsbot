@@ -152,15 +152,7 @@ export const defaultState = {
     roundsRun: 0,
     status: "Auto-stop ready."
   },
-  document: {
-    enabled: false,
-    title: "",
-    content: "",
-    versions: [],
-    maxVersions: 20,
-    lineAttribution: [],
-    showAttribution: false
-  },
+  documents: [],
   scenario: {
     mode: "problem",
     title: "Design council",

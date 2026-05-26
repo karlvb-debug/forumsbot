@@ -2495,3 +2495,21 @@ summary {
   color: var(--muted);
   font-size: 0.85rem;
 }
+
+/* ── Documents panel ─────────────────────────────────────────── */
+.documents-list { display: flex; flex-direction: column; gap: 10px; padding: 10px 0; }
+.docs-empty { color: var(--muted); font-style: italic; font-size: 0.85rem; text-align: center; padding: 16px; }
+.doc-entry { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px; border-left: 3px solid var(--accent); }
+.doc-entry--readonly { border-left-color: var(--muted); }
+.doc-entry-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.doc-entry-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 0.8rem; }
+.doc-word-count { color: var(--muted); margin-left: auto; }
+.doc-ai-badge { font-size: 0.7rem; padding: 1px 5px; border-radius: 3px; background: var(--panel-strong); color: var(--muted); white-space: nowrap; }
+.doc-ai-badge--on { background: var(--accent-soft); color: var(--accent); }
+.doc-entry-content { width: 100%; font-family: inherit; font-size: 0.82rem; resize: vertical; }
+.doc-add-actions { display: flex; gap: 8px; padding: 6px 0; }
+/* PR Import */
+.doc-import-details { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; }
+.doc-import-summary { cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--accent); }
+.doc-import-form { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+

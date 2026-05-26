@@ -254,7 +254,7 @@ export function render() {
   renderStageHeader();
   renderActors();
   renderConversationSummary();
-  renderDocument();
+  renderDocuments();
   renderQuickStartPreview();
   renderMemory();
   renderOutcomes();
@@ -571,153 +571,76 @@ export function summaryLine(label, value) {
   return row;
 }
 
-export function renderDocument() {
-  if (!els.documentEnabled) return;
-  els.documentEnabled.checked = state.document.enabled;
-  els.documentTitle.value = state.document.title || "";
-  
-  const versions = state.document.versions || [];
-  const maxIndex = versions.length;
-  
-  // 1. Calculate & Render Attribution Bar
-  if (els.documentAttributionContainer) {
-    if (!state.document.enabled || versions.length === 0) {
-      els.documentAttributionContainer.style.display = "none";
-    } else {
-      els.documentAttributionContainer.style.display = "flex";
-      els.documentAttributionContainer.innerHTML = "";
-      
-      const counts = {};
-      let total = 0;
-      versions.forEach((v) => {
-        const authorName = v.author || "Unknown";
-        counts[authorName] = (counts[authorName] || 0) + 1;
-        total++;
-      });
-      
-      const actorColorMap = {};
-      state.actors.forEach((a) => {
-        actorColorMap[a.name] = a.color;
-      });
-      actorColorMap["User"] = "#355f9f";
-      actorColorMap["Director"] = "#a2611a";
-      if (state.dm && state.dm.name) {
-        actorColorMap[state.dm.name] = "#a2611a";
-      }
-      
-      Object.entries(counts).forEach(([author, count]) => {
-        const pct = (count / total) * 100;
-        const segment = document.createElement("div");
-        segment.className = "attribution-segment";
-        segment.style.width = `${pct}%`;
-        segment.style.backgroundColor = actorColorMap[author] || "#888";
-        segment.title = `${author}: ${count} edit${count !== 1 ? "s" : ""} (${pct.toFixed(0)}%)`;
-        els.documentAttributionContainer.appendChild(segment);
-      });
-    }
+export function renderDocuments() {
+  const container = document.getElementById("documentsList");
+  if (!container) return;
+  const docs = state.documents || [];
+
+  if (!docs.length) {
+    container.innerHTML = '<p class="docs-empty">No documents yet. Add one below.</p>';
+    return;
   }
 
-  // 2. Render History Scrubber & Current Preview Content
-  if (els.documentHistoryContainer && els.documentHistorySlider && els.documentHistoryStatus && els.documentRestoreButton) {
-    if (!state.document.enabled || versions.length === 0) {
-      els.documentHistoryContainer.style.display = "none";
-    } else {
-      els.documentHistoryContainer.style.display = "block";
-      els.documentHistorySlider.max = maxIndex;
-      
-      if (typeof state.ui.viewingVersionIndex === "undefined" || state.ui.viewingVersionIndex > maxIndex || state.ui.viewingVersionIndex < 0) {
-        state.ui.viewingVersionIndex = maxIndex;
-      }
-      
-      els.documentHistorySlider.value = state.ui.viewingVersionIndex;
-      
-      if (state.ui.viewingVersionIndex === maxIndex) {
-        // Viewing Current Draft
-        els.documentHistoryStatus.innerHTML = `<span class="muted-text">Viewing: <strong>Current Draft</strong></span>`;
-        els.documentRestoreButton.style.display = "none";
-        if (els.documentPreview) {
-          els.documentPreview.classList.remove("viewing-history");
-          els.documentPreview.innerHTML = renderMarkdown(state.document.content || "");
-        }
-        if (document.activeElement !== els.documentContent) {
-          els.documentContent.value = state.document.content || "";
-        }
-      } else {
-        // Viewing Historical Version
-        const ver = versions[state.ui.viewingVersionIndex];
-        const dateStr = ver.timestamp ? new Date(ver.timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "unknown time";
-        
-        let authorColor = "#888";
-        if (ver.author === "User") authorColor = "#355f9f";
-        else if (ver.author === "Director" || (state.dm && ver.author === state.dm.name)) authorColor = "#a2611a";
-        else {
-          const match = state.actors.find((a) => a.name === ver.author);
-          if (match) authorColor = match.color;
-        }
-        
-        els.documentHistoryStatus.innerHTML = `
-          <span>Viewing: <strong>Version ${state.ui.viewingVersionIndex + 1} of ${maxIndex}</strong></span>
-          <span>By <span class="author-badge" style="background:${authorColor}">${escapeHtml(ver.author)}</span> at ${dateStr}</span>
-        `;
-        els.documentRestoreButton.style.display = "";
-        
-        if (els.documentPreview) {
-          els.documentPreview.classList.add("viewing-history");
-          els.documentPreview.innerHTML = renderMarkdown(ver.content || "");
-        }
-        if (document.activeElement !== els.documentContent) {
-          els.documentContent.value = ver.content || "";
-        }
-      }
-    }
-  }
+  container.innerHTML = "";
+  docs.forEach((doc) => {
+    const card = document.createElement("div");
+    card.className = `doc-entry${doc.aiEditable ? " doc-entry--editable" : " doc-entry--readonly"}`;
+    card.dataset.docId = doc.id;
+    card.innerHTML = `
+      <div class="doc-entry-header">
+        <input class="doc-entry-title" value="${escapeHtml(doc.title)}" placeholder="Document title" style="flex:1;background:transparent;border:none;color:var(--ink);font-weight:600;font-size:0.9rem;padding:0">
+        <span class="doc-ai-badge${doc.aiEditable ? " doc-ai-badge--on" : ""}" title="${doc.aiEditable ? "Actors can edit this document" : "Read-only reference"}">${doc.aiEditable ? "✏ editable" : "👁 read-only"}</span>
+        <label class="toggle-row compact" style="margin:0">
+          <input type="checkbox" class="doc-entry-enabled"${doc.enabled ? " checked" : ""}>
+          <span>On</span>
+        </label>
+        <button class="icon-button doc-entry-remove" type="button" title="Remove document" style="margin-left:4px">×</button>
+      </div>
+      <div class="doc-entry-controls">
+        <label class="toggle-row compact">
+          <input type="checkbox" class="doc-entry-ai-editable"${doc.aiEditable ? " checked" : ""}>
+          <span>AI can edit</span>
+        </label>
+        <span class="doc-word-count">${doc.wordCount || 0}w · ${doc.versions.length}v</span>
+      </div>
+      <textarea class="doc-entry-content" rows="6" placeholder="Document content…">${escapeHtml(doc.content)}</textarea>
+    `;
 
-  // Fallback if versions is empty or document history UI components don't exist
-  if (versions.length === 0 || !els.documentHistoryContainer) {
-    if (document.activeElement !== els.documentContent) {
-      els.documentContent.value = state.document.content || "";
-    }
-    if (els.documentPreview) {
-      els.documentPreview.classList.remove("viewing-history");
-      els.documentPreview.innerHTML = renderMarkdown(state.document.content || "");
-    }
-  }
-  
-  const vCount = versions.length;
-  els.documentVersionCount.textContent = `${vCount} version${vCount !== 1 ? "s" : ""}`;
+    // Wire events
+    card.querySelector(".doc-entry-title").addEventListener("input", e => {
+      doc.title = e.target.value; doc.updatedAt = new Date().toISOString(); saveState();
+    });
+    card.querySelector(".doc-entry-enabled").addEventListener("change", e => {
+      doc.enabled = e.target.checked; saveState();
+    });
+    card.querySelector(".doc-entry-ai-editable").addEventListener("change", e => {
+      doc.aiEditable = e.target.checked;
+      card.className = `doc-entry${doc.aiEditable ? " doc-entry--editable" : " doc-entry--readonly"}`;
+      card.querySelector(".doc-ai-badge").textContent = doc.aiEditable ? "✏ editable" : "👁 read-only";
+      card.querySelector(".doc-ai-badge").className = `doc-ai-badge${doc.aiEditable ? " doc-ai-badge--on" : ""}`;
+      saveState();
+    });
+    card.querySelector(".doc-entry-content").addEventListener("input", e => {
+      doc.content = e.target.value;
+      doc.wordCount = doc.content.trim().split(/\s+/).filter(Boolean).length;
+      doc.updatedAt = new Date().toISOString();
+      card.querySelector(".doc-word-count").textContent = `${doc.wordCount}w · ${doc.versions.length}v`;
+      saveState();
+    });
+    card.querySelector(".doc-entry-remove").addEventListener("click", () => {
+      state.documents = state.documents.filter(d => d.id !== doc.id);
+      saveState();
+      renderDocuments();
+    });
 
-  // 3. Attribution toggle sync
-  if (els.documentShowAttributionInput) {
-    els.documentShowAttributionInput.checked = !!state.document.showAttribution;
-  }
-
-  // 4. Confluence River Canvas — show/hide based on showAttribution
-  if (els.documentConfluenceContainer && els.documentConfluenceCanvas) {
-    const showConfluence = !!state.document.showAttribution && state.document.enabled;
-    els.documentConfluenceContainer.style.display = showConfluence ? "" : "none";
-    if (showConfluence) {
-      startConfluenceRiverAnimation(els.documentConfluenceCanvas);
-    } else {
-      stopConfluenceRiverAnimation();
-    }
-  }
+    container.appendChild(card);
+  });
 }
 
+export function renderDocument() {} // stub — replaced by renderDocuments
+
 export function switchDocView(viewName) {
-  if (els.docEditView) els.docEditView.style.display = viewName === "edit" ? "" : "none";
-  if (els.docPreviewView) els.docPreviewView.style.display = viewName === "preview" ? "" : "none";
-  els.docViewBtns.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.docView === viewName);
-  });
-  
-  if (viewName === "edit") {
-    // Snap scrubber back to current active draft so edits affect the correct draft
-    state.ui.viewingVersionIndex = state.document.versions.length;
-    renderDocument();
-    els.documentContent.focus();
-  } else if (viewName === "preview") {
-    renderDocument();
-  }
+  // switchDocView is a no-op in the new documents panel (legacy stub)
 }
 
 export function switchSidebarTab(tabName) {
@@ -1544,12 +1467,6 @@ export function readSettingsFromForm() {
   state.settings.temperature = Number(els.temperature.value || defaultState.settings.temperature);
   state.scenario.mode = els.mode.value;
   state.scenario.title = els.title.value.trim() || "Untitled forum";
-  // Mirror to document title if it hasn't been manually customised
-  // (document title equals scenario title, or is blank — both indicate it's still the default)
-  if (state.document && (!state.document.title || state.document.title === state.scenario._lastSyncedTitle)) {
-    state.document.title = state.scenario.title;
-    if (els.documentTitle) els.documentTitle.value = state.scenario.title;
-  }
   state.scenario._lastSyncedTitle = state.scenario.title;
 
   state.scenario.premise = els.premise.value.trim();

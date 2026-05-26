@@ -1,6 +1,23 @@
 import { STORAGE_KEY, VALID_TABS, defaultState } from './constants.js';
 import { normalizeQuickStartConfig, cleanStoredMessage, normalizeStringArray } from './utils.js';
 
+function normalizeDocumentEntry(e) {
+  return {
+    id: e.id || crypto.randomUUID(),
+    title: e.title || "Untitled",
+    type: "document",
+    content: e.content || "",
+    enabled: e.enabled !== false,
+    aiEditable: !!e.aiEditable,
+    createdAt: e.createdAt || new Date().toISOString(),
+    updatedAt: e.updatedAt || e.createdAt || new Date().toISOString(),
+    wordCount: typeof e.wordCount === "number" ? e.wordCount : (e.content||"").trim().split(/\s+/).filter(Boolean).length,
+    versions: Array.isArray(e.versions) ? e.versions : [],
+    maxVersions: typeof e.maxVersions === "number" ? e.maxVersions : 20,
+    target: "all",
+  };
+}
+
 function normalizeState(value) {
   const merged = {
     ...structuredClone(defaultState),
@@ -12,15 +29,37 @@ function normalizeState(value) {
     diagnostics: { ...defaultState.diagnostics, ...value.diagnostics },
     outcomes: { ...defaultState.outcomes, ...value.outcomes },
     autoStop: { ...defaultState.autoStop, ...value.autoStop },
-    document: { ...defaultState.document, ...value.document },
     scenario: { ...defaultState.scenario, ...value.scenario },
     dm: { ...defaultState.dm, ...value.dm },
     actors: Array.isArray(value.actors) && value.actors.length ? value.actors : structuredClone(defaultState.actors),
     messages: Array.isArray(value.messages) ? value.messages.map(cleanStoredMessage) : [],
     turnQueue: Array.isArray(value.turnQueue) ? value.turnQueue : []
   };
-  if (!Array.isArray(merged.document.versions)) merged.document.versions = [];
-  if (!Array.isArray(merged.document.lineAttribution)) merged.document.lineAttribution = [];
+  // Migrate old single document → documents[] entry
+  if (!Array.isArray(value.documents)) {
+    const docs = [];
+    const d = value.document;
+    if (d && (d.content || d.title || d.enabled)) {
+      docs.push(normalizeDocumentEntry({
+        id: crypto.randomUUID(),
+        title: d.title || 'Shared Document',
+        content: d.content || '',
+        enabled: d.enabled !== false,
+        aiEditable: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        wordCount: (d.content||'').trim().split(/\s+/).filter(Boolean).length,
+        versions: d.versions || [],
+        maxVersions: d.maxVersions || 20,
+        target: 'all',
+      }));
+    }
+    merged.documents = docs;
+  } else {
+    merged.documents = value.documents.map(normalizeDocumentEntry);
+  }
+  delete merged.document;
+
   if (!Array.isArray(merged.telemetry.alignmentHistory)) merged.telemetry.alignmentHistory = [];
   if (!Array.isArray(merged.diagnostics.transitions)) merged.diagnostics.transitions = [];
   if (!Array.isArray(merged.diagnostics.warnings)) merged.diagnostics.warnings = [];
@@ -89,12 +128,6 @@ function normalizeState(value) {
   if (merged.autoStop.enabled && !String(merged.autoStop.goal || "").trim()) {
     merged.autoStop.goal = String(merged.scenario.objective || "").trim();
   }
-  // Auto-populate document title from scenario title when blank
-  if (!String(merged.document?.title || "").trim() && merged.scenario?.title) {
-    if (!merged.document) merged.document = {};
-    merged.document.title = merged.scenario.title;
-  }
-
   merged.actors = merged.actors.map((actor, index) => ({
     id: actor.id || crypto.randomUUID(),
     name: actor.name || `Actor ${index + 1}`,
@@ -112,11 +145,10 @@ function normalizeState(value) {
     temperature: typeof actor.temperature === "number" ? actor.temperature : 0.8,
     color: actor.color || defaultState.actors[index % defaultState.actors.length]?.color || "#18726d"
   }));
-  merged.ui.viewingVersionIndex = merged.document.versions.length;
   return merged;
 }
 
-export { normalizeState };
+export { normalizeState, normalizeDocumentEntry };
 
 function loadState() {
   try {

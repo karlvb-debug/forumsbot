@@ -119,7 +119,7 @@ export async function exportSession() {
         goal: state.autoStop.goal,
         roundsRun: state.autoStop.roundsRun
       },
-      sessionMetrics: calculateSessionMetrics(messages, state.document.lineAttribution),
+      sessionMetrics: calculateSessionMetrics(messages, (state.document && state.document.lineAttribution) || []),
       telemetry: {
         currentAlignmentScore: state.telemetry?.currentAlignmentScore,
         alignmentHistory: state.telemetry?.alignmentHistory

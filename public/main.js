@@ -13,6 +13,7 @@ import {
   renderChunkBrowser,
   renderTokenGauge,
   renderDocument,
+  renderDocuments,
   renderTelemetry,
   switchSidebarTab,
   switchDocView,
@@ -255,102 +256,61 @@ function wireEvents() {
     });
   }
 
-  // Document panel events
-  if (els.documentEnabled) {
-    els.documentEnabled.addEventListener("change", () => {
-      if (!isInitialized) return;
-      state.document.enabled = els.documentEnabled.checked;
-      saveState();
-      renderConversationSummary();
+  // Document panel events — Unified Documents System
+  document.getElementById("addDocumentButton")?.addEventListener("click", () => {
+    if (!Array.isArray(state.documents)) state.documents = [];
+    state.documents.push({
+      id: crypto.randomUUID(), title: "New Document", type: "document",
+      content: "", enabled: true, aiEditable: true,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      wordCount: 0, versions: [], maxVersions: 20, target: "all"
     });
-  }
-  if (els.documentTitle) {
-    els.documentTitle.addEventListener("input", () => {
-      if (!isInitialized) return;
-      state.document.title = els.documentTitle.value;
-      saveState();
+    saveState(); renderDocuments();
+  });
+  document.getElementById("addReferenceButton")?.addEventListener("click", () => {
+    if (!Array.isArray(state.documents)) state.documents = [];
+    state.documents.push({
+      id: crypto.randomUUID(), title: "Reference Document", type: "document",
+      content: "", enabled: true, aiEditable: false,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      wordCount: 0, versions: [], maxVersions: 20, target: "all"
     });
-  }
-  if (els.documentContent) {
-    els.documentContent.addEventListener("input", () => {
-      if (!isInitialized) return;
-      state.document.content = els.documentContent.value;
-      saveState();
-    });
-  }
+    saveState(); renderDocuments();
+  });
 
-  // Show Attribution toggle
-  if (els.documentShowAttributionInput) {
-    els.documentShowAttributionInput.addEventListener("change", () => {
-      if (!isInitialized) return;
-      state.document.showAttribution = els.documentShowAttributionInput.checked;
-      saveState();
-      renderDocument();
-    });
-  }
-  if (els.documentCopy) {
-    els.documentCopy.addEventListener("click", () => {
-      navigator.clipboard.writeText(state.document.content || "").then(() => {
-        els.documentCopy.textContent = "✅ Copied";
-        setTimeout(() => { els.documentCopy.textContent = "📋 Copy"; }, 1500);
-      });
-    });
-  }
-  if (els.documentClear) {
-    els.documentClear.addEventListener("click", () => {
-      if (!confirm("Clear the document content? This cannot be undone.")) return;
-      state.document.content = "";
-      state.document.versions = [];
-      saveState();
-      renderDocument();
-    });
-  }
-
-  // Document history scrubbing
-  if (els.documentHistorySlider) {
-    els.documentHistorySlider.addEventListener("input", () => {
-      if (!isInitialized) return;
-      state.ui.viewingVersionIndex = Number(els.documentHistorySlider.value);
-      
-      // If editing, switch to preview view to see historical render
-      const isEditView = els.docEditView && els.docEditView.style.display !== "none";
-      if (isEditView) {
-        switchDocView("preview");
-      } else {
-        renderDocument();
+  // GitHub PR Import
+  document.getElementById("importPrButton")?.addEventListener("click", async () => {
+    const url = document.getElementById("prUrlInput")?.value?.trim();
+    const token = document.getElementById("prTokenInput")?.value?.trim() || "";
+    const status = document.getElementById("prImportStatus");
+    const btn = document.getElementById("importPrButton");
+    if (!url) return;
+    if (status) { status.style.display = ""; status.textContent = "Importing…"; }
+    if (btn) btn.disabled = true;
+    try {
+      const { importGithubPr, buildCodeReviewDocuments, buildCodeReviewSetup } = await import("./modules/codeReview.js");
+      const prData = await importGithubPr(url, token);
+      const newDocs = buildCodeReviewDocuments(prData);
+      const setup = buildCodeReviewSetup(prData);
+      if (!Array.isArray(state.documents)) state.documents = [];
+      state.documents.push(...newDocs);
+      state.scenario = { ...state.scenario, ...setup.scenario };
+      if (!state.actors.some(a => a.canDirect)) {
+        state.actors = [...setup.actors, ...state.actors];
       }
-      saveState();
-    });
-  }
-
-  if (els.documentRestoreButton) {
-    els.documentRestoreButton.addEventListener("click", () => {
-      if (!isInitialized) return;
-      const index = state.ui.viewingVersionIndex;
-      const versions = state.document.versions || [];
-      if (index >= 0 && index < versions.length) {
-        if (!confirm(`Restore the document to Version ${index + 1}?`)) return;
-        
-        const historicalContent = versions[index].content || "";
-        
-        // Save current draft to history first so we don't lose it
-        state.document.versions.push({
-          author: "User",
-          content: state.document.content,
-          timestamp: new Date().toISOString()
-        });
-        
-        if (state.document.versions.length > (state.document.maxVersions || 20)) {
-          state.document.versions = state.document.versions.slice(-(state.document.maxVersions || 20));
-        }
-        
-        state.document.content = historicalContent;
-        state.ui.viewingVersionIndex = state.document.versions.length;
-        saveState();
-        renderDocument();
-      }
-    });
-  }
+      saveState(); render(); syncFormFromState();
+      if (status) { status.textContent = `Imported: ${prData.title} (${prData.changed_files} files)`; }
+      document.getElementById("prUrlInput").value = "";
+      document.getElementById("prTokenInput").value = "";
+    } catch (err) {
+      if (status) status.textContent = `Error: ${err.message}`;
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+  document.getElementById("cancelPrButton")?.addEventListener("click", () => {
+    document.getElementById("prImportDetails")?.removeAttribute("open");
+  });
 
   // Mode pill buttons
   els.modePills.forEach((pill) => {
