@@ -365,16 +365,16 @@ async function githubPr(req, res) {
     const filesRes = await fetch(`${base}/pulls/${number}/files?per_page=100`, { headers, signal: AbortSignal.timeout(10000) });
     const rawFiles = filesRes.ok ? await filesRes.json() : [];
     const FILE_PATCH_CAP = 4000;
-    let totalDiff = 0;
     const TOTAL_DIFF_CAP = 40000;
-    const files = rawFiles
-      .filter(f => f.patch) // skip binary files
-      .map(f => {
-        const patch = totalDiff < TOTAL_DIFF_CAP ? f.patch.slice(0, FILE_PATCH_CAP) : "";
-        totalDiff += patch.length;
-        return { filename: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch };
-      })
-      .filter(f => f.patch);
+    let totalDiff = 0;
+    const files = [];
+    for (const f of rawFiles) {
+      if (!f.patch) continue; // skip binary files
+      const patch = f.patch.slice(0, FILE_PATCH_CAP);
+      if (totalDiff + patch.length > TOTAL_DIFF_CAP) break;
+      totalDiff += patch.length;
+      files.push({ filename: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch });
+    }
     return sendJson(res, 200, {
       title: pr.title,
       body: pr.body || "",

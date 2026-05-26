@@ -1,11 +1,24 @@
 import React from 'react';
-import { Toggle } from '../shared/FormControls';
+import { Toggle, Range, Field } from '../shared/FormControls';
 import { useForumState, mutateState } from '../../hooks/useForumState';
 
 export function TelemetryPanel() {
   const actors = useForumState(s => s.actors);
   const telemetry = useForumState(s => s.telemetry || {});
   const settings = useForumState(s => s.settings || {});
+  const messages = useForumState(s => s.messages || []);
+  const diagnostics = useForumState(s => s.diagnostics || {});
+
+  // Health metrics
+  const totalTurns = messages.filter(m => m.type !== 'system' && m.type !== 'user').length;
+  const skipTurns = messages.filter(m => m.type === 'skip').length;
+  const skipRate = totalTurns > 0 ? Math.round((skipTurns / totalTurns) * 100) : 0;
+  const extractLog = diagnostics.outcomeExtractionLog || [];
+  const extractAttempts = extractLog.length;
+  const extractSuccesses = extractLog.filter(e => e.success !== false).length;
+  const extractRate = extractAttempts > 0 ? Math.round((extractSuccesses / extractAttempts) * 100) : null;
+  const memDupLog = diagnostics.warnings || [];
+  const memDups = memDupLog.filter(w => w.category === 'memory_dup' || w.msg?.includes('dup')).length;
 
   // currentAlignmentScore is 0–100; default to 100 (on-track) before first check
   const alignmentPct = telemetry.currentAlignmentScore ?? 100;
@@ -93,11 +106,49 @@ export function TelemetryPanel() {
       </div>
 
       <div className="card">
+        <div className="card-title"><h3>Session Health</h3></div>
+        <div className="metrics-grid">
+          <div className="metric-tile">
+            <span className="metric-val">{skipRate}%</span>
+            <span className="metric-lbl">Skip Rate</span>
+          </div>
+          <div className="metric-tile">
+            <span className="metric-val">{extractRate !== null ? `${extractRate}%` : '—'}</span>
+            <span className="metric-lbl">Extract Rate</span>
+          </div>
+          <div className="metric-tile">
+            <span className="metric-val">{memDups}</span>
+            <span className="metric-lbl">Mem Dups</span>
+          </div>
+          <div className="metric-tile">
+            <span className="metric-val">{alignmentPct}%</span>
+            <span className="metric-lbl">Aligned</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
         <div className="card-title"><h3>Optimization</h3></div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <Toggle checked={settings.enablePreflightRouter !== false} onChange={(v) => mutateState(s => { s.settings.enablePreflightRouter = v; })} label="Preflight skip router" />
           <Toggle checked={settings.roundSnapshotEnabled !== false} onChange={(v) => mutateState(s => { s.settings.roundSnapshotEnabled = v; })} label="Round snapshot · KV cache reuse" />
           <Toggle checked={!!settings.enableHypothesisSampling} onChange={(v) => mutateState(s => { s.settings.enableHypothesisSampling = v; })} label="Hypothesis sampling" />
+          {settings.enableHypothesisSampling && (
+            <div style={{ paddingLeft: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+              <Field label={`Candidates: ${settings.hypothesisSampleCount ?? 2}`}>
+                <Range value={settings.hypothesisSampleCount ?? 2} min={2} max={5} step={1} onChange={(v) => mutateState(s => { s.settings.hypothesisSampleCount = v; })} />
+              </Field>
+              <Toggle checked={settings.hypothesisAutoSelect !== false} onChange={(v) => mutateState(s => { s.settings.hypothesisAutoSelect = v; })} label="Auto-select best candidate" />
+            </div>
+          )}
+          <Toggle checked={!!settings.showInfluenceBars} onChange={(v) => mutateState(s => { s.settings.showInfluenceBars = v; })} label="Show influence bars on messages" />
+          <Toggle checked={settings.includeTraces !== false} onChange={(v) => mutateState(s => { s.settings.includeTraces = v; })} label="Include prompt traces in diagnostics" />
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <Field label={`Gravity sensitivity: ${settings.gravitySensitivity ?? 50}`}>
+            <Range value={settings.gravitySensitivity ?? 50} min={0} max={100} step={5} onChange={(v) => mutateState(s => { s.settings.gravitySensitivity = v; })} />
+          </Field>
+          <div className="field-hint">Controls how strongly off-topic drift nudges actors back to the objective.</div>
         </div>
       </div>
     </div>

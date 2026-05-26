@@ -76,10 +76,28 @@ const ACTOR_TEMPLATES = [
   },
 ];
 
+function RelationshipAdd({ actors, currentId, onAdd }) {
+  const [sel, setSel] = useState('');
+  const others = actors.filter(a => a.id !== currentId);
+  if (!others.length) return null;
+  return (
+    <div style={{ display: 'flex', gap: 4 }}>
+      <select style={{ flex: 1, fontSize: 12 }} value={sel} onChange={e => setSel(e.target.value)}>
+        <option value="">+ Add relationship…</option>
+        {others.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+      </select>
+      <button className="btn sm" disabled={!sel} onClick={() => { if (sel) { onAdd(sel); setSel(''); } }}>Add</button>
+    </div>
+  );
+}
+
 export function ActorsPanel() {
   const actors = useForumState(s => s.actors);
   const messages = useForumState(s => s.messages || []);
   const [expanded, setExpanded] = useState(null);
+  const [aiDesc, setAiDesc] = useState('');
+  const [aiDescGenerating, setAiDescGenerating] = useState(false);
+  const [aiDescError, setAiDescError] = useState(null);
 
   // Per-actor stats: turns taken and words spoken
   const actorStats = useMemo(() => {
@@ -135,6 +153,36 @@ export function ActorsPanel() {
     });
   }, []);
 
+  const generateFromDescription = useCallback(async () => {
+    const desc = aiDesc.trim();
+    if (!desc) return;
+    setAiDescGenerating(true);
+    setAiDescError(null);
+    try {
+      const { chatCompletion } = await import('../../modules/api.js');
+      const text = String(await chatCompletion(
+        `You create forum actor definitions from one-line descriptions. Output ONLY valid JSON with keys: name, role, persona, goal, voice. No explanation.`,
+        `Description: "${desc}"\n\nOutput JSON:`,
+        { temperature: 0.7, maxTokens: 400 }
+      ) || '').trim();
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('No JSON in response.');
+      const actor = JSON.parse(jsonMatch[0]);
+      addActor({
+        name: actor.name || 'AI Actor',
+        role: actor.role || 'Participant',
+        persona: actor.persona || '',
+        goal: actor.goal || '',
+        voice: actor.voice || '',
+      });
+      setAiDesc('');
+    } catch (err) {
+      setAiDescError(err?.message || 'Generation failed.');
+    } finally {
+      setAiDescGenerating(false);
+    }
+  }, [aiDesc, addActor]);
+
   const activePerms = (a) => PERM_DEFS.filter(p => a[p.key]);
 
   return (
@@ -162,6 +210,24 @@ export function ActorsPanel() {
           voice: 'Decisive and brief. States what it is doing and why in one sentence.',
           canManageCast: true, temperature: 0.7, color: '#1a7a6e',
         })}>🔧 Manager</button>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 11, color: 'var(--fg-mute)', marginBottom: 4 }}>AI from description</div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <input
+            style={{ flex: 1, fontSize: 12 }}
+            placeholder="e.g. a skeptical economist who challenges growth…"
+            value={aiDesc}
+            onChange={e => { setAiDesc(e.target.value); setAiDescError(null); }}
+            onKeyDown={e => { if (e.key === 'Enter') generateFromDescription(); }}
+            disabled={aiDescGenerating}
+          />
+          <button className="btn sm primary" onClick={generateFromDescription} disabled={aiDescGenerating || !aiDesc.trim()}>
+            {aiDescGenerating ? '…' : '+ AI'}
+          </button>
+        </div>
+        {aiDescError && <div className="field-hint" style={{ color: 'var(--danger)', marginTop: 2 }}>{aiDescError}</div>}
       </div>
 
       <div style={{ marginBottom: 12 }}>
@@ -256,6 +322,30 @@ export function ActorsPanel() {
                         {p.icon} {p.label}
                       </button>
                     ))}
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 11, color: 'var(--fg-mute)', marginBottom: 4 }}>Relationships</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {Object.entries(a.relationships || {}).map(([name, rel]) => (
+                      <div key={name} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <span style={{ minWidth: 70, fontSize: 12, color: 'var(--fg-dim)' }}>{name}</span>
+                        <input
+                          style={{ flex: 1, fontSize: 12 }}
+                          value={rel}
+                          onChange={e => updateActor(a.id, 'relationships', { ...a.relationships, [name]: e.target.value })}
+                        />
+                        <button className="mini-icon-btn" title="Remove" onClick={() => {
+                          const r = { ...(a.relationships || {}) };
+                          delete r[name];
+                          updateActor(a.id, 'relationships', r);
+                        }}><Ic.Trash width={10} height={10} /></button>
+                      </div>
+                    ))}
+                    <RelationshipAdd actors={actors} currentId={a.id} onAdd={(name) => {
+                      updateActor(a.id, 'relationships', { ...a.relationships, [name]: '' });
+                    }} />
                   </div>
                 </div>
 

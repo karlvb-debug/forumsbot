@@ -1332,13 +1332,13 @@ export async function applyAiResult(participant, result) {
 
   const speakerName = participant.data.name;
   // Apply document edits (new protocol)
+  let docEdited = false;
   if (Array.isArray(result.documentEdits) && result.documentEdits.length) {
-    applyDocumentEdits(result.documentEdits, speakerName);
+    docEdited = applyDocumentEdits(result.documentEdits, speakerName);
   } else if (result.documentEdit) {
     // Stale prompt: old single-field protocol — silently ignore
     console.warn(`[document] ${speakerName} used legacy documentEdit field — ignoring. Update actor prompt.`);
   }
-  const docEdited = !!(Array.isArray(result.documentEdits) && result.documentEdits.length);
 
   const actor = participant.data;
   actor.thoughts = appendMemory(actor.thoughts, result.thought);
@@ -1444,6 +1444,7 @@ function applyDocumentEdits(edits, authorName) {
     anyChanged = true;
   }
   if (anyChanged) { saveState(); }
+  return anyChanged;
 }
 
 export function appendMemory(existing, thought) {

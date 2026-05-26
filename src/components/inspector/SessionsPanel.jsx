@@ -91,6 +91,7 @@ export function SessionsPanel() {
             <option value="debug">Debug — full state, private thoughts, traces & metrics</option>
             <option value="shareable">Shareable — redacted privacy mode</option>
             <option value="markdown">Markdown — human-readable transcript</option>
+            <option value="eval">Evaluation — structured QA dataset</option>
           </select>
         </Field>
         <div className="field-hint" style={{ marginTop: -4, marginBottom: 8 }}>

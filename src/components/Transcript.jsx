@@ -179,6 +179,10 @@ export function Transcript({ showThoughts }) {
 
   const scrollRef = useRef(null);
   const wasAtBottomRef = useRef(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchMatchIdx, setSearchMatchIdx] = useState(0);
+  const matchRefs = useRef([]);
 
   // Build actor lookup map (by id and by name)
   const actorMap = useMemo(() => {
@@ -230,6 +234,39 @@ export function Transcript({ showThoughts }) {
   const turnCount = messages.filter(m => m.type !== 'skip' && m.type !== 'system').length;
   const anchoredCount = messages.filter(m => m.anchored).length;
 
+  // Search: IDs of messages matching the query
+  const searchLower = searchQuery.toLowerCase().trim();
+  const matchIds = useMemo(() => {
+    if (!searchLower) return [];
+    return messages
+      .filter(m => (m.content || m.text || m.message || '').toLowerCase().includes(searchLower))
+      .map(m => m.id);
+  }, [messages, searchLower]);
+
+  // Scroll to current match
+  useEffect(() => {
+    if (!matchIds.length) return;
+    const idx = Math.min(searchMatchIdx, matchIds.length - 1);
+    const el = matchRefs.current[matchIds[idx]];
+    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [matchIds, searchMatchIdx]);
+
+  // Ctrl+F / Cmd+F to open search
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        setSearchOpen(v => !v);
+      }
+      if (e.key === 'Escape' && searchOpen) {
+        setSearchOpen(false);
+        setSearchQuery('');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [searchOpen]);
+
   const onAnchor = (msgId) => {
     mutateState(s => {
       const msg = s.messages.find(m => m.id === msgId);
@@ -271,7 +308,39 @@ export function Transcript({ showThoughts }) {
         <span>● {autoRunning ? 'Auto running' : `${turnCount} turns`}</span>
         <span className="sep" />
         <span>{anchoredCount} anchored</span>
+        <button
+          className="chip-btn"
+          style={{ marginLeft: 'auto', fontSize: 11 }}
+          title="Search transcript (Ctrl+F)"
+          onClick={() => { setSearchOpen(v => !v); if (searchOpen) setSearchQuery(''); }}
+        >
+          🔍
+        </button>
       </div>
+
+      {searchOpen && (
+        <div className="transcript-search">
+          <input
+            autoFocus
+            className="search-input"
+            placeholder="Search messages…"
+            value={searchQuery}
+            onChange={e => { setSearchQuery(e.target.value); setSearchMatchIdx(0); }}
+          />
+          {searchLower && (
+            <span className="search-count">
+              {matchIds.length ? `${Math.min(searchMatchIdx + 1, matchIds.length)}/${matchIds.length}` : '0'}
+            </span>
+          )}
+          {matchIds.length > 1 && (
+            <>
+              <button className="chip-btn" onClick={() => setSearchMatchIdx(i => (i - 1 + matchIds.length) % matchIds.length)}>↑</button>
+              <button className="chip-btn" onClick={() => setSearchMatchIdx(i => (i + 1) % matchIds.length)}>↓</button>
+            </>
+          )}
+          <button className="chip-btn" onClick={() => { setSearchOpen(false); setSearchQuery(''); }}>✕</button>
+        </div>
+      )}
 
       {displayItems.map(item => {
         if (item.type === 'divider') {
@@ -283,16 +352,23 @@ export function Transcript({ showThoughts }) {
           role: msg.type === 'dm' ? 'Director' : msg.type === 'user' ? 'You' : '',
           color: msg.color || '#9aa0a6',
         };
+        const isSearchMatch = searchLower && matchIds.includes(msg.id);
+        const isActiveMatch = isSearchMatch && matchIds[Math.min(searchMatchIdx, matchIds.length - 1)] === msg.id;
         return (
-          <MessageCard
+          <div
             key={item.id}
-            msg={msg}
-            actor={actor}
-            showThoughts={showThoughts}
-            onAnchor={onAnchor}
-            onFeedback={onFeedback}
-            onFork={onFork}
-          />
+            ref={el => { if (el) matchRefs.current[msg.id] = el; }}
+            className={isActiveMatch ? 'search-match-active' : isSearchMatch ? 'search-match' : undefined}
+          >
+            <MessageCard
+              msg={msg}
+              actor={actor}
+              showThoughts={showThoughts}
+              onAnchor={onAnchor}
+              onFeedback={onFeedback}
+              onFork={onFork}
+            />
+          </div>
         );
       })}
 

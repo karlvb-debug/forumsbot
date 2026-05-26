@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import * as Ic from './Icons';
-import { useForumState, mutateState } from '../hooks/useForumState';
+import { useForumState, mutateState, saveState } from '../hooks/useForumState';
 import { useActions, getConnectionStatus, getConnectionStatusVersion, subscribeBusy, getBusy, subscribeConnectionStatus } from '../hooks/useActions';
 import { useSyncExternalStore } from 'react';
 
@@ -28,6 +28,7 @@ export function Topbar({ onOpenCmd }) {
   const connStatus = getConnectionStatus();
   const connClass = connStatus.tone === 'ok' ? 'live' : connStatus.tone === 'error' ? 'err' : '';
 
+  const turboMode = useForumState(s => s.settings?.turboMode || false);
   const { nextTurn, runRound, startAuto, stopGeneration } = useActions();
 
   return (
@@ -63,6 +64,14 @@ export function Topbar({ onOpenCmd }) {
         )}
       </div>
 
+      <button
+        className={`icon-btn${turboMode ? ' active warn' : ''}`}
+        title={turboMode ? 'Turbo mode ON — memory/alignment/thoughts disabled (click to turn off)' : 'Turbo mode — skip memory cycles, alignment, and thoughts for maximum speed'}
+        style={{ fontSize: 11, fontWeight: 600 }}
+        onClick={() => { mutateState(s => { s.settings.turboMode = !s.settings.turboMode; }); saveState(); }}
+      >
+        ⚡
+      </button>
       <button
         className="icon-btn"
         onClick={handleCopyMd}
