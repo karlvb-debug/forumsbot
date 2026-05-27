@@ -10,11 +10,13 @@ import { SessionsPanel } from './SessionsPanel';
 import { DocumentsPanel } from './DocumentsPanel';
 import { PromptViewerPanel } from './PromptViewerPanel';
 import { HelpPanel } from './HelpPanel';
+import { ParticipationPanel } from './ParticipationPanel';
 
 const PANELS = {
   connection: ConnectionPanel,
   scenario: ScenarioPanel,
   actors: ActorsPanel,
+  participation: ParticipationPanel,
   memory: MemoryPanel,
   telemetry: TelemetryPanel,
   goal: GoalPanel,

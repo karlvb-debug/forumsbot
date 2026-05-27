@@ -110,7 +110,9 @@ export const defaultState = {
     confirmModal: null,         // { message, confirmLabel } — set by requestConfirm()
     embeddingProbeResult: null, // { ok, reason? } — set by pingConnection embedding probe
     currentSpeaker: "",         // name of actor currently generating
-    assistantOpen: false        // AI assistant drawer open/closed
+    assistantOpen: false,       // AI assistant drawer open/closed
+    pauseModal: null,           // { pauseRecord } — set by promptPause()
+    awaitingUserInput: false    // true while a pause modal is open
   },
   memory: {
     enabled: true,
@@ -280,6 +282,18 @@ export const defaultState = {
   autoRunning: false,
   // Sprint 7: Conceptual Anchors — settled group agreements, injected into every prompt
   anchors: [],  // [{ id, text, speaker, color, messageId, createdAt }]
+  // UserContext — who the user is in this session
+  userContext: {
+    displayName: "",
+    interactionMode: "collaborator",  // "sponsor" | "collaborator" | "observer"
+    storyRole: "",                    // optional character name in story sessions
+    pausePolicy: {
+      allowedReasons: ["decision", "conflict", "question", "clarification", "information"],
+      maxPausesPerRound: 2,
+      honoredWindow: 0,
+    }
+  },
+  pendingPauses: [],  // PauseRecord[]
   // Runtime-only: not persisted between sessions
   contextInfo: {
     maxContextLength: 0,      // fetched from /api/v0/models

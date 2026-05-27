@@ -1534,3 +1534,123 @@ button:focus-visible { border-radius: 8px; }
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
+/* ───── Pause card ───── */
+.pause-card {
+  margin: 6px 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border-left: 3px solid var(--border);
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+.pause-card.suppressed {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  opacity: 0.6;
+  border-left-color: var(--fg-muted);
+}
+.pause-card.honored {
+  border-left-color: oklch(0.78 0.13 65);  /* amber */
+  background: oklch(0.78 0.13 65 / 0.06);
+}
+.pause-card.resolved {
+  border-left-color: var(--ok);
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+}
+.pause-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.pause-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.pause-reason-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: oklch(0.78 0.13 65 / 0.2);
+  color: oklch(0.55 0.13 65);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+}
+.pause-context {
+  font-size: 12px;
+  color: var(--fg-muted);
+  line-height: 1.5;
+}
+.pause-question {
+  font-size: 14px;
+  line-height: 1.5;
+}
+.pause-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.pause-free-text {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+}
+.pause-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-1);
+  color: var(--fg);
+  font-size: 13px;
+}
+.pause-input:focus {
+  outline: none;
+  border-color: oklch(0.78 0.13 65);
+}
+.pause-body {
+  flex: 1;
+}
+.pause-response {
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-top: 4px;
+}
+.pause-note {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.pause-modal-card {
+  width: min(500px, 90vw);
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+.pause-modal-card .pause-card.honored {
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 8px 32px oklch(0 0 0 / 0.4);
+}
+
+/* ───── Awaiting input strip ───── */
+.awaiting-input-strip {
+  padding: 6px 16px;
+  background: oklch(0.78 0.13 65 / 0.12);
+  color: oklch(0.55 0.13 65);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  border-top: 1px solid oklch(0.78 0.13 65 / 0.3);
+}

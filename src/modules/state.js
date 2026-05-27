@@ -50,7 +50,12 @@ function normalizeState(value) {
     dm: { ...defaultState.dm, ...value.dm },
     actors: Array.isArray(value.actors) && value.actors.length ? value.actors : structuredClone(defaultState.actors),
     messages: Array.isArray(value.messages) ? value.messages.map(cleanStoredMessage) : [],
-    turnQueue: Array.isArray(value.turnQueue) ? value.turnQueue : []
+    turnQueue: Array.isArray(value.turnQueue) ? value.turnQueue : [],
+    userContext: {
+      ...defaultState.userContext,
+      ...(value.userContext || {}),
+      pausePolicy: { ...defaultState.userContext.pausePolicy, ...(value.userContext?.pausePolicy || {}) }
+    }
   };
 
   // Migrate old document + knowledgeBase → unified documents[]
@@ -103,10 +108,13 @@ function normalizeState(value) {
   if (!Array.isArray(merged.anchors)) merged.anchors = [];
   if (!Array.isArray(merged.pendingInjections)) merged.pendingInjections = [];
   if (!Array.isArray(merged.pendingPrivateMessages)) merged.pendingPrivateMessages = [];
+  if (!Array.isArray(merged.pendingPauses)) merged.pendingPauses = [];
 
   merged.memory.isSummarizing = false;
   merged.memory.isDistilling = false;
   merged.memory.distillingActor = "";
+  merged.ui.pauseModal = null;
+  merged.ui.awaitingUserInput = false;
   if (!value.settings?.baseUrl || value.settings.baseUrl === "http://localhost:1234/v1") {
     merged.settings.baseUrl = defaultState.settings.baseUrl;
   }

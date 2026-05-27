@@ -3,6 +3,7 @@ import * as Ic from './Icons';
 import { useForumState, mutateState } from '../hooks/useForumState';
 import { useStreaming } from '../hooks/useStreaming';
 import { renderMarkdown } from '../modules/markdown.js';
+import { PauseCard } from './PauseCard';
 
 const THOUGHT_COLLAPSE_THRESHOLD = 150;
 const THOUGHT_PREVIEW_LENGTH = 80;
@@ -19,6 +20,10 @@ function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork })
   const [copied, setCopied] = useState(false);
 
   if (!actor) return null;
+
+  if (msg.type === 'pause') {
+    return <PauseCard msg={msg} />;
+  }
 
   const timeStr = msg.createdAt
     ? new Date(msg.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })

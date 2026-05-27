@@ -8,6 +8,7 @@ import { Composer } from './components/Composer';
 import { CommandPalette } from './components/CommandPalette';
 import { StopModal } from './components/StopModal';
 import { ConfirmModal } from './components/ConfirmModal';
+import { PauseCard } from './components/PauseCard';
 import { AiAssistant } from './components/AiAssistant';
 import { ReadinessStrip } from './components/ReadinessStrip';
 // Importing state.js triggers loadState() at module level
@@ -17,27 +18,29 @@ import { mutateState, notifyStateChange, saveState, useForumState } from './hook
 
 // Navigation items for the rail
 const NAV = [
-  { id: 'scenario',   label: 'Scenario',   icon: 'Target',   group: 1 },
-  { id: 'actors',     label: 'Actors',      icon: 'Actors',   group: 1 },
-  { id: 'memory',     label: 'Memory',      icon: 'Brain',    group: 2 },
-  { id: 'telemetry',  label: 'Telemetry',   icon: 'Gauge',    group: 2 },
-  { id: 'documents',  label: 'Documents',   icon: 'Doc',      group: 2 },
-  { id: 'goal',       label: 'Goal',        icon: 'Sliders',  group: 3 },
-  { id: 'sessions',   label: 'Sessions',    icon: 'Sessions', group: 3 },
-  { id: 'connection', label: 'Connection',  icon: 'Plug',     group: 4 },
-  { id: 'help',       label: 'Help',        icon: 'Info',     group: 4 },
+  { id: 'scenario',      label: 'Scenario',     icon: 'Target',   group: 1 },
+  { id: 'actors',        label: 'Actors',       icon: 'Actors',   group: 1 },
+  { id: 'participation', label: 'You',          icon: 'Info',     group: 1 },
+  { id: 'memory',        label: 'Memory',       icon: 'Brain',    group: 2 },
+  { id: 'telemetry',     label: 'Telemetry',    icon: 'Gauge',    group: 2 },
+  { id: 'documents',     label: 'Documents',    icon: 'Doc',      group: 2 },
+  { id: 'goal',          label: 'Goal',         icon: 'Sliders',  group: 3 },
+  { id: 'sessions',      label: 'Sessions',     icon: 'Sessions', group: 3 },
+  { id: 'connection',    label: 'Connection',   icon: 'Plug',     group: 4 },
+  { id: 'help',          label: 'Help',         icon: 'Info',     group: 4 },
 ];
 
 const NAV_TITLES = {
-  scenario:   { title: 'Scenario',    sub: 'premise · objective · mode' },
-  actors:     { title: 'Actors',      sub: 'panel composition' },
-  memory:     { title: 'Memory',      sub: 'facts · summary · anchors · outcomes' },
-  telemetry:  { title: 'Telemetry',   sub: 'alignment · drift · influence' },
-  documents:  { title: 'Documents',   sub: 'working docs · references · links' },
-  goal:       { title: 'Goal',        sub: 'auto-stop & judges' },
-  sessions:   { title: 'Sessions',    sub: 'save · load · export' },
-  connection: { title: 'Connection',  sub: 'LM Studio · model · generation' },
-  help:       { title: 'Help',        sub: 'documentation · reference' },
+  scenario:      { title: 'Scenario',      sub: 'premise · objective · mode' },
+  actors:        { title: 'Actors',        sub: 'panel composition' },
+  participation: { title: 'Participation', sub: 'your role · pause policy' },
+  memory:        { title: 'Memory',        sub: 'facts · summary · anchors · outcomes' },
+  telemetry:     { title: 'Telemetry',     sub: 'alignment · drift · influence' },
+  documents:     { title: 'Documents',     sub: 'working docs · references · links' },
+  goal:          { title: 'Goal',          sub: 'auto-stop & judges' },
+  sessions:      { title: 'Sessions',      sub: 'save · load · export' },
+  connection:    { title: 'Connection',    sub: 'LM Studio · model · generation' },
+  help:          { title: 'Help',          sub: 'documentation · reference' },
 };
 
 export default function App() {
@@ -53,6 +56,8 @@ export default function App() {
   const { nextTurn, runRound, startAuto, stopGeneration } = useActions();
   const stopModal = useForumState(s => s.ui?.stopModal || null);
   const confirmModal = useForumState(s => s.ui?.confirmModal || null);
+  const pauseModal = useForumState(s => s.ui?.pauseModal || null);
+  const awaitingUserInput = useForumState(s => s.ui?.awaitingUserInput || false);
 
   // Load modules on mount
   useEffect(() => {
@@ -175,6 +180,11 @@ export default function App() {
               <Transcript showThoughts={showThoughts} />
             </div>
             <ReadinessStrip />
+            {awaitingUserInput && (
+              <div className="awaiting-input-strip">
+                ⏸ An actor is waiting for your response — see the pause card above
+              </div>
+            )}
             <Composer
               showThoughts={showThoughts}
               onToggleThoughts={() => mutateState(s => { s.settings.showThoughts = !s.settings.showThoughts; })}
@@ -207,6 +217,13 @@ export default function App() {
           onStop={() => import('./modules/turns.js').then(m => m.resolveStopOrContinue(true))}
           onContinue={(g) => import('./modules/turns.js').then(m => m.resolveStopOrContinue(false, g))}
         />
+      )}
+      {pauseModal && (
+        <div className="modal-overlay">
+          <div className="modal-card pause-modal-card">
+            <PauseCard msg={{ type: 'pause', pauseRecord: { ...pauseModal.pauseRecord, outcome: 'honored' } }} />
+          </div>
+        </div>
       )}
     </Shell>
   );
