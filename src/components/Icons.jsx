@@ -39,9 +39,15 @@ export const Actors = (props) => (
 
 export const Brain = (props) => (
   <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M7 4a2.5 2.5 0 0 0-2.5 2.5c-1 .3-1.8 1.2-1.8 2.3 0 .8.4 1.5 1 2v.4c0 1.4 1.1 2.5 2.5 2.5.4 0 .8-.1 1.1-.3v2.6" />
-    <path d="M13 4a2.5 2.5 0 0 1 2.5 2.5c1 .3 1.8 1.2 1.8 2.3 0 .8-.4 1.5-1 2v.4c0 1.4-1.1 2.5-2.5 2.5-.4 0-.8-.1-1.1-.3v2.6" />
-    <path d="M10 4v12" />
+    {/* Left Hemisphere Outline */}
+    <path d="M10 4a2.5 2.5 0 0 0-5 0.1 3.3 3.3 0 0 0-2.1 4.8 3.3 3.3 0 0 0 0.5 5.5A3.3 3.3 0 1 0 10 15" />
+    {/* Right Hemisphere Outline */}
+    <path d="M10 4a2.5 2.5 0 0 1 5 0.1 3.3 3.3 0 0 1 2.1 4.8 3.3 3.3 0 0 1-0.5 5.5A3.3 3.3 0 1 1 10 15" />
+    {/* Central Fissure */}
+    <path d="M10 4v11" />
+    {/* Inner Folds */}
+    <path d="M10 7h3a1.5 1.5 0 0 1 1.5 1.5v0.8" />
+    <path d="M10 10H7a1.5 1.5 0 0 0-1.5 1.5v0.8" />
   </svg>
 );
 
@@ -223,7 +229,7 @@ export const Upload = (props) => (
 
 export const Cmd = (props) => (
   <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3z" />
+    <path d="M13 7v9a3 3 0 1 0 3-3H4a3 3 0 1 0 3 3V4a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3z" />
   </svg>
 );
 
