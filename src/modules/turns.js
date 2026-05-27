@@ -1654,10 +1654,16 @@ export async function applyAiResult(participant, result) {
       state.autoRunning = false;
       saveState();
       const userResponse = await promptPause(record);
-      record.outcome = "resolved";
-      record.userResponse = userResponse;
-      record.resolvedAt = new Date().toISOString();
-      mutateState(s => { s.ui.pauseModal = null; s.ui.awaitingUserInput = false; });
+      const resolvedAt = new Date().toISOString();
+      // Update stored message and pendingPauses so transcript re-renders resolved state
+      mutateState(s => {
+        const msg = s.messages.find(m => m.pauseRecord?.id === record.id);
+        if (msg) msg.pauseRecord = { ...msg.pauseRecord, outcome: "resolved", userResponse, resolvedAt };
+        const pause = (s.pendingPauses || []).find(p => p.id === record.id);
+        if (pause) { pause.outcome = "resolved"; pause.userResponse = userResponse; pause.resolvedAt = resolvedAt; }
+        s.ui.pauseModal = null;
+        s.ui.awaitingUserInput = false;
+      });
       // Inject user response so the actor can reference it next turn
       if (!Array.isArray(state.pendingInjections)) state.pendingInjections = [];
       state.pendingInjections.push({
@@ -1752,11 +1758,17 @@ export function appendMemory(existing, thought) {
 }
 
 export function scenarioBlock() {
+  const storyRole = state.userContext?.storyRole?.trim();
+  const displayName = state.userContext?.displayName?.trim();
+  const userLabel = storyRole
+    ? `${storyRole}${displayName ? ` (${displayName})` : ''}`
+    : (displayName || null);
   return [
     `Mode: ${labelForMode(state.scenario.mode)}`,
     `Title: ${state.scenario.title || "Untitled forum"}`,
     state.scenario.premise ? `Premise: ${state.scenario.premise}` : "",
-    state.scenario.objective ? `Objective: ${state.scenario.objective}` : ""
+    state.scenario.objective ? `Objective: ${state.scenario.objective}` : "",
+    userLabel ? `The human participant in this session is: ${userLabel}. Messages labelled [USER] in the transcript are from them.` : ""
   ].filter(Boolean).join("\n");
 }
 

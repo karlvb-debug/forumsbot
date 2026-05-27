@@ -221,7 +221,10 @@ export default function App() {
       {pauseModal && (
         <div className="modal-overlay">
           <div className="modal-card pause-modal-card">
-            <PauseCard msg={{ type: 'pause', pauseRecord: { ...pauseModal.pauseRecord, outcome: 'honored' } }} />
+            <PauseCard
+              msg={{ type: 'pause', pauseRecord: { ...pauseModal.pauseRecord, outcome: 'honored' } }}
+              interactive={true}
+            />
           </div>
         </div>
       )}

@@ -244,6 +244,13 @@ export function normalizeAiResult(result, fallback) {
   if (Array.isArray(result.privateMessages) && result.privateMessages.length) {
     normalized.privateMessages = result.privateMessages;
   }
+  // Pause request — actor asks user for input
+  if (result.pauseRequest && typeof result.pauseRequest === "object") {
+    const pr = result.pauseRequest;
+    if (pr.reason && pr.defaultIfNoResponse) {
+      normalized.pauseRequest = pr;
+    }
+  }
   return normalized;
 }
 

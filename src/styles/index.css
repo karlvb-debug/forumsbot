@@ -1638,6 +1638,9 @@ button:focus-visible { border-radius: 8px; }
   border: none;
   box-shadow: none;
 }
+.pause-card.honored.static {
+  opacity: 0.75;
+}
 .pause-modal-card .pause-card.honored {
   border-radius: 12px;
   padding: 20px 24px;

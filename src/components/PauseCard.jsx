@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 
-export function PauseCard({ msg }) {
+// When rendered inside the transcript, honored pauses show a static indicator.
+// The modal overlay (App.jsx) renders the interactive form.
+export function PauseCard({ msg, interactive = false }) {
   const record = msg?.pauseRecord;
   if (!record) return null;
 
@@ -28,7 +30,20 @@ export function PauseCard({ msg }) {
     );
   }
 
-  // honored / pending — show interactive form
+  // honored — transcript shows static indicator; modal shows interactive form
+  if (!interactive) {
+    return (
+      <div className="pause-card honored static">
+        <span className="pause-icon">⏸</span>
+        <div className="pause-body">
+          <div className="pause-header"><strong>{record.requesterName}</strong> is waiting for your response</div>
+          {record.question && <div className="pause-question">{record.question}</div>}
+          <div className="field-hint" style={{ marginTop: 4 }}>Respond using the prompt above ↑</div>
+        </div>
+      </div>
+    );
+  }
+
   return <PauseForm record={record} />;
 }
 
