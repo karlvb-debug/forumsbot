@@ -4,7 +4,7 @@ import { useForumState, mutateState, saveState } from '../hooks/useForumState';
 import { useActions, getConnectionStatus, getConnectionStatusVersion, subscribeBusy, getBusy, subscribeConnectionStatus } from '../hooks/useActions';
 import { useSyncExternalStore } from 'react';
 
-export function Topbar({ onOpenCmd }) {
+export function Topbar() {
   const assistantOpen = useForumState(s => s.ui?.assistantOpen || false);
   const toggleAssistant = () => mutateState(s => { s.ui.assistantOpen = !s.ui.assistantOpen; });
   const [mdCopied, setMdCopied] = useState(false);
@@ -106,9 +106,6 @@ export function Topbar({ onOpenCmd }) {
         title="AI Assistant · Alt+I"
       >
         <Ic.Robot width={16} height={16} />
-      </button>
-      <button className="icon-btn" onClick={onOpenCmd} title="Command palette · Ctrl+K">
-        <Ic.Cmd width={16} height={16} />
       </button>
     </header>
   );
