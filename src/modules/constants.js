@@ -224,8 +224,9 @@ export const defaultState = {
       canSeeThoughts: false,
       canInject: true,
       authority: 50,
-      turnSchedule: 'normal',
-      actorMode: 'participant',
+      turnSchedule: 'every-turn',
+      actorMode: 'background',
+      triggerOn: ['on_every_turn', 'on_user_message', 'on_conflict', 'on_agent_repetition'],
     },
     {
       id: crypto.randomUUID(),
@@ -246,6 +247,7 @@ export const defaultState = {
       authority: 50,
       turnSchedule: 'normal',
       actorMode: 'participant',
+      triggerOn: [],
     },
     {
       id: crypto.randomUUID(),
@@ -266,6 +268,7 @@ export const defaultState = {
       authority: 50,
       turnSchedule: 'normal',
       actorMode: 'participant',
+      triggerOn: [],
     },
     {
       id: crypto.randomUUID(),
@@ -286,6 +289,7 @@ export const defaultState = {
       authority: 50,
       turnSchedule: 'normal',
       actorMode: 'participant',
+      triggerOn: [],
     }
   ],
   messages: [],

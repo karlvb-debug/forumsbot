@@ -152,19 +152,82 @@ export function nextParticipant() {
  * Called after each normal actor's turn completes. These actors see the latest
  * transcript message and can inject guidance, manage cast, or re-route the next speaker.
  */
-async function runBetweenTurnActors(signal) {
-  const betweenActors = state.actors.filter(a =>
-    a.enabled && (a.turnSchedule || 'normal') === 'every-turn'
-  );
-  if (!betweenActors.length) return;
+// ── Event trigger labels ───────────────────────────────────────────────────────
+const TRIGGER_EVENT_LABELS = {
+  on_every_turn:       'A new actor is about to take their turn',
+  on_user_message:     'The user just sent a message',
+  on_round_start:      'A new discussion round is starting',
+  on_round_end:        'The discussion round just ended',
+  on_conflict:         'A conflict was flagged in the discussion',
+  on_agent_repetition: 'An actor was flagged for repeating prior content',
+};
 
-  // Who is scheduled next (before any re-routing by background actors)
+function buildEventContextBlock(eventName, data = {}) {
+  const label = TRIGGER_EVENT_LABELS[eventName] || eventName;
+  const lines = [`[CONTROL TRIGGER: ${label}]`];
+  if (data.message) lines.push(`User message: "${String(data.message).slice(0, 300)}"`);
+  if (data.actorName) lines.push(`Actor: ${data.actorName}`);
+  if (data.context) lines.push(`Context: ${String(data.context).slice(0, 200)}`);
+  return lines.join('\n');
+}
+
+/**
+ * Fire all actors whose triggerOn array includes eventName.
+ * Runs them silently (background-style prompt context injected automatically).
+ */
+async function fireTriggerActors(eventName, eventData = {}, signal = null) {
+  const effectiveSignal = signal || abortController?.signal || null;
+  const triggered = state.actors.filter(a =>
+    a.enabled &&
+    Array.isArray(a.triggerOn) &&
+    a.triggerOn.includes(eventName)
+  );
+  if (!triggered.length) return;
+
   const nextActorId = state.turnQueue[0];
   const nextActor = nextActorId ? state.actors.find(a => a.id === nextActorId) : null;
 
-  for (const actor of betweenActors) {
+  for (const actor of triggered) {
+    if (effectiveSignal?.aborted) break;
+    setCurrentSpeaker('');
+    try {
+      const result = await askActor(actor, effectiveSignal, null, false, {
+        triggerEvent: eventName,
+        triggerData: eventData,
+        nextActor,
+      });
+      if (result && result.action !== 'skip') {
+        await applyAiResult({ kind: 'actor', data: actor }, result);
+      }
+    } catch (err) {
+      console.warn(`[turns] trigger "${eventName}" actor "${actor.name}" error:`, err.message);
+    }
+  }
+}
+
+/** Called by useActions.sendMessage after a user message is added to state. */
+export async function fireUserMessageTriggers(message) {
+  await fireTriggerActors('on_user_message', { message });
+}
+
+async function runBetweenTurnActors(signal) {
+  // New event-based: actors with triggerOn including 'on_every_turn'
+  await fireTriggerActors('on_every_turn', {}, signal);
+
+  // Legacy: actors with turnSchedule: 'every-turn' but no triggerOn set
+  const legacyActors = state.actors.filter(a =>
+    a.enabled &&
+    (a.turnSchedule || 'normal') === 'every-turn' &&
+    !(Array.isArray(a.triggerOn) && a.triggerOn.length > 0)
+  );
+  if (!legacyActors.length) return;
+
+  const nextActorId = state.turnQueue[0];
+  const nextActor = nextActorId ? state.actors.find(a => a.id === nextActorId) : null;
+
+  for (const actor of legacyActors) {
     if (signal?.aborted) break;
-    setCurrentSpeaker('');  // clear status while background actor runs
+    setCurrentSpeaker('');
     try {
       const result = await askActor(actor, signal, null, false, { nextActor });
       if (result && result.action !== 'skip') {
@@ -478,6 +541,9 @@ export async function runRound(options = {}) {
   let completedTurns = 0;
   state.currentRound = (state.currentRound || 0) + 1;
 
+  // Fire round-start triggers (background orchestrators can set up injections/routing)
+  await fireTriggerActors('on_round_start', { round: state.currentRound }, abortController?.signal);
+
   const strategy = state.scenario?.systems?.turnRouting?.strategy ?? 'round-robin';
 
   if (strategy === 'dm-directed') {
@@ -545,6 +611,12 @@ export async function runRound(options = {}) {
   }
 
   const roundMessages = state.messages.slice(startIndex);
+
+  // Fire round-end triggers before summary/stop evaluation
+  if (roundMessages.length) {
+    await fireTriggerActors('on_round_end', { round: state.currentRound }, abortController?.signal);
+  }
+
   if (roundMessages.length && state.memory.enabled && !state.settings.turboMode) {
     state.memory.turnsSinceSummary = 0;
     summarizeMemory("round", roundMessages);
@@ -809,6 +881,11 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
   const docsContext = buildDocumentsForPrompt(actor.id);
   const sysCfg = resolveSystemSettings();
 
+  // Build event context block when this call was fired by a trigger event
+  const triggerBlock = options.triggerEvent
+    ? buildEventContextBlock(options.triggerEvent, options.triggerData || {})
+    : '';
+
   if (actor.canDirect) {
     // This actor is a Director — build director-style prompt
     const privateThoughts = actor.canSeeThoughts ? privateThoughtDigest() : "";
@@ -948,7 +1025,8 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
       directorSystem = `BACKGROUND MODE: Your response will NOT appear in the transcript. Only your promptInjections, manageActors, nextSpeaker, and privateMessages fields take effect. Omit or leave "message" blank.\n${nextLabel}\n\n` + system;
     }
 
-    const result = await chatJson(directorSystem, user, actor.temperature ?? state.settings.temperature, signal, onStream);
+    const directorUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
+    const result = await chatJson(directorSystem, directorUser, actor.temperature ?? state.settings.temperature, signal, onStream);
     result._promptParts = promptParts;
     return result;
   }
@@ -993,7 +1071,8 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
         : 'No next actor determined yet.';
       managerSystem = `BACKGROUND MODE: Your response will NOT appear in the transcript. Only your promptInjections, manageActors, nextSpeaker, and privateMessages fields take effect. Omit or leave "message" blank.\n${nextLabel}\n\n` + system;
     }
-    return chatJson(managerSystem, user, actor.temperature ?? state.settings.temperature, signal, onStream);
+    const managerUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
+    return chatJson(managerSystem, managerUser, actor.temperature ?? state.settings.temperature, signal, onStream);
   }
 
   if (actor.canResearch) {
@@ -1044,7 +1123,8 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
         : 'No next actor determined yet.';
       researchSystem = `BACKGROUND MODE: Your response will NOT appear in the transcript. Only your promptInjections, manageActors, nextSpeaker, and privateMessages fields take effect. Omit or leave "message" blank.\n${nextLabel}\n\n` + system;
     }
-    return chatJson(researchSystem, user, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || null);
+    const researchUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
+    return chatJson(researchSystem, researchUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || null);
   }
 
   const contextLine = sysCfg.stageDirectionsEnabled
@@ -1201,7 +1281,8 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     persona: `Name: ${actor.name}\nRole: ${actor.role || ""}\nPersona: ${actor.persona || ""}\nVoice: ${actor.voice || ""}`
   };
 
-  const result = await chatJson(actorSystem, user, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || null);
+  const actorUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
+  const result = await chatJson(actorSystem, actorUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || null);
   result._promptParts = promptParts;
   return result;
 }
@@ -1769,6 +1850,8 @@ export async function applyAiResult(participant, result) {
           content: "You have been flagged for repetition. Only contribute if you have genuinely new content.",
           scope: "next_turn_only", insertedAt: new Date().toISOString()
         });
+        const repeaterActor = state.actors.find(a => a.id === prevActorId);
+        fireTriggerActors('on_agent_repetition', { actorId: prevActorId, actorName: repeaterActor?.name || '' });
       }
     }
   }
@@ -1830,6 +1913,11 @@ export async function applyAiResult(participant, result) {
     if (!Array.isArray(state.pendingPauses)) state.pendingPauses = [];
     state.pendingPauses = [...state.pendingPauses, record];
     await addMessage({ type: "pause", actorId: actor.id, speaker: speakerName, color: actor.color, pauseRecord: record, content: record.question || record.context });
+
+    // Fire conflict trigger so orchestrators can react
+    if (record.reason === 'conflict') {
+      fireTriggerActors('on_conflict', { actorId: actor.id, actorName: speakerName, context: record.context });
+    }
 
     if (allowed) {
       const wasAutoRunning = state.autoRunning;

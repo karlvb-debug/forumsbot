@@ -14,6 +14,15 @@ const PERM_DEFS = [
 
 const DEFAULT_COLORS = ['#2a9d8f', '#7c5cbf', '#4a7fd4', '#c97a40', '#e76f51', '#457b9d', '#c8a830'];
 
+const TRIGGER_DEFS = [
+  { key: 'on_every_turn',       label: 'Every turn',   icon: '🔄' },
+  { key: 'on_user_message',     label: 'User message', icon: '💬' },
+  { key: 'on_round_start',      label: 'Round start',  icon: '▶️'  },
+  { key: 'on_round_end',        label: 'Round end',    icon: '⏹️'  },
+  { key: 'on_conflict',         label: 'Conflict',     icon: '⚡' },
+  { key: 'on_agent_repetition', label: 'Repetition',   icon: '🔁' },
+];
+
 const ACTOR_TEMPLATES = [
   {
     label: '🎬 Director',
@@ -27,6 +36,7 @@ const ACTOR_TEMPLATES = [
     canInject: true,
     turnSchedule: 'every-turn',
     actorMode: 'background',
+    triggerOn: ['on_every_turn', 'on_user_message', 'on_conflict', 'on_agent_repetition'],
     color: '#c8a830',
   },
   {
@@ -190,6 +200,7 @@ export function ActorsPanel() {
         authority: 50,
         turnSchedule: 'normal',
         actorMode: 'participant',
+        triggerOn: [],
         temperature: overrides.temperature ?? 0.8,
         color: overrides.color || DEFAULT_COLORS[s.actors.length % DEFAULT_COLORS.length],
         ...overrides,
@@ -273,6 +284,7 @@ export function ActorsPanel() {
                 canResearch: !!tpl.canResearch,
                 turnSchedule: tpl.turnSchedule || 'normal',
                 actorMode: tpl.actorMode || 'participant',
+                triggerOn: Array.isArray(tpl.triggerOn) ? [...tpl.triggerOn] : [],
               });
             }
             e.target.value = "";
@@ -426,6 +438,31 @@ export function ActorsPanel() {
                     {a.actorMode === 'background' && 'Produces no transcript entry — side effects (injections, routing, cast changes) fire silently.'}
                   </div>
                 )}
+
+                <div className="perm-row" style={{ marginTop: 8 }}>
+                  <span className="lbl">Event triggers</span>
+                  <div className="perm-chips">
+                    {TRIGGER_DEFS.map(t => {
+                      const active = Array.isArray(a.triggerOn) && a.triggerOn.includes(t.key);
+                      return (
+                        <button
+                          key={t.key}
+                          className={"perm-chip" + (active ? " active" : "")}
+                          style={active ? { '--perm-color': 'var(--teal)' } : {}}
+                          onClick={() => {
+                            const current = Array.isArray(a.triggerOn) ? a.triggerOn : [];
+                            updateActor(a.id, 'triggerOn', active
+                              ? current.filter(e => e !== t.key)
+                              : [...current, t.key]);
+                          }}
+                          title={t.key}
+                        >
+                          {t.icon} {t.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
                 <div style={{ marginTop: 8 }}>
                   <div style={{ fontSize: 11, color: 'var(--fg-mute)', marginBottom: 4 }}>Relationships</div>
