@@ -84,10 +84,22 @@ export async function addMessage(message) {
 
 export function buildTurnQueue() {
   const enabledActors = state.actors.filter(a => a.enabled);
-  let enabledIds = enabledActors.map(a => a.id);
+  const currentRound = state.currentRound || 0;
+
+  // every-turn actors fire as between-turn hooks (not in queue)
+  // on-call actors only enter queue when explicitly routed to
+  // alternate actors participate only on odd rounds (1, 3, 5…)
+  const queueActors = enabledActors.filter(a => {
+    const sched = a.turnSchedule || 'normal';
+    if (sched === 'every-turn' || sched === 'on-call') return false;
+    if (sched === 'alternate') return currentRound % 2 !== 0;
+    return true;
+  });
+
+  let enabledIds = queueActors.map(a => a.id);
   const strategy = state.scenario?.systems?.turnRouting?.strategy ?? 'round-robin';
   if (strategy === 'dm-directed') {
-    const dirId = enabledActors.find(a => a.canDirect)?.id;
+    const dirId = queueActors.find(a => a.canDirect)?.id;
     if (dirId) enabledIds = [dirId, ...enabledIds.filter(id => id !== dirId)];
   }
   state.turnQueue = [...enabledIds];
@@ -100,7 +112,16 @@ export function nextParticipant() {
   state.turnQueue = state.turnQueue.filter((id) => enabledSet.has(id));
 
   const queueSet = new Set(state.turnQueue);
-  const missing = enabled.filter(id => !queueSet.has(id));
+  const currentRound = state.currentRound || 0;
+  const missing = enabled.filter(id => {
+    if (queueSet.has(id)) return false;
+    const a = state.actors.find(x => x.id === id);
+    if (!a) return false;
+    const sched = a.turnSchedule || 'normal';
+    if (sched === 'every-turn' || sched === 'on-call') return false;
+    if (sched === 'alternate') return currentRound % 2 !== 0;
+    return true;
+  });
   if (missing.length) {
     state.turnQueue.push(...missing);
   }
@@ -124,6 +145,35 @@ export function nextParticipant() {
   state.turnQueue.push(id);
   const actor = state.actors.find((item) => item.id === id);
   return actor ? { kind: "actor", data: actor } : null;
+}
+
+/**
+ * Fire all `every-turn` actors as silent between-turn hooks.
+ * Called after each normal actor's turn completes. These actors see the latest
+ * transcript message and can inject guidance, manage cast, or re-route the next speaker.
+ */
+async function runBetweenTurnActors(signal) {
+  const betweenActors = state.actors.filter(a =>
+    a.enabled && (a.turnSchedule || 'normal') === 'every-turn'
+  );
+  if (!betweenActors.length) return;
+
+  // Who is scheduled next (before any re-routing by background actors)
+  const nextActorId = state.turnQueue[0];
+  const nextActor = nextActorId ? state.actors.find(a => a.id === nextActorId) : null;
+
+  for (const actor of betweenActors) {
+    if (signal?.aborted) break;
+    setCurrentSpeaker('');  // clear status while background actor runs
+    try {
+      const result = await askActor(actor, signal, null, false, { nextActor });
+      if (result && result.action !== 'skip') {
+        await applyAiResult({ kind: 'actor', data: actor }, result);
+      }
+    } catch (err) {
+      console.warn(`[turns] between-turn actor "${actor.name}" error:`, err.message);
+    }
+  }
 }
 
 const MAX_RETRIES = 3;
@@ -340,6 +390,8 @@ export async function runNextTurn(options = {}) {
       }
 
       await applyAiResult(participant, result);
+      // Fire every-turn background actors between turns
+      await runBetweenTurnActors(abortController.signal);
       removeStreamingBubble();
 
       // Sprint 6: Tool Usefulness Score — computed after applyAiResult so we have the final message
@@ -746,7 +798,7 @@ export async function distillActorMemory(actorName, thought) {
   }
 }
 
-export async function askActor(actor, signal, onStream = null, twoPhase = false) {
+export async function askActor(actor, signal, onStream = null, twoPhase = false, options = {}) {
   // showThoughts controls PROMPT behavior (whether AI is told to think).
   // Decoupled from the UI toggle which only controls expand/collapse.
   // Only turbo mode suppresses thinking.
@@ -885,7 +937,18 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
       persona: `Name: ${actor.name}\nPersona: ${actor.persona || ""}`
     };
 
-    const result = await chatJson(system, user, actor.temperature ?? state.settings.temperature, signal, onStream);
+    // Background mode: inject orchestration context and suppress participant framing
+    const isBackground = (actor.actorMode || 'participant') === 'background';
+    let directorSystem = system;
+    if (isBackground) {
+      const nextAct = options.nextActor;
+      const nextLabel = nextAct
+        ? `The next scheduled actor is: **${nextAct.name}** (${nextAct.role || 'participant'}).`
+        : 'No next actor determined yet.';
+      directorSystem = `BACKGROUND MODE: Your response will NOT appear in the transcript. Only your promptInjections, manageActors, nextSpeaker, and privateMessages fields take effect. Omit or leave "message" blank.\n${nextLabel}\n\n` + system;
+    }
+
+    const result = await chatJson(directorSystem, user, actor.temperature ?? state.settings.temperature, signal, onStream);
     result._promptParts = promptParts;
     return result;
   }
@@ -919,7 +982,18 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
 
     const baseContext = await buildPromptContext({ kind: "actor", actor });
     const user = `${baseContext}\n\n### Current actor roster\n${rosterLines}`;
-    return chatJson(system, user, actor.temperature ?? state.settings.temperature, signal, onStream);
+
+    // Background mode: inject orchestration context and suppress participant framing
+    const isBackgroundMgr = (actor.actorMode || 'participant') === 'background';
+    let managerSystem = system;
+    if (isBackgroundMgr) {
+      const nextAct = options.nextActor;
+      const nextLabel = nextAct
+        ? `The next scheduled actor is: **${nextAct.name}** (${nextAct.role || 'participant'}).`
+        : 'No next actor determined yet.';
+      managerSystem = `BACKGROUND MODE: Your response will NOT appear in the transcript. Only your promptInjections, manageActors, nextSpeaker, and privateMessages fields take effect. Omit or leave "message" blank.\n${nextLabel}\n\n` + system;
+    }
+    return chatJson(managerSystem, user, actor.temperature ?? state.settings.temperature, signal, onStream);
   }
 
   if (actor.canResearch) {
@@ -959,7 +1033,18 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
     ].filter(Boolean).join("\n");
 
     const user = await buildPromptContext({ kind: "actor", actor });
-    return chatJson(system, user, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || null);
+
+    // Background mode: inject orchestration context and suppress participant framing
+    const isBackgroundRes = (actor.actorMode || 'participant') === 'background';
+    let researchSystem = system;
+    if (isBackgroundRes) {
+      const nextAct = options.nextActor;
+      const nextLabel = nextAct
+        ? `The next scheduled actor is: **${nextAct.name}** (${nextAct.role || 'participant'}).`
+        : 'No next actor determined yet.';
+      researchSystem = `BACKGROUND MODE: Your response will NOT appear in the transcript. Only your promptInjections, manageActors, nextSpeaker, and privateMessages fields take effect. Omit or leave "message" blank.\n${nextLabel}\n\n` + system;
+    }
+    return chatJson(researchSystem, user, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || null);
   }
 
   const contextLine = sysCfg.stageDirectionsEnabled
@@ -1098,13 +1183,25 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
   ].filter(Boolean).join("\n");
 
   const user = await buildPromptContext({ kind: "actor", actor });
+
+  // Background mode: inject orchestration context and suppress participant framing
+  const isBackgroundActor = (actor.actorMode || 'participant') === 'background';
+  let actorSystem = system;
+  if (isBackgroundActor) {
+    const nextAct = options.nextActor;
+    const nextLabel = nextAct
+      ? `The next scheduled actor is: **${nextAct.name}** (${nextAct.role || 'participant'}).`
+      : 'No next actor determined yet.';
+    actorSystem = `BACKGROUND MODE: Your response will NOT appear in the transcript. Only your promptInjections, manageActors, nextSpeaker, and privateMessages fields take effect. Omit or leave "message" blank.\n${nextLabel}\n\n` + system;
+  }
+
   const promptParts = {
     ..._lastPromptParts,
-    system,
+    system: actorSystem,
     persona: `Name: ${actor.name}\nRole: ${actor.role || ""}\nPersona: ${actor.persona || ""}\nVoice: ${actor.voice || ""}`
   };
 
-  const result = await chatJson(system, user, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || null);
+  const result = await chatJson(actorSystem, user, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || null);
   result._promptParts = promptParts;
   return result;
 }
@@ -1676,8 +1773,8 @@ export async function applyAiResult(participant, result) {
     }
   }
 
-  // CAP-1: Prompt injections — director/manager primes an actor before their next turn
-  if ((actor.canDirect || actor.canManageCast) && Array.isArray(result.promptInjections)) {
+  // CAP-1: Prompt injections — director/manager/inject-capable primes an actor before their next turn
+  if ((actor.canDirect || actor.canManageCast || actor.canInject) && Array.isArray(result.promptInjections)) {
     for (const inj of result.promptInjections.slice(0, 3)) {
       const target = state.actors.find(a => a.enabled &&
         a.name.toLowerCase() === String(inj.targetName || "").toLowerCase());
@@ -1693,7 +1790,7 @@ export async function applyAiResult(participant, result) {
   }
 
   // CAP-2: Private messages — actor sends a private message visible only to target
-  if ((actor.canDirect || actor.canManageCast) && Array.isArray(result.privateMessages)) {
+  if ((actor.canDirect || actor.canManageCast || actor.canInject) && Array.isArray(result.privateMessages)) {
     for (const msg of result.privateMessages.slice(0, 3)) {
       const target = state.actors.find(a => a.enabled &&
         a.name.toLowerCase() === String(msg.toName || "").toLowerCase());
@@ -1772,11 +1869,13 @@ export async function applyAiResult(participant, result) {
 
   // Message type: canDirect actors use "dm" for backward compatibility with transcripts
   const msgType = actor.canDirect ? "dm" : "actor";
+  const isBackground = (actor.actorMode || 'participant') === 'background';
 
   if (result.action === "skip") {
     logTransition("skip_decision", { speaker: speakerName, reason: result.thought });
     actor.skipCount = (actor.skipCount || 0) + 1;
     saveState();
+    if (isBackground) return; // silent skip — no transcript entry for background actors
     return addMessage({ type: "skip", actorId: actor.id, speaker: actor.name, content: "Skipped.", thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, metrics: result.metrics, nextSpeaker: result.nextSpeaker || "" });
   }
 
@@ -1788,6 +1887,7 @@ export async function applyAiResult(participant, result) {
 
   actor.turnCount = (actor.turnCount || 0) + 1;
   saveState();
+  if (isBackground) return; // side effects applied; background actors don't produce transcript entries
   return addMessage({ type: msgType, actorId: actor.id, speaker: actor.name, content: result.message, thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, metrics: result.metrics, nextSpeaker: result.nextSpeaker || "" });
 }
 

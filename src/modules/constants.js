@@ -222,7 +222,10 @@ export const defaultState = {
       canManageCast: true,
       canResearch: false,
       canSeeThoughts: false,
-      authority: 50
+      canInject: true,
+      authority: 50,
+      turnSchedule: 'normal',
+      actorMode: 'participant',
     },
     {
       id: crypto.randomUUID(),
@@ -239,7 +242,10 @@ export const defaultState = {
       canManageCast: false,
       canResearch: false,
       canSeeThoughts: false,
-      authority: 50
+      canInject: false,
+      authority: 50,
+      turnSchedule: 'normal',
+      actorMode: 'participant',
     },
     {
       id: crypto.randomUUID(),
@@ -256,7 +262,10 @@ export const defaultState = {
       canManageCast: false,
       canResearch: false,
       canSeeThoughts: false,
-      authority: 50
+      canInject: false,
+      authority: 50,
+      turnSchedule: 'normal',
+      actorMode: 'participant',
     },
     {
       id: crypto.randomUUID(),
@@ -273,7 +282,10 @@ export const defaultState = {
       canManageCast: false,
       canResearch: false,
       canSeeThoughts: false,
-      authority: 50
+      canInject: false,
+      authority: 50,
+      turnSchedule: 'normal',
+      actorMode: 'participant',
     }
   ],
   messages: [],

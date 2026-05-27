@@ -5,9 +5,10 @@ import { useForumState, mutateState, saveState } from '../../hooks/useForumState
 import { putActorMemory } from '../../modules/db.js';
 
 const PERM_DEFS = [
-  { key: 'canDirect',      label: 'Direct',    icon: '🎬', color: 'var(--gold)'  },
-  { key: 'canManageCast',  label: 'Manage',    icon: '🔧', color: 'var(--warn)'  },
-  { key: 'canResearch',    label: 'Research',   icon: '🔍', color: 'var(--info)'  },
+  { key: 'canDirect',      label: 'Direct',      icon: '🎬', color: 'var(--gold)'   },
+  { key: 'canManageCast',  label: 'Manage',      icon: '🔧', color: 'var(--warn)'   },
+  { key: 'canInject',      label: 'Inject',      icon: '🎯', color: 'var(--teal)'   },
+  { key: 'canResearch',    label: 'Research',    icon: '🔍', color: 'var(--info)'   },
   { key: 'canSeeThoughts', label: 'See Thoughts', icon: '🧠', color: 'var(--purple)' },
 ];
 
@@ -23,6 +24,9 @@ const ACTOR_TEMPLATES = [
     voice: 'Calm, concise, neutral.',
     canDirect: true,
     canManageCast: true,
+    canInject: true,
+    turnSchedule: 'every-turn',
+    actorMode: 'background',
     color: '#c8a830',
   },
   {
@@ -43,6 +47,7 @@ const ACTOR_TEMPLATES = [
     goal: 'Ensure the right perspectives are in the room at the right time.',
     voice: 'Decisive and brief. States what it is doing and why in one sentence.',
     canManageCast: true,
+    canInject: true,
     temperature: 0.7,
     color: '#1a7a6e',
   },
@@ -179,9 +184,12 @@ export function ActorsPanel() {
         enabled: true, expanded: false,
         canDirect: false,
         canManageCast: false,
+        canInject: false,
         canResearch: false,
         canSeeThoughts: false,
         authority: 50,
+        turnSchedule: 'normal',
+        actorMode: 'participant',
         temperature: overrides.temperature ?? 0.8,
         color: overrides.color || DEFAULT_COLORS[s.actors.length % DEFAULT_COLORS.length],
         ...overrides,
@@ -261,7 +269,10 @@ export function ActorsPanel() {
                 color: tpl.color,
                 canDirect: !!tpl.canDirect,
                 canManageCast: !!tpl.canManageCast,
+                canInject: !!tpl.canInject,
                 canResearch: !!tpl.canResearch,
+                turnSchedule: tpl.turnSchedule || 'normal',
+                actorMode: tpl.actorMode || 'participant',
               });
             }
             e.target.value = "";
@@ -386,6 +397,35 @@ export function ActorsPanel() {
                     ))}
                   </div>
                 </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+                  <Field label="Turn schedule">
+                    <select
+                      value={a.turnSchedule || 'normal'}
+                      onChange={e => updateActor(a.id, 'turnSchedule', e.target.value)}
+                    >
+                      <option value="normal">Normal — once per round</option>
+                      <option value="every-turn">Every turn — fires between actors</option>
+                      <option value="alternate">Alternate — every other round</option>
+                      <option value="on-call">On-call — only when addressed</option>
+                    </select>
+                  </Field>
+                  <Field label="Visibility">
+                    <select
+                      value={a.actorMode || 'participant'}
+                      onChange={e => updateActor(a.id, 'actorMode', e.target.value)}
+                    >
+                      <option value="participant">Participant — visible in transcript</option>
+                      <option value="background">Background — silent, side effects only</option>
+                    </select>
+                  </Field>
+                </div>
+                {(a.turnSchedule === 'every-turn' || a.actorMode === 'background') && (
+                  <div className="field-hint" style={{ marginTop: -2, marginBottom: 4 }}>
+                    {a.turnSchedule === 'every-turn' && 'Runs after each actor\'s turn to inject, route, or manage cast. '}
+                    {a.actorMode === 'background' && 'Produces no transcript entry — side effects (injections, routing, cast changes) fire silently.'}
+                  </div>
+                )}
 
                 <div style={{ marginTop: 8 }}>
                   <div style={{ fontSize: 11, color: 'var(--fg-mute)', marginBottom: 4 }}>Relationships</div>

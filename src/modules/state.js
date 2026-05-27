@@ -48,7 +48,13 @@ function normalizeState(value) {
       }
     },
     dm: { ...defaultState.dm, ...value.dm },
-    actors: Array.isArray(value.actors) && value.actors.length ? value.actors : structuredClone(defaultState.actors),
+    actors: (Array.isArray(value.actors) && value.actors.length ? value.actors : structuredClone(defaultState.actors))
+      .map(a => ({
+        canInject: false,
+        turnSchedule: 'normal',
+        actorMode: 'participant',
+        ...a,
+      })),
     messages: Array.isArray(value.messages) ? value.messages.map(cleanStoredMessage) : [],
     turnQueue: Array.isArray(value.turnQueue) ? value.turnQueue : [],
     userContext: {
@@ -228,7 +234,10 @@ function normalizeState(value) {
     canManageCast: !!(actor.canManageCast || actor.isManager),
     canResearch: !!(actor.canResearch || actor.isResearcher),
     canSeeThoughts: !!(actor.canSeeThoughts),
-    authority: typeof actor.authority === "number" ? Math.max(0, Math.min(100, actor.authority)) : 50
+    canInject: !!(actor.canInject),
+    authority: typeof actor.authority === "number" ? Math.max(0, Math.min(100, actor.authority)) : 50,
+    turnSchedule: actor.turnSchedule || 'normal',
+    actorMode: actor.actorMode || 'participant',
   }));
   return merged;
 }
