@@ -5,6 +5,7 @@ import {
   sanitizeJsonString,
   trimWords,
   normalizeStringArray,
+  normalizeAiResult,
 } from './utils.js';
 
 describe('estimateTokens', () => {
@@ -108,5 +109,116 @@ describe('normalizeStringArray', () => {
 
   it('removes bullet prefixes', () => {
     expect(normalizeStringArray('- item one\n* item two')).toEqual(['item one', 'item two']);
+  });
+});
+
+// ── normalizeAiResult ─────────────────────────────────────────────────────────
+describe('normalizeAiResult — pauseRequest passthrough', () => {
+  const fallback = 'fallback message';
+  const base = { action: 'speak', message: 'hello' };
+
+  it('passes through a valid pauseRequest with all fields', () => {
+    const result = normalizeAiResult({
+      ...base,
+      pauseRequest: {
+        reason: 'question',
+        context: 'We need to decide something.',
+        question: 'What do you prefer?',
+        options: ['Option A', 'Option B'],
+        defaultIfNoResponse: 'proceed with A',
+      },
+    }, fallback);
+    expect(result.pauseRequest).toBeDefined();
+    expect(result.pauseRequest.reason).toBe('question');
+    expect(result.pauseRequest.defaultIfNoResponse).toBe('proceed with A');
+  });
+
+  it('passes through a valid pauseRequest when question is absent (question is optional)', () => {
+    const result = normalizeAiResult({
+      ...base,
+      pauseRequest: {
+        reason: 'decision',
+        context: 'Key decision point.',
+        defaultIfNoResponse: 'use default',
+      },
+    }, fallback);
+    expect(result.pauseRequest).toBeDefined();
+    expect(result.pauseRequest.reason).toBe('decision');
+  });
+
+  it('drops pauseRequest when reason is missing', () => {
+    const result = normalizeAiResult({
+      ...base,
+      pauseRequest: { context: 'ctx', question: 'q', defaultIfNoResponse: 'default' },
+    }, fallback);
+    expect(result.pauseRequest).toBeUndefined();
+  });
+
+  it('drops pauseRequest when defaultIfNoResponse is missing', () => {
+    const result = normalizeAiResult({
+      ...base,
+      pauseRequest: { reason: 'question', context: 'ctx', question: 'q?' },
+    }, fallback);
+    expect(result.pauseRequest).toBeUndefined();
+  });
+
+  it('drops pauseRequest when it is a string instead of object', () => {
+    const result = normalizeAiResult({
+      ...base,
+      pauseRequest: 'ask the user something',
+    }, fallback);
+    expect(result.pauseRequest).toBeUndefined();
+  });
+
+  it('drops pauseRequest when both reason and defaultIfNoResponse are absent', () => {
+    const result = normalizeAiResult({
+      ...base,
+      pauseRequest: { context: 'ctx' },
+    }, fallback);
+    expect(result.pauseRequest).toBeUndefined();
+  });
+
+  it('does not corrupt other normalized fields when pauseRequest is present', () => {
+    const result = normalizeAiResult({
+      action: 'speak',
+      message: 'My message.',
+      thought: 'My thought.',
+      pauseRequest: { reason: 'conflict', context: 'ctx', defaultIfNoResponse: 'continue' },
+    }, fallback);
+    expect(result.action).toBe('speak');
+    expect(result.message).toBe('My message.');
+    expect(result.thought).toBe('My thought.');
+    expect(result.pauseRequest.reason).toBe('conflict');
+  });
+});
+
+describe('normalizeAiResult — pinFact and rateSignal passthrough', () => {
+  const fallback = 'fallback';
+  const base = { action: 'speak', message: 'Hi' };
+
+  it('passes through a non-empty pinFact string', () => {
+    const result = normalizeAiResult({ ...base, pinFact: 'The lighthouse is abandoned.' }, fallback);
+    expect(result.pinFact).toBe('The lighthouse is abandoned.');
+  });
+
+  it('drops pinFact when empty string', () => {
+    const result = normalizeAiResult({ ...base, pinFact: '  ' }, fallback);
+    expect(result.pinFact).toBeUndefined();
+  });
+
+  it('truncates pinFact to 200 chars', () => {
+    const result = normalizeAiResult({ ...base, pinFact: 'x'.repeat(300) }, fallback);
+    expect(result.pinFact.length).toBe(200);
+  });
+
+  it('passes through rateSignal when it is an object', () => {
+    const sig = { novel: false, advancing: false, flag: 'repeat' };
+    const result = normalizeAiResult({ ...base, rateSignal: sig }, fallback);
+    expect(result.rateSignal).toEqual(sig);
+  });
+
+  it('drops rateSignal when it is a string', () => {
+    const result = normalizeAiResult({ ...base, rateSignal: 'bad' }, fallback);
+    expect(result.rateSignal).toBeUndefined();
   });
 });
