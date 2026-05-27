@@ -460,9 +460,9 @@ export async function generateQuickStart(promptOverride = "") {
   };
 
   const patchChangesShape = `{
-  "addActors": [{"name":"","role":"","persona":"","goal":"","voice":"","temperature":0.8,"authority":50,"canResearch":false,"canManageCast":false}],
+  "addActors": [{"name":"","role":"","persona":"","goal":"","voice":"","temperature":0.8,"authority":50,"canDirect":false,"canManageCast":false,"canResearch":false,"canSeeThoughts":false}],
   "removeActors": ["ActorName"],
-  "modifyActors": [{"find":"ActorName","persona":"...","goal":"...","temperature":0.9,"authority":70}],
+  "modifyActors": [{"find":"ActorName","persona":"...","goal":"...","temperature":0.9,"authority":70,"canDirect":false,"canManageCast":false,"canResearch":false,"canSeeThoughts":false}],
   "scenario": {"title":"...","premise":"...","objective":"...","mode":"problem|story|freeform","systems":{"stageDirections":{"enabled":false,"intensity":"minimal|moderate|immersive","maxTokenShare":0.2},"alignment":{"strictness":"strict|moderate|loose|off","anchorInPrompt":false,"nudgeStyle":"hard-redirect|gentle-nudge|question"},"turnRouting":{"strategy":"round-robin|dm-directed|narrative-flow","allowDirectAddress":true},"dmRole":{"role":"narrator|facilitator|arbiter|observer","narrates":false,"canIntroduceElements":false},"document":{"schema":"freeform|decisions|story-bible|findings"}}},
   "dm": {"enabled":true,"name":"...","persona":"...","canSeeThoughts":false},
   "settings": {"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"toolsEnabled":true,"streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":true,"enableHypothesisSampling":false,"hypothesisSampleCount":2,"hypothesisAutoSelect":true,"enableCrossSessionMemory":true,"enableAdaptiveCompression":true,"turnDelay":0},
@@ -779,7 +779,8 @@ export function applyAssistantPatch(changes) {
       goal: a.goal || "",
       voice: a.voice || "",
       temperature: typeof a.temperature === "number" ? a.temperature : 0.8,
-      canDirect: false,
+      authority: typeof a.authority === "number" ? a.authority : 50,
+      canDirect: !!a.isDirector || !!a.canDirect,
       canManageCast: !!a.isManager || !!a.canManageCast,
       canResearch: !!a.isResearcher || !!a.canResearch,
       canSeeThoughts: !!a.canSeeThoughts,
@@ -801,6 +802,9 @@ export function applyAssistantPatch(changes) {
     if (target) {
       const { find: _find, ...rest } = mod;
       Object.assign(target, rest);
+      if (rest.isDirector !== undefined) target.canDirect = !!rest.isDirector;
+      if (rest.isManager !== undefined) target.canManageCast = !!rest.isManager;
+      if (rest.isResearcher !== undefined) target.canResearch = !!rest.isResearcher;
     }
   }
 
