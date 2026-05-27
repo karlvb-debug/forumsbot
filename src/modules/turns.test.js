@@ -315,3 +315,56 @@ describe('scenarioBlock', () => {
     expect(block).toContain('[USER]');
   });
 });
+
+// ── applyAiResult ─────────────────────────────────────────────────────────────
+import { applyAiResult } from './turns.js';
+
+describe('applyAiResult', () => {
+  beforeEach(() => {
+    mockState.actors = [
+      {
+        id: 'manager-id',
+        name: 'Manager',
+        role: 'Roster Orchestrator',
+        canManageCast: true,
+        color: '#1a7a6e',
+      }
+    ];
+    mockState.messages = [];
+    mockState.turnQueue = ['manager-id'];
+  });
+
+  it('creates new actors via applyAiResult with custom permissions, authority, and temperature', async () => {
+    const result = {
+      action: 'speak',
+      message: 'I have created specialist Bob for you.',
+      manageActors: {
+        create: [
+          {
+            name: 'Bob',
+            role: 'Scientist',
+            persona: 'Analytical',
+            goal: 'Solve problems',
+            voice: 'Monotone',
+            canResearch: true,
+            canDirect: true,
+            authority: 80,
+            temperature: 0.5,
+          }
+        ]
+      }
+    };
+
+    const participant = { data: mockState.actors[0] };
+    await applyAiResult(participant, result);
+
+    expect(mockState.actors).toHaveLength(2);
+    const bob = mockState.actors.find(a => a.name === 'Bob');
+    expect(bob).toBeDefined();
+    expect(bob.role).toBe('Scientist');
+    expect(bob.canResearch).toBe(true);
+    expect(bob.canDirect).toBe(true);
+    expect(bob.authority).toBe(80);
+    expect(bob.temperature).toBe(0.5);
+  });
+});
