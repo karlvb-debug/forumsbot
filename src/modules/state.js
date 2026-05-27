@@ -130,7 +130,11 @@ function normalizeState(value) {
     merged.ui.activeTab = "";
   }
   if (merged.ui.quickStartDraft) {
-    merged.ui.quickStartDraft = normalizeQuickStartConfig(merged.ui.quickStartDraft, false);
+    if (merged.ui.quickStartDraft.type === "patch") {
+      // Keep patch draft as-is
+    } else {
+      merged.ui.quickStartDraft = normalizeQuickStartConfig(merged.ui.quickStartDraft, false);
+    }
   }
   if (!Array.isArray(merged.memory.pendingPinnedFacts)) {
     merged.memory.pendingPinnedFacts = [];

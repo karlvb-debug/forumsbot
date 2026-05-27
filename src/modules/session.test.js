@@ -75,4 +75,68 @@ describe('applyAssistantPatch', () => {
     expect(actor.canResearch).toBe(true);
     expect(actor.canDirect).toBe(true);
   });
+  it('correctly deep merges scenario systems nested objects', () => {
+    state.scenario = {
+      mode: 'problem',
+      title: 'Initial Title',
+      systems: {
+        stageDirections: { enabled: false, intensity: 'moderate' },
+        alignment: { strictness: 'moderate' }
+      }
+    };
+
+    applyAssistantPatch({
+      scenario: {
+        systems: {
+          stageDirections: { enabled: true }
+        }
+      }
+    });
+
+    expect(state.scenario.systems.stageDirections.enabled).toBe(true);
+    expect(state.scenario.systems.stageDirections.intensity).toBe('moderate');
+    expect(state.scenario.systems.alignment.strictness).toBe('moderate');
+  });
+
+  it('correctly creates a director when none exists', () => {
+    state.actors = [];
+    applyAssistantPatch({
+      dm: {
+        enabled: true,
+        name: 'The Overlord',
+        persona: 'All-seeing'
+      }
+    });
+
+    expect(state.actors).toHaveLength(1);
+    expect(state.actors[0].canDirect).toBe(true);
+    expect(state.actors[0].name).toBe('The Overlord');
+    expect(state.actors[0].persona).toBe('All-seeing');
+  });
+
+  it('correctly merges userContext and nested pausePolicy', () => {
+    state.userContext = {
+      displayName: 'Alice',
+      interactionMode: 'collaborator',
+      pausePolicy: {
+        maxPausesPerRound: 2,
+        honoredWindow: 0
+      }
+    };
+
+    applyAssistantPatch({
+      userContext: {
+        displayName: 'Bob',
+        pausePolicy: {
+          maxPausesPerRound: 5
+        }
+      }
+    });
+
+    expect(state.userContext.displayName).toBe('Bob');
+    expect(state.userContext.interactionMode).toBe('collaborator');
+    expect(state.userContext.pausePolicy.maxPausesPerRound).toBe(5);
+    expect(state.userContext.pausePolicy.honoredWindow).toBe(0);
+  });
 });
+

@@ -624,9 +624,9 @@ export async function generateQuickStart(promptOverride = "") {
     const message = parsed.message || "";
 
     if (type === "patch" && parsed.changes && typeof parsed.changes === "object") {
-      applyAssistantPatch(parsed.changes);
-      state.ui.quickStartHistory.push({ role: "assistant", content: raw, type: "patch", message });
-      setQuickStartStatus("Changes applied.");
+      state.ui.quickStartDraft = { type: "patch", changes: parsed.changes };
+      state.ui.quickStartHistory.push({ role: "assistant", content: raw, type: "patch", message, draft: state.ui.quickStartDraft });
+      setQuickStartStatus("Changes ready — click Apply to update current session.");
     } else if (type === "chat") {
       state.ui.quickStartHistory.push({ role: "assistant", content: raw, type: "chat", message });
       setQuickStartStatus("");
@@ -677,6 +677,24 @@ export async function applyQuickStartConfig() {
   const draft = state.ui.quickStartDraft;
   if (!draft) {
     setQuickStartStatus("Generate a setup first.", "warn");
+    return;
+  }
+  if (draft.type === "patch") {
+    const hadConversation = state.messages.length > 0;
+    applyAssistantPatch(draft.changes);
+    state.ui.quickStartDraft = null;
+    updateAiAssistantApplyButton();
+    state.ui.quickStartStatus = "Changes applied.";
+    saveState();
+    if (hadConversation) {
+      const { addMessage } = await import('./turns.js');
+      await addMessage({
+        type: "system",
+        speaker: "System",
+        content: `Session updated by AI Assistant patch.`,
+        color: "var(--coral)"
+      });
+    }
     return;
   }
   const normalized = normalizeQuickStartConfig(draft);
@@ -808,15 +826,69 @@ export function applyAssistantPatch(changes) {
     }
   }
 
-  // Scenario (partial)
+  // Scenario (partial deep merge)
   if (c.scenario && typeof c.scenario === "object") {
-    Object.assign(state.scenario, c.scenario);
+    for (const [key, val] of Object.entries(c.scenario)) {
+      if (val === null || val === undefined) continue;
+      if (key === "systems" && typeof val === "object") {
+        if (!state.scenario.systems) state.scenario.systems = {};
+        for (const [sysKey, sysVal] of Object.entries(val)) {
+          if (sysVal === null || sysVal === undefined) continue;
+          if (typeof sysVal === "object") {
+            state.scenario.systems[sysKey] = {
+              ...state.scenario.systems[sysKey],
+              ...sysVal
+            };
+          } else {
+            state.scenario.systems[sysKey] = sysVal;
+          }
+        }
+      } else {
+        state.scenario[key] = val;
+      }
+    }
   }
 
-  // Director (partial)
+  // Director (partial + promotion/creation)
   if (c.dm && typeof c.dm === "object") {
-    const director = state.actors.find(a => a.canDirect);
-    if (director) Object.assign(director, c.dm);
+    let director = state.actors.find(a => a.canDirect);
+    if (!director && c.dm.enabled !== false) {
+      // Look for an actor with the same name to promote
+      const nameLower = (c.dm.name || "").toLowerCase();
+      if (nameLower) {
+        director = state.actors.find(a => a.name.toLowerCase() === nameLower);
+      }
+      if (director) {
+        director.canDirect = true;
+      } else {
+        // Create a brand new director
+        director = {
+          id: crypto.randomUUID(),
+          name: c.dm.name || "Director",
+          role: "Director",
+          persona: c.dm.persona || "",
+          goal: "Guide the discussion.",
+          voice: "",
+          temperature: 0.8,
+          authority: 90,
+          canDirect: true,
+          canManageCast: false,
+          canResearch: false,
+          canSeeThoughts: !!c.dm.canSeeThoughts || !!c.dm.seesPrivateThoughts,
+          enabled: true,
+          thoughts: "",
+          color: colors[state.actors.length % colors.length]
+        };
+        state.actors.push(director);
+      }
+    }
+    if (director) {
+      if (c.dm.enabled !== undefined) director.enabled = !!c.dm.enabled;
+      if (c.dm.name !== undefined) director.name = c.dm.name;
+      if (c.dm.persona !== undefined) director.persona = c.dm.persona;
+      if (c.dm.canSeeThoughts !== undefined) director.canSeeThoughts = !!c.dm.canSeeThoughts;
+      if (c.dm.seesPrivateThoughts !== undefined) director.canSeeThoughts = !!c.dm.seesPrivateThoughts;
+    }
   }
 
   // Settings (partial)
@@ -846,6 +918,22 @@ export function applyAssistantPatch(changes) {
   // Auto-stop (partial)
   if (c.autoStop && typeof c.autoStop === "object") {
     Object.assign(state.autoStop, c.autoStop);
+  }
+
+  // UserContext (partial)
+  if (c.userContext && typeof c.userContext === "object") {
+    if (!state.userContext) state.userContext = {};
+    for (const [key, val] of Object.entries(c.userContext)) {
+      if (val === null || val === undefined) continue;
+      if (key === "pausePolicy" && typeof val === "object") {
+        state.userContext.pausePolicy = {
+          ...state.userContext.pausePolicy,
+          ...val
+        };
+      } else {
+        state.userContext[key] = val;
+      }
+    }
   }
 
   saveState();
