@@ -487,7 +487,7 @@ export async function generateQuickStart(promptOverride = "") {
     '{"type":"patch","message":"### Proposed Config Modifications\\n\\nDetailed markdown list of all proposed changes (e.g. bullets listing actors added/edited, settings modified, etc.) with reasons.","changes":' + patchChangesShape + '}',
     "",
     'type="fullSetup" — ONLY when creating an entirely new scenario from scratch:',
-    '{"type":"fullSetup","message":"### New Scenario Setup: [Title]\\n\\nDetailed markdown summary of the new scenario, including premise, goal, and the proposed character cast list.","changes":' + fullSetupShape.slice(1),
+    '{"type":"fullSetup","message":"### New Scenario Setup: [Title]\\n\\nDetailed markdown summary of the new scenario, including premise, goal, and the proposed character cast list.",' + fullSetupShape.slice(1),
     "",
     "## HOW FORUM WORKS",
     "Forum runs AI personas (actors) who discuss a topic in a structured transcript. Each actor is a separate LLM call. A round runs every enabled actor once. Auto mode runs rounds continuously.",
@@ -689,17 +689,44 @@ export async function generateQuickStart(promptOverride = "") {
 
     const type = parsed.type || "fullSetup";
     const message = parsed.message || "";
+    console.log('[generateQuickStart] LLM response type:', type, 'hasChanges:', !!parsed.changes, 'topLevelKeys:', Object.keys(parsed).join(','));
 
-    if (type === "patch" && parsed.changes && typeof parsed.changes === "object") {
-      state.ui.quickStartDraft = { type: "patch", changes: parsed.changes };
-      state.ui.quickStartHistory.push({ role: "assistant", content: raw, type: "patch", message, draft: state.ui.quickStartDraft });
-      setQuickStartStatus("Changes ready — click Apply to update current session.");
+    if (type === "patch") {
+      // The LLM may put patch fields at the top level or nested under "changes"
+      let changes = (parsed.changes && typeof parsed.changes === "object") ? parsed.changes : null;
+      if (!changes) {
+        // Check if patch fields are at the top level (LLM didn't nest under "changes")
+        const patchKeys = ["addActors", "removeActors", "modifyActors", "scenario", "dm", "settings", "memory", "autoStop", "userContext"];
+        const found = patchKeys.filter(k => parsed[k] !== undefined);
+        if (found.length > 0) {
+          console.log('[generateQuickStart] Auto-wrapping top-level patch keys:', found);
+          changes = {};
+          for (const k of found) { changes[k] = parsed[k]; }
+        }
+      }
+      if (changes && typeof changes === "object" && Object.keys(changes).length > 0) {
+        state.ui.quickStartDraft = { type: "patch", changes };
+        state.ui.quickStartHistory.push({ role: "assistant", content: raw, type: "patch", message, draft: state.ui.quickStartDraft });
+        setQuickStartStatus("Changes ready — click Apply to update current session.");
+      } else {
+        // type=patch but no actual changes — treat as chat to avoid wiping session
+        console.warn('[generateQuickStart] type=patch but no changes found, treating as chat');
+        state.ui.quickStartHistory.push({ role: "assistant", content: raw, type: "chat", message });
+        setQuickStartStatus("");
+      }
     } else if (type === "chat") {
       state.ui.quickStartHistory.push({ role: "assistant", content: raw, type: "chat", message });
       setQuickStartStatus("");
     } else {
-      // fullSetup
-      state.ui.quickStartDraft = normalizeQuickStartConfig(parsed);
+      // fullSetup — fields should be at top level, but handle LLM nesting under "changes"
+      let setupSource = parsed;
+      if (parsed.changes && typeof parsed.changes === "object" && parsed.changes.scenario) {
+        console.log('[generateQuickStart] Unwrapping fullSetup fields from changes wrapper');
+        setupSource = { ...parsed, ...parsed.changes };
+        delete setupSource.changes;
+      }
+      console.log('[generateQuickStart] fullSetup source keys:', Object.keys(setupSource).join(','), 'actors:', Array.isArray(setupSource.actors) ? setupSource.actors.length : 'NONE');
+      state.ui.quickStartDraft = normalizeQuickStartConfig(setupSource);
       state.ui.quickStartHistory.push({ role: "assistant", content: raw, type: "fullSetup", message, draft: state.ui.quickStartDraft });
       setQuickStartStatus("Full setup ready — click Apply to replace current scenario.");
     }
@@ -753,18 +780,24 @@ export async function applyQuickStartConfig() {
 }
 
 export async function applyQuickStartAtIndex(index) {
+  console.log('[applyQuickStartAtIndex] called with index:', index);
   const history = state.ui.quickStartHistory || [];
   const entry = history[index];
+  console.log('[applyQuickStartAtIndex] entry:', entry ? { type: entry.type, hasDraft: !!entry.draft, applied: entry.applied, draftType: entry.draft?.type, draftKeys: entry.draft ? Object.keys(entry.draft) : null } : 'NOT FOUND');
   if (!entry || !entry.draft) {
+    console.warn('[applyQuickStartAtIndex] BAIL: no entry or no draft');
     setQuickStartStatus("Nothing to apply for that message.", "warn");
     return;
   }
   if (entry.applied) {
+    console.warn('[applyQuickStartAtIndex] BAIL: already applied');
     setQuickStartStatus("Already applied.", "warn");
     return;
   }
+  console.log('[applyQuickStartAtIndex] PRE-APPLY state snapshot:', { mode: state.scenario.mode, actorCount: state.actors.length, actorNames: state.actors.map(a => a.name) });
   await _applyDraft(entry.draft);
   entry.applied = true;
+  console.log('[applyQuickStartAtIndex] POST-APPLY state snapshot:', { mode: state.scenario.mode, actorCount: state.actors.length, actorNames: state.actors.map(a => a.name), title: state.scenario.title });
   // Also clear global draft if it matches
   state.ui.quickStartDraft = null;
   updateAiAssistantApplyButton();
@@ -772,7 +805,9 @@ export async function applyQuickStartAtIndex(index) {
 }
 
 async function _applyDraft(draft) {
+  console.log('[_applyDraft] draft.type:', draft.type, 'keys:', Object.keys(draft));
   if (draft.type === "patch") {
+    console.log('[_applyDraft] PATCH branch — changes keys:', draft.changes ? Object.keys(draft.changes) : 'NO CHANGES');
     const hadConversation = state.messages.length > 0;
     applyAssistantPatch(draft.changes);
     state.ui.quickStartStatus = "Changes applied.";
@@ -788,7 +823,9 @@ async function _applyDraft(draft) {
     }
     return;
   }
+  console.log('[_applyDraft] FULL SETUP branch — normalizing draft with keys:', Object.keys(draft));
   const normalized = normalizeQuickStartConfig(draft);
+  console.log('[_applyDraft] normalized result:', { mode: normalized.scenario?.mode, systems: normalized.scenario?.systems ? Object.keys(normalized.scenario.systems) : 'NONE', actorCount: normalized.actors?.length, dmEnabled: normalized.dm?.enabled, hasSettings: !!normalized.settings, hasAutoStop: !!normalized.autoStop });
   const hadConversation = state.messages.length > 0;
   state.scenario = normalized.scenario;
   state.actors = normalized.actors;
@@ -901,6 +938,7 @@ export function openAiAssistantPanel() {
 }
 
 export function applyAssistantPatch(changes) {
+  console.log('[applyAssistantPatch] changes:', JSON.stringify(changes, null, 2).slice(0, 500));
   const c = changes;
 
   // Actors — add
