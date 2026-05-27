@@ -6,6 +6,7 @@ import {
   trimWords,
   normalizeStringArray,
   normalizeAiResult,
+  normalizeQuickStartConfig,
 } from './utils.js';
 
 describe('estimateTokens', () => {
@@ -222,3 +223,19 @@ describe('normalizeAiResult — pinFact and rateSignal passthrough', () => {
     expect(result.rateSignal).toBeUndefined();
   });
 });
+
+describe('normalizeQuickStartConfig', () => {
+  it('correctly parses memory.pinnedFacts and memory.openQuestions as arrays', () => {
+    const rawConfig = {
+      scenario: { title: 'Test Scenario' },
+      memory: {
+        pinnedFacts: 'Fact 1\nFact 2',
+        openQuestions: '["Question 1", "Question 2"]'
+      }
+    };
+    const result = normalizeQuickStartConfig(rawConfig);
+    expect(result.memory.pinnedFacts).toEqual(['Fact 1', 'Fact 2']);
+    expect(result.memory.openQuestions).toEqual(['Question 1', 'Question 2']);
+  });
+});
+

@@ -479,9 +479,9 @@ export function normalizeQuickStartConfig(config, assignFreshIds = true) {
       return normalized;
     })(),
     memory: {
-      pinnedFacts: cleanConfigText(memory.pinnedFacts, "", 700),
+      pinnedFacts: normalizeStringArray(memory.pinnedFacts).map(f => f.slice(0, 500)),
       sharedSummary: cleanConfigText(memory.sharedSummary, "", 900),
-      openQuestions: cleanConfigText(memory.openQuestions, "", 500),
+      openQuestions: normalizeStringArray(memory.openQuestions).map(q => q.slice(0, 500)),
       dmState: cleanConfigText(memory.dmState, "", 500)
     }
   };

@@ -701,7 +701,38 @@ export async function applyQuickStartConfig() {
   const hadConversation = state.messages.length > 0;
   state.scenario = normalized.scenario;
   state.actors = normalized.actors;
-  const directorActor = state.actors.find(a => a.canDirect);
+  let directorActor = state.actors.find(a => a.canDirect);
+  if (!directorActor && normalized.dm && normalized.dm.enabled !== false) {
+    // Look for an actor with the same name to promote
+    const nameLower = (normalized.dm.name || "").toLowerCase();
+    if (nameLower) {
+      directorActor = state.actors.find(a => a.name.toLowerCase() === nameLower);
+    }
+    if (directorActor) {
+      directorActor.canDirect = true;
+    } else {
+      // Create a brand new director
+      directorActor = {
+        id: crypto.randomUUID(),
+        name: normalized.dm.name || "Director",
+        role: "Director",
+        persona: normalized.dm.persona || "",
+        goal: "Guide the discussion.",
+        voice: "",
+        temperature: 0.8,
+        authority: 90,
+        canDirect: true,
+        canManageCast: false,
+        canResearch: false,
+        canSeeThoughts: !!normalized.dm.canSeeThoughts || !!normalized.dm.seesPrivateThoughts,
+        enabled: true,
+        thoughts: "",
+        color: colors[state.actors.length % colors.length]
+      };
+      state.actors.push(directorActor);
+    }
+  }
+
   if (directorActor && normalized.dm) {
     directorActor.enabled = normalized.dm.enabled;
     directorActor.name = normalized.dm.name || directorActor.name;
