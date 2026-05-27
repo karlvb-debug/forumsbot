@@ -425,7 +425,7 @@ export async function generateQuickStart(promptOverride = "") {
   const currentConfig = {
     scenario: state.scenario,
     dm: (() => { const d = state.actors.find(a => a.canDirect); return d ? { enabled: d.enabled, name: d.name, persona: d.persona, canSeeThoughts: d.canSeeThoughts } : { enabled: false }; })(),
-    actors: state.actors.map(a => ({ name: a.name, role: a.role, persona: a.persona, goal: a.goal, voice: a.voice, enabled: a.enabled, temperature: a.temperature, canDirect: !!a.canDirect, canManageCast: !!a.canManageCast, canResearch: !!a.canResearch, canSeeThoughts: !!a.canSeeThoughts })),
+    actors: state.actors.map(a => ({ name: a.name, role: a.role, persona: a.persona, goal: a.goal, voice: a.voice, enabled: a.enabled, temperature: a.temperature, authority: a.authority ?? 50, canDirect: !!a.canDirect, canManageCast: !!a.canManageCast, canResearch: !!a.canResearch, canSeeThoughts: !!a.canSeeThoughts })),
     settings: {
       temperature: state.settings.temperature,
       maxTokens: state.settings.maxTokens ?? 2000,
@@ -450,21 +450,28 @@ export async function generateQuickStart(promptOverride = "") {
       sharedSummary: state.memory.sharedSummary || "",
       openQuestions: state.memory.openQuestions || "",
       dmState: state.memory.dmState || ""
+    },
+    userContext: {
+      interactionMode: state.userContext?.interactionMode || "collaborator",
+      displayName: state.userContext?.displayName || "",
+      storyRole: state.userContext?.storyRole || "",
+      pausePolicy: state.userContext?.pausePolicy || {}
     }
   };
 
   const patchChangesShape = `{
-  "addActors": [{"name":"","role":"","persona":"","goal":"","voice":"","temperature":0.8,"canResearch":false,"canManageCast":false}],
+  "addActors": [{"name":"","role":"","persona":"","goal":"","voice":"","temperature":0.8,"authority":50,"canResearch":false,"canManageCast":false}],
   "removeActors": ["ActorName"],
-  "modifyActors": [{"find":"ActorName","persona":"...","goal":"...","temperature":0.9}],
+  "modifyActors": [{"find":"ActorName","persona":"...","goal":"...","temperature":0.9,"authority":70}],
   "scenario": {"title":"...","premise":"...","objective":"...","mode":"problem|story|freeform","systems":{"stageDirections":{"enabled":false,"intensity":"minimal|moderate|immersive","maxTokenShare":0.2},"alignment":{"strictness":"strict|moderate|loose|off","anchorInPrompt":false,"nudgeStyle":"hard-redirect|gentle-nudge|question"},"turnRouting":{"strategy":"round-robin|dm-directed|narrative-flow","allowDirectAddress":true},"dmRole":{"role":"narrator|facilitator|arbiter|observer","narrates":false,"canIntroduceElements":false},"document":{"schema":"freeform|decisions|story-bible|findings"}}},
   "dm": {"enabled":true,"name":"...","persona":"...","canSeeThoughts":false},
   "settings": {"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"toolsEnabled":true,"streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":true,"enableHypothesisSampling":false,"hypothesisSampleCount":2,"hypothesisAutoSelect":true,"enableCrossSessionMemory":true,"enableAdaptiveCompression":true,"turnDelay":0},
   "memory": {"addFacts":["fact text"],"removeFacts":["text to match and remove"],"sharedSummary":"...","openQuestions":"...","dmState":"..."},
-  "autoStop": {"enabled":true,"goal":"...","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5}
+  "autoStop": {"enabled":true,"goal":"...","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5},
+  "userContext": {"interactionMode":"sponsor|collaborator|observer","displayName":"","storyRole":""}
 }`;
 
-  const fullSetupShape = `{"scenario":{"mode":"problem|story|freeform","title":"","premise":"","objective":"","systems":{"stageDirections":{"enabled":false,"intensity":"moderate","maxTokenShare":0.2},"alignment":{"strictness":"moderate","anchorInPrompt":false,"nudgeStyle":"gentle-nudge"},"turnRouting":{"strategy":"round-robin","allowDirectAddress":true},"dmRole":{"role":"facilitator","narrates":false,"canIntroduceElements":false},"document":{"schema":"freeform"}}},"dm":{"enabled":true,"name":"","persona":"","canSeeThoughts":false},"actors":[{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"canDirect":false,"canManageCast":false,"canResearch":false,"canSeeThoughts":false}],"memory":{"pinnedFacts":[],"sharedSummary":"","openQuestions":"","dmState":""},"settings":{"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"toolsEnabled":false,"streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":true,"enableHypothesisSampling":false,"hypothesisSampleCount":2,"hypothesisAutoSelect":true,"enableCrossSessionMemory":true,"enableAdaptiveCompression":true,"turnDelay":0},"autoStop":{"enabled":false,"goal":"","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5}}`;
+  const fullSetupShape = `{"scenario":{"mode":"problem|story|freeform","title":"","premise":"","objective":"","systems":{"stageDirections":{"enabled":false,"intensity":"moderate","maxTokenShare":0.2},"alignment":{"strictness":"moderate","anchorInPrompt":false,"nudgeStyle":"gentle-nudge"},"turnRouting":{"strategy":"round-robin","allowDirectAddress":true},"dmRole":{"role":"facilitator","narrates":false,"canIntroduceElements":false},"document":{"schema":"freeform"}}},"dm":{"enabled":true,"name":"","persona":"","canSeeThoughts":false},"actors":[{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"authority":50,"canDirect":false,"canManageCast":false,"canResearch":false,"canSeeThoughts":false}],"memory":{"pinnedFacts":[],"sharedSummary":"","openQuestions":"","dmState":""},"settings":{"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"toolsEnabled":false,"streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":true,"enableHypothesisSampling":false,"hypothesisSampleCount":2,"hypothesisAutoSelect":true,"enableCrossSessionMemory":true,"enableAdaptiveCompression":true,"turnDelay":0},"autoStop":{"enabled":false,"goal":"","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5}}`;
 
   const system = [
     "You are the AI Assistant for Forum, a local multi-agent AI discussion app running LLM actors via LM Studio.",
@@ -489,7 +496,8 @@ export async function generateQuickStart(promptOverride = "") {
     "",
     "## UI PANELS",
     "- Scenario: Set mode (Problem/Story/Freeform), title, premise, objective.",
-    "- Actors: Add, edit, remove, enable/disable actors. Adjust persona, role, goal, voice, color, temperature, permissions (Direct, Manage, Research, See Thoughts).",
+    "- Actors: Add, edit, remove, enable/disable actors. Adjust persona, role, goal, voice, color, temperature, authority (0-100), permissions (Direct, Manage, Research, See Thoughts).",
+    "- You (Participation): Set your interaction mode (sponsor/collaborator/observer), display name, story role. Adjust per-mode pause policy. View pause history.",
     "- Memory: Pinned Facts (injected verbatim), AI rolling Summary, Open Questions, Anchors, Outcomes.",
     "- Telemetry: Alignment score (0-100%), Drift, Influence bars.",
     "- Documents: Working docs (AI editable), reference docs (read-only), import PR (GitHub PR URL), local folder import.",
@@ -503,6 +511,31 @@ export async function generateQuickStart(promptOverride = "") {
     "- Researcher (canResearch: true): runs web searches and reads URLs.",
     "- Story/Roleplay Mode: Set stageDirections.enabled=true + dmRole.narrates=true. Actors speak in character with *asterisk* actions. High temp (1.0-1.2) recommended.",
     "- Code Review Mode: Documents -> Import PR automatically sets up 4 specialist review actors and documents.",
+    "",
+    "## ACTOR AUTHORITY (authority field, 0-100)",
+    "Every actor has an 'authority' field (integer 0-100, default 50). It controls how much weight other actors give their statements in the discussion.",
+    "  0-35: Low authority — actor's claims are treated as tentative or easily challenged.",
+    "  36-64: Neutral band (default) — actor participates as a peer.",
+    "  65-100: High authority — actor's conclusions carry extra weight; others defer or accept them as near-facts.",
+    "Use high authority for a senior expert who should not be second-guessed. Use low authority for a junior participant or devil's advocate. Authority does NOT affect turn order or who speaks — only how statements are weighted by peers.",
+    "In analytical sessions authority is framed as professional weight; in story sessions it's framed as social status.",
+    "",
+    "## PARTICIPATION & PAUSE SYSTEM (userContext)",
+    "The 'You' panel lets the human configure their presence in the session.",
+    "",
+    "**interactionMode** — controls when actors pause to ask the user:",
+    "  'collaborator' (default): actors can pause for decisions, conflicts, questions, clarifications, or information (up to 2 pauses/round).",
+    "  'sponsor': actors pause only for major decisions or conflicts (max 1 pause/round, with debounce).",
+    "  'observer': actors never pause; the session runs to completion uninterrupted.",
+    "",
+    "**displayName**: The user's name injected into actor prompts. E.g. 'Alice'. Actors can address the user by name.",
+    "**storyRole**: The user's in-world character name for story sessions. E.g. 'The Mayor', 'The Client'. Injected as 'The human participant is: The Mayor (Alice).' in actor prompts.",
+    "",
+    "**pauseRequest** (actors can include in their JSON output):",
+    "  {\"reason\":\"decision|conflict|question|clarification|information\",\"context\":\"brief context\",\"question\":\"the specific ask\",\"options\":[\"Option A\",\"Option B\"],\"defaultIfNoResponse\":\"what the actor will assume if no answer\"}",
+    "  - When honored: auto-run stops, a pause card appears in the transcript, and the user is shown a modal to respond (buttons if options[], free-text if options=[]). After responding, a [User responded: ...] injection is sent to the next turn and auto-run resumes.",
+    "  - When suppressed (observer mode or policy): a collapsed note appears in the transcript; the actor uses defaultIfNoResponse.",
+    "  - The patchChangesShape userContext field lets you set interactionMode, displayName, and storyRole. The pause policy is usually left at defaults.",
     "",
     "## SCENARIO SYSTEMS (scenario.systems)",
     "Systems replace the old monolithic mode behavior. Each is independently toggleable. Set them in scenario.systems when creating or patching a scenario.",
@@ -540,9 +573,12 @@ export async function generateQuickStart(promptOverride = "") {
     "  promptInjections: [{targetName:'ActorName', content:'Private guidance for their next turn.', scope:'next_turn_only'|'persistent'}] — privately primes an actor before their next turn without others seeing it.",
     "  privateMessages: [{toName:'ActorName', content:'Message only they see.'}] — sends a private message visible only to the target actor.",
     "Actors (non-story mode) can include:",
-    "  pinFact: 'one-sentence statement' — pins a newly established undisputed fact to shared memory.",
+    "  pinFact: 'one-sentence statement' — pins a newly established undisputed fact to shared memory. Only for settled, undisputed facts.",
     "  rateSignal: {novel:false, advancing:false, flag:'repeat'} — flags the prior message as repetitive; triggers loop-detection hints automatically.",
-    "These are built into actor/director prompts automatically. Mention them if users ask why an actor sent a private note or why a fact appeared in pinned facts.",
+    "  anchor: {text:'claim text', confidence:'high|medium|low'} — proposes a new anchor (settled consensus point) for Director review.",
+    "Any actor (when not in observer mode) can include:",
+    "  pauseRequest: {reason:'decision|conflict|question|clarification|information', context:'...', question:'...', options:['A','B'], defaultIfNoResponse:'...'} — pauses the session to get user input before continuing. See PARTICIPATION & PAUSE SYSTEM above.",
+    "These are built into actor/director prompts automatically. Mention them if users ask why an actor sent a private note, why a fact appeared in pinned facts, or why the session paused for input.",
     "",
     "## JSON SCHEMA RULES",
     "Use type=patch for: adding/modifying/removing actors, modifying settings, memory, or scenario fields. Use type=fullSetup for brand-new scenarios. Use type=chat for pure questions. For patch and fullSetup, you MUST include a detailed, user-friendly markdown bulleted summary of all proposed changes inside the \"message\" field so the user can review them. JSON SAFETY: To prevent parsing errors, never use raw double quotes inside your \"message\" string (use single quotes ' instead, e.g. 'Skeptic'). Avoid raw backslashes. Return ONLY valid JSON. No markdown fences. No commentary outside the JSON."
