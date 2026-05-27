@@ -130,6 +130,16 @@ export function ActorsPanel() {
   const [aiDesc, setAiDesc] = useState('');
   const [aiDescGenerating, setAiDescGenerating] = useState(false);
   const [aiDescError, setAiDescError] = useState(null);
+  const [dragIdx, setDragIdx] = useState(null);
+  const [dropIdx, setDropIdx] = useState(null);
+
+  const moveActor = useCallback((from, to) => {
+    if (from === to || from < 0 || to < 0) return;
+    mutateState(s => {
+      const [moved] = s.actors.splice(from, 1);
+      s.actors.splice(to, 0, moved);
+    });
+  }, []);
 
   // Per-actor stats: turns taken and words spoken
   const actorStats = useMemo(() => {
@@ -284,13 +294,26 @@ export function ActorsPanel() {
         {aiDescError && <div className="field-hint" style={{ color: 'var(--danger)', marginTop: 2 }}>{aiDescError}</div>}
       </div>
 
-      {actors.map((a) => {
+      {actors.map((a, idx) => {
         const isOpen = expanded === a.id;
         const perms = activePerms(a);
         const stats = actorStats[a.id] || actorStats[a.name] || null;
         return (
-          <div key={a.id} className={"actor-card" + (isOpen ? " expanded" : "") + (a.enabled ? "" : " disabled")}>
+          <div
+            key={a.id}
+            className={"actor-card" + (isOpen ? " expanded" : "") + (a.enabled ? "" : " disabled") + (dragIdx === idx ? " dragging" : "") + (dropIdx === idx ? " drop-above" : "")}
+            draggable
+            onDragStart={(e) => { setDragIdx(idx); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(idx)); }}
+            onDragEnd={() => { setDragIdx(null); setDropIdx(null); }}
+            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dragIdx !== null && dragIdx !== idx) setDropIdx(idx); }}
+            onDragLeave={() => { if (dropIdx === idx) setDropIdx(null); }}
+            onDrop={(e) => { e.preventDefault(); const from = dragIdx ?? parseInt(e.dataTransfer.getData('text/plain'), 10); moveActor(from, idx); setDragIdx(null); setDropIdx(null); }}
+          >
             <div className="actor-card-head" onClick={() => setExpanded(isOpen ? null : a.id)}>
+              <div className="actor-reorder">
+                <button className="reorder-btn" title="Move up" disabled={idx === 0} onClick={(e) => { e.stopPropagation(); moveActor(idx, idx - 1); }}>▲</button>
+                <button className="reorder-btn" title="Move down" disabled={idx === actors.length - 1} onClick={(e) => { e.stopPropagation(); moveActor(idx, idx + 1); }}>▼</button>
+              </div>
               <span className="actor-swatch" style={{ background: a.color }}>{(a.name || '?')[0]}</span>
               <div className="grow" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>

@@ -957,6 +957,26 @@ input[type="range"]::-webkit-slider-thumb {
 .expand-caret { color: var(--fg-faint); transition: transform .2s; }
 .actor-card.expanded .expand-caret { transform: rotate(90deg); }
 
+/* ── Actor reorder controls ── */
+.actor-reorder {
+  display: flex; flex-direction: column; gap: 0;
+  flex-shrink: 0; margin-right: -4px;
+}
+.reorder-btn {
+  appearance: none; border: 0; background: transparent;
+  color: var(--fg-faint); font-size: 8px; line-height: 1;
+  padding: 2px 4px; cursor: pointer; border-radius: 3px;
+  transition: color .15s, background .15s;
+}
+.reorder-btn:hover:not(:disabled) { color: var(--fg); background: var(--bg-input); }
+.reorder-btn:disabled { opacity: 0.2; cursor: default; }
+
+/* Drag & drop states */
+.actor-card.dragging { opacity: 0.35; }
+.actor-card.drop-above { border-top: 2px solid var(--accent); margin-top: -2px; }
+.actor-card[draggable] { cursor: grab; }
+.actor-card[draggable]:active { cursor: grabbing; }
+
 .mini-icon-btn {
   appearance: none; background: transparent; border: 0; color: var(--fg-faint);
   width: 22px; height: 22px; border-radius: 4px; cursor: pointer;
