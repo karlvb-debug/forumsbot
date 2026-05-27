@@ -264,19 +264,23 @@ export function ActorsPanel() {
           <div key={a.id} className={"actor-card" + (isOpen ? " expanded" : "") + (a.enabled ? "" : " disabled")}>
             <div className="actor-card-head" onClick={() => setExpanded(isOpen ? null : a.id)}>
               <span className="actor-swatch" style={{ background: a.color }}>{(a.name || '?')[0]}</span>
-              <div className="grow">
+              <div className="grow" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                   <span className="actor-name">{a.name}</span>
                   <span className="actor-role-tag">{a.role}</span>
-                  {perms.map(p => (
-                    <span key={p.key} className="perm-badge" style={{ color: p.color, borderColor: p.color }}>{p.icon}</span>
-                  ))}
-                  {stats && (
-                    <span className="actor-stats-badge" title={`${stats.turns} turns · ${stats.words} words spoken`}>
-                      {stats.turns}t · {stats.words}w
-                    </span>
-                  )}
                 </div>
+                {(perms.length > 0 || stats) && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    {perms.map(p => (
+                      <span key={p.key} className="perm-badge" style={{ color: p.color, borderColor: p.color }}>{p.icon}</span>
+                    ))}
+                    {stats && (
+                      <span className="actor-stats-badge" title={`${stats.turns} turns · ${stats.words} words spoken`}>
+                        {stats.turns}t · {stats.words}w
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
               <Toggle checked={a.enabled} onChange={(v) => { updateActor(a.id, 'enabled', v); }} />
               <Ic.Chevron className="expand-caret" width={14} height={14} />
