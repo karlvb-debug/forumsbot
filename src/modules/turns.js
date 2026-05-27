@@ -707,8 +707,11 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
     // This actor is a Director — build director-style prompt
     const privateThoughts = actor.canSeeThoughts ? privateThoughtDigest() : "";
     const modeInstruction = sysCfg.dmNarrates
-      ? "You are the narrative DM. Describe the environment, atmosphere, sounds, and consequences of the characters' actions using rich descriptive narration wrapped in asterisks. Frame scene beats, introduce complications, and advance the story. Do NOT speak for the characters—react to what they do and set the stage for their next moves."
-      : "Help move the exchange forward. Surface decisions, conflicts, and next questions. Summarize when useful and invite quieter actors in without taking over.";
+      ? [
+          "You are the narrative DM. Describe the environment, atmosphere, sounds, and consequences of the characters' actions using rich descriptive narration wrapped in asterisks. Frame scene beats, introduce complications, and advance the story.",
+          "ABSOLUTE RULE: NEVER speak as, quote, or put words in the mouth of another character. You narrate the world — you do NOT voice the characters. Wrong: 'Gareth slams his fist on the table. \"I won't stand for this!\"' Right: '*The tension at the table rises as Gareth's expression darkens.*' If you want a character to do or say something specific, use a promptInjection to guide them privately — they will carry it out in their own voice on their next turn."
+        ].join(" ")
+      : "Help move the exchange forward. Surface decisions, conflicts, and next questions. Summarize when useful and invite quieter actors in without taking over. NEVER speak as or put words in the mouth of another actor. If you want an actor to take a specific direction, use a promptInjection to guide them privately.";
 
     const dmRoleModifier = sysCfg.dmRole === 'observer'
       ? "OBSERVER MODE: Only speak when directly and specifically addressed by name. Do not volunteer guidance, summaries, or questions. Remain completely silent unless an actor explicitly asks for your input."
@@ -748,7 +751,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
       "You can describe physical actions, scenery changes, or narrator actions by surrounding them with asterisks, e.g. *the wind howls in the background* or *gestures to the map*.",
       "FLOW CONTROL: You can direct the conversation flow dynamically. If you want a specific actor to respond next, include their name in the optional \"nextSpeaker\" JSON field (case-insensitive, e.g. \"Anya\" or \"Ben\"). If you want the default turn order to continue, omit \"nextSpeaker\" or set it to empty.",
       "ANCHOR SUGGESTIONS: If the group has just reached a clear, settled agreement worth locking in, include a brief statement of it in the optional \"anchor\" field (max 20 words). The user will be prompted to approve it. Only anchor genuinely settled points — not ongoing debates.",
-      "CAP-1 PROMPT INJECTION: To privately prime an actor before their next turn, include \"promptInjections\": [{\"targetName\": \"ActorName\", \"content\": \"Private guidance, max 500 chars.\", \"scope\": \"next_turn_only\"}]. Use sparingly — only to course-correct or prime a specific contribution.",
+      "CAP-1 PROMPT INJECTION — YOUR PRIMARY TOOL FOR DIRECTING CHARACTERS: When you want a character to do, say, or react to something specific, inject private guidance into their next turn. Include \"promptInjections\": [{\"targetName\": \"ActorName\", \"content\": \"Private guidance, max 500 chars.\", \"scope\": \"next_turn_only\"}]. The character will read this before generating their response and carry it out in their own voice. This is ALWAYS better than writing dialogue or actions for another character yourself. Use \"next_turn_only\" for one-off direction, or \"persistent\" for ongoing behavioral guidance.",
       "CAP-2 PRIVATE MESSAGE: To send a message visible only to one actor, include \"privateMessages\": [{\"toName\": \"ActorName\", \"content\": \"Private message.\"}]. Max 3 per turn.",
       (!showThoughts)
         ? "IMPORTANT: Private thoughts display is disabled. You MUST keep your JSON \"thought\" field empty (\"\") to save tokens and minimize latency."
