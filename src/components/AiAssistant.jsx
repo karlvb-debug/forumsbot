@@ -6,10 +6,10 @@ import { renderMarkdown } from '../modules/markdown.js';
 export function AiAssistant() {
   const open = useForumState(s => s.ui?.assistantOpen || false);
   const history = useForumState(s => s.ui?.quickStartHistory || []);
-  const draft = useForumState(s => s.ui?.quickStartDraft || null);
   const status = useForumState(s => s.ui?.quickStartStatus || '');
   const prompt = useForumState(s => s.ui?.quickStartPrompt || '');
   const [busy, setBusy] = useState(false);
+  const [applyingIndex, setApplyingIndex] = useState(-1);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -38,13 +38,14 @@ export function AiAssistant() {
     }
   };
 
-  const apply = async () => {
-    setBusy(true);
+  const applyAtIndex = async (index) => {
+    if (busy || applyingIndex >= 0) return;
+    setApplyingIndex(index);
     try {
       const session = await import('../modules/session.js');
-      await session.applyQuickStartConfig();
+      await session.applyQuickStartAtIndex(index);
     } finally {
-      setBusy(false);
+      setApplyingIndex(-1);
     }
   };
 
@@ -107,9 +108,26 @@ export function AiAssistant() {
                 <div className="ai-bubble ai-bubble-assistant">
                   <div className="ai-bubble-text" dangerouslySetInnerHTML={{ __html: renderMarkdown(entry.message || 'Done.') }} />
                   {entry.type && entry.type !== 'chat' && entry.type !== 'error' && (
-                    <div className="ai-bubble-badge">
-                      {entry.type === 'patch' ? '✎ Changes ready' : entry.type === 'fullSetup' ? '✦ Full setup ready' : null}
-                    </div>
+                    <>
+                      <div className="ai-bubble-badge">
+                        {entry.type === 'patch' ? '✎ Changes ready' : entry.type === 'fullSetup' ? '✦ Full setup ready' : null}
+                      </div>
+                      {entry.draft && (
+                        <div className="ai-bubble-actions">
+                          {entry.applied ? (
+                            <button className="btn sm ghost" disabled>✓ Applied</button>
+                          ) : (
+                            <button
+                              className="btn sm primary"
+                              onClick={() => applyAtIndex(i)}
+                              disabled={busy || applyingIndex >= 0}
+                            >
+                              {applyingIndex === i ? 'Applying…' : 'Apply'}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
                   {entry.type === 'error' && (
                     <div className="ai-bubble-badge err">⚠ {entry.message}</div>
@@ -130,17 +148,7 @@ export function AiAssistant() {
           <div ref={bottomRef} />
         </div>
 
-        {draft && (
-          <div className="ai-assistant-draft-bar">
-            <span className="ai-draft-label">Changes ready to apply</span>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button className="btn sm ghost" onClick={discard} disabled={busy}>Discard</button>
-              <button className="btn sm primary" onClick={apply} disabled={busy}>Apply</button>
-            </div>
-          </div>
-        )}
-
-        {status && !draft && (
+        {status && (
           <div className="ai-assistant-status">{status}</div>
         )}
 

@@ -1399,6 +1399,16 @@ button:focus-visible { border-radius: 8px; }
   font-weight: 500;
 }
 .ai-bubble-badge.err { color: var(--danger); }
+.ai-bubble-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.ai-bubble-actions .btn[disabled] {
+  opacity: 0.6;
+  color: var(--fg-muted);
+}
 .ai-bubble-thinking {
   display: flex;
   gap: 5px;

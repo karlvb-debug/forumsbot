@@ -447,6 +447,8 @@ export function normalizeQuickStartConfig(config, assignFreshIds = true) {
   const scenario = source.scenario && typeof source.scenario === "object" ? source.scenario : {};
   const dm = source.dm && typeof source.dm === "object" ? source.dm : {};
   const memory = source.memory && typeof source.memory === "object" ? source.memory : {};
+  const srcSettings = source.settings && typeof source.settings === "object" ? source.settings : null;
+  const srcAutoStop = source.autoStop && typeof source.autoStop === "object" ? source.autoStop : null;
   const defaultActors = [
     { name: "Architect", role: "Systems thinker", persona: "You care about structure, tradeoffs, and how pieces fit together.", goal: "Turn messy ideas into a workable plan.", voice: "Calm, precise, concise.", thoughts: "", enabled: true },
     { name: "Skeptic", role: "Risk spotter", persona: "You notice gaps, ambiguity, and hidden costs.", goal: "Prevent the group from accepting easy answers too quickly.", voice: "Direct but constructive.", thoughts: "", enabled: true },
@@ -456,18 +458,83 @@ export function normalizeQuickStartConfig(config, assignFreshIds = true) {
     ? source.actors.slice(0, 8)
     : defaultActors;
 
-  return {
+  // ── Normalize scenario.systems (deep-merge with validation) ──
+  const rawSystems = scenario.systems && typeof scenario.systems === "object" ? scenario.systems : {};
+  const normalizedMode = ["problem", "story", "freeform"].includes(scenario.mode) ? scenario.mode : "problem";
+  const isStoryMode = normalizedMode === "story";
+
+  const normSub = (raw, defaults) => {
+    if (!raw || typeof raw !== "object") return { ...defaults };
+    const out = { ...defaults };
+    for (const [k, v] of Object.entries(raw)) {
+      if (v !== null && v !== undefined && k in defaults) out[k] = v;
+    }
+    return out;
+  };
+
+  const systems = {
+    stageDirections: normSub(rawSystems.stageDirections, {
+      enabled: isStoryMode,
+      intensity: "moderate",
+      maxTokenShare: 0.2
+    }),
+    alignment: normSub(rawSystems.alignment, {
+      strictness: isStoryMode ? "loose" : "moderate",
+      anchorInPrompt: false,
+      nudgeStyle: isStoryMode ? "question" : "gentle-nudge"
+    }),
+    turnRouting: normSub(rawSystems.turnRouting, {
+      strategy: isStoryMode ? "narrative-flow" : "round-robin",
+      allowDirectAddress: true
+    }),
+    dmRole: normSub(rawSystems.dmRole, {
+      role: isStoryMode ? "narrator" : "facilitator",
+      narrates: isStoryMode,
+      canIntroduceElements: isStoryMode
+    }),
+    document: normSub(rawSystems.document, {
+      schema: isStoryMode ? "story-bible" : "freeform"
+    })
+  };
+
+  // ── Normalize settings (pass through known fields) ──
+  let settings = undefined;
+  if (srcSettings) {
+    settings = {};
+    const numKeys = ["temperature", "maxTokens", "topP", "repeatPenalty", "hypothesisSampleCount", "turnDelay"];
+    const boolKeys = ["toolsEnabled", "streamingEnabled", "showThoughts", "turboMode", "enablePreflightRouter", "enableHypothesisSampling", "hypothesisAutoSelect", "enableCrossSessionMemory", "enableAdaptiveCompression"];
+    for (const k of numKeys) { if (typeof srcSettings[k] === "number") settings[k] = srcSettings[k]; }
+    for (const k of boolKeys) { if (typeof srcSettings[k] === "boolean") settings[k] = srcSettings[k]; }
+    if (Object.keys(settings).length === 0) settings = undefined;
+  }
+
+  // ── Normalize autoStop (pass through known fields) ──
+  let autoStop = undefined;
+  if (srcAutoStop) {
+    autoStop = {};
+    if (typeof srcAutoStop.enabled === "boolean") autoStop.enabled = srcAutoStop.enabled;
+    if (srcAutoStop.goal !== undefined) autoStop.goal = String(srcAutoStop.goal);
+    if (typeof srcAutoStop.goalCheckEnabled === "boolean") autoStop.goalCheckEnabled = srcAutoStop.goalCheckEnabled;
+    if (typeof srcAutoStop.stopOnAllSkip === "boolean") autoStop.stopOnAllSkip = srcAutoStop.stopOnAllSkip;
+    if (typeof srcAutoStop.maxRoundsEnabled === "boolean") autoStop.maxRoundsEnabled = srcAutoStop.maxRoundsEnabled;
+    if (typeof srcAutoStop.maxRounds === "number") autoStop.maxRounds = srcAutoStop.maxRounds;
+    if (Object.keys(autoStop).length === 0) autoStop = undefined;
+  }
+
+  const result = {
     scenario: {
-      mode: ["problem", "story", "freeform"].includes(scenario.mode) ? scenario.mode : "problem",
+      mode: normalizedMode,
       title: cleanConfigText(scenario.title, "Untitled forum", 80),
       premise: cleanConfigText(scenario.premise, "A small group of local AI actors are gathered to discuss the user's topic.", 700),
-      objective: cleanConfigText(scenario.objective, "Ask clarifying questions, challenge weak assumptions, and converge on practical next steps.", 500)
+      objective: cleanConfigText(scenario.objective, "Ask clarifying questions, challenge weak assumptions, and converge on practical next steps.", 500),
+      systems
     },
     dm: {
       enabled: dm.enabled !== false,
       name: cleanConfigText(dm.name, "Director", 50),
       persona: cleanConfigText(dm.persona, "Keep the scene moving, summarize when useful, and invite quieter actors in without taking over.", 500),
-      seesPrivateThoughts: dm.seesPrivateThoughts === true
+      canSeeThoughts: !!(dm.canSeeThoughts || dm.seesPrivateThoughts),
+      seesPrivateThoughts: !!(dm.canSeeThoughts || dm.seesPrivateThoughts)
     },
     actors: (() => {
       const normalized = actorSources.map((actor, index) => normalizeQuickStartActor(actor, index, assignFreshIds));
@@ -485,6 +552,11 @@ export function normalizeQuickStartConfig(config, assignFreshIds = true) {
       dmState: cleanConfigText(memory.dmState, "", 500)
     }
   };
+
+  if (settings) result.settings = settings;
+  if (autoStop) result.autoStop = autoStop;
+
+  return result;
 }
 
 /**

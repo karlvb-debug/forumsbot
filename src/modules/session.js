@@ -679,11 +679,35 @@ export async function applyQuickStartConfig() {
     setQuickStartStatus("Generate a setup first.", "warn");
     return;
   }
+  await _applyDraft(draft);
+  state.ui.quickStartDraft = null;
+  updateAiAssistantApplyButton();
+  saveState();
+}
+
+export async function applyQuickStartAtIndex(index) {
+  const history = state.ui.quickStartHistory || [];
+  const entry = history[index];
+  if (!entry || !entry.draft) {
+    setQuickStartStatus("Nothing to apply for that message.", "warn");
+    return;
+  }
+  if (entry.applied) {
+    setQuickStartStatus("Already applied.", "warn");
+    return;
+  }
+  await _applyDraft(entry.draft);
+  entry.applied = true;
+  // Also clear global draft if it matches
+  state.ui.quickStartDraft = null;
+  updateAiAssistantApplyButton();
+  saveState();
+}
+
+async function _applyDraft(draft) {
   if (draft.type === "patch") {
     const hadConversation = state.messages.length > 0;
     applyAssistantPatch(draft.changes);
-    state.ui.quickStartDraft = null;
-    updateAiAssistantApplyButton();
     state.ui.quickStartStatus = "Changes applied.";
     saveState();
     if (hadConversation) {
@@ -724,7 +748,7 @@ export async function applyQuickStartConfig() {
         canDirect: true,
         canManageCast: false,
         canResearch: false,
-        canSeeThoughts: !!normalized.dm.canSeeThoughts || !!normalized.dm.seesPrivateThoughts,
+        canSeeThoughts: !!(normalized.dm.canSeeThoughts || normalized.dm.seesPrivateThoughts),
         enabled: true,
         thoughts: "",
         color: colors[state.actors.length % colors.length]
@@ -737,19 +761,15 @@ export async function applyQuickStartConfig() {
     directorActor.enabled = normalized.dm.enabled;
     directorActor.name = normalized.dm.name || directorActor.name;
     directorActor.persona = normalized.dm.persona || directorActor.persona;
-    directorActor.canSeeThoughts = !!normalized.dm.canSeeThoughts || !!normalized.dm.seesPrivateThoughts;
+    directorActor.canSeeThoughts = !!(normalized.dm.canSeeThoughts || normalized.dm.seesPrivateThoughts);
     directorActor.thoughts = "";
   }
   // Apply AI-suggested settings if present
   if (normalized.settings) {
     const ns = normalized.settings;
-    if (typeof ns.temperature === "number") state.settings.temperature = ns.temperature;
-    if (typeof ns.maxTokens === "number") state.settings.maxTokens = ns.maxTokens;
-    if (typeof ns.toolsEnabled === "boolean") state.settings.toolsEnabled = ns.toolsEnabled;
-    if (typeof ns.streamingEnabled === "boolean") state.settings.streamingEnabled = ns.streamingEnabled;
-    if (typeof ns.showThoughts === "boolean") state.settings.showThoughts = ns.showThoughts;
-    if (typeof ns.enableAdaptiveCompression === "boolean") state.settings.enableAdaptiveCompression = ns.enableAdaptiveCompression;
-    if (typeof ns.enableCrossSessionMemory === "boolean") state.settings.enableCrossSessionMemory = ns.enableCrossSessionMemory;
+    for (const [key, val] of Object.entries(ns)) {
+      if (val !== null && val !== undefined) state.settings[key] = val;
+    }
   }
   if (normalized.autoStop) {
     const nas = normalized.autoStop;
@@ -771,8 +791,6 @@ export async function applyQuickStartConfig() {
     lastSummaryMessageId: ""
   };
   state.turnQueue = [];
-  state.ui.quickStartDraft = null;
-  updateAiAssistantApplyButton();
   state.ui.quickStartStatus = "Setup applied.";
   saveState();
   if (hadConversation) {
@@ -785,7 +803,6 @@ export async function applyQuickStartConfig() {
       color: "var(--coral)"
     });
   }
-
 }
 
 export function discardQuickStartConfig() {
@@ -797,6 +814,7 @@ export function discardQuickStartConfig() {
   renderQuickStartChat();
   updateAiAssistantApplyButton();
 }
+
 
 export function setQuickStartBusy() {
   // ScenarioPanel controls button disabled state via its own quickStartBusy local state.
