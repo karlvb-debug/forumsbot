@@ -426,15 +426,69 @@ export async function runRound(options = {}) {
   let completedTurns = 0;
   state.currentRound = (state.currentRound || 0) + 1;
 
-  for (let index = 0; index < count; index += 1) {
-    if (abortController?.signal.aborted) break;
-    const ok = await runNextTurn({ summarizeCycle: false, isRoundContinuation: true });
-    if (!ok) break;
-    completedTurns += 1;
-    // Configurable inter-turn pause when auto-running
-    if (options.fromAuto) {
-      const delayMs = (state.settings.turnDelay || 0) * 1000;
-      if (delayMs > 0) await wait(delayMs);
+  const strategy = state.scenario?.systems?.turnRouting?.strategy ?? 'round-robin';
+
+  if (strategy === 'dm-directed') {
+    // ── DM-Directed mode ──────────────────────────────────────────
+    // Director always speaks first. After each Director turn, only the
+    // actor named in nextSpeaker gets to speak. If the Director skips
+    // or doesn't name anyone, the round ends.
+    const director = state.actors.find(a => a.canDirect && a.enabled);
+    if (!director) {
+      setStatus("dm-directed mode requires an enabled Director.", "warn");
+      return false;
+    }
+    const maxTurns = count * 2 + 1; // Safety cap to prevent infinite loops
+    let turnsThisRound = 0;
+
+    // Start with the Director
+    state.turnQueue = [director.id];
+    while (turnsThisRound < maxTurns) {
+      if (abortController?.signal.aborted) break;
+      const ok = await runNextTurn({ summarizeCycle: false, isRoundContinuation: true });
+      if (!ok) break;
+      completedTurns++;
+      turnsThisRound++;
+
+      // Check what the last speaker said
+      const lastMsg = state.messages[state.messages.length - 1];
+      if (!lastMsg) break;
+
+      if (lastMsg.actorId === director.id) {
+        // Director just spoke — check if they named a nextSpeaker
+        if (lastMsg.nextSpeaker && lastMsg.nextSpeaker.trim()) {
+          // nextSpeaker routing already moved the target to front of turnQueue
+          // (done in applyAiResult), so just continue the loop
+          console.log(`[dm-directed] Director named next speaker: ${lastMsg.nextSpeaker}`);
+        } else {
+          // Director didn't name anyone — round over
+          console.log('[dm-directed] Director did not name a next speaker, ending round');
+          break;
+        }
+      } else {
+        // A non-Director actor just spoke — Director goes next
+        state.turnQueue = state.turnQueue.filter(id => id !== director.id);
+        state.turnQueue.unshift(director.id);
+      }
+
+      // Configurable inter-turn pause when auto-running
+      if (options.fromAuto) {
+        const delayMs = (state.settings.turnDelay || 0) * 1000;
+        if (delayMs > 0) await wait(delayMs);
+      }
+    }
+  } else {
+    // ── Round-robin (default) ─────────────────────────────────────
+    for (let index = 0; index < count; index += 1) {
+      if (abortController?.signal.aborted) break;
+      const ok = await runNextTurn({ summarizeCycle: false, isRoundContinuation: true });
+      if (!ok) break;
+      completedTurns += 1;
+      // Configurable inter-turn pause when auto-running
+      if (options.fromAuto) {
+        const delayMs = (state.settings.turnDelay || 0) * 1000;
+        if (delayMs > 0) await wait(delayMs);
+      }
     }
   }
 
@@ -708,10 +762,26 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
     const privateThoughts = actor.canSeeThoughts ? privateThoughtDigest() : "";
     const modeInstruction = sysCfg.dmNarrates
       ? [
-          "You are the narrative DM. Describe the environment, atmosphere, sounds, and consequences of the characters' actions using rich descriptive narration wrapped in asterisks. Frame scene beats, introduce complications, and advance the story.",
-          "ABSOLUTE RULE: NEVER speak as, quote, or put words in the mouth of another character. You narrate the world — you do NOT voice the characters. Wrong: 'Gareth slams his fist on the table. \"I won't stand for this!\"' Right: '*The tension at the table rises as Gareth's expression darkens.*' If you want a character to do or say something specific, use a promptInjection to guide them privately — they will carry it out in their own voice on their next turn."
-        ].join(" ")
-      : "Help move the exchange forward. Surface decisions, conflicts, and next questions. Summarize when useful and invite quieter actors in without taking over. NEVER speak as or put words in the mouth of another actor. If you want an actor to take a specific direction, use a promptInjection to guide them privately.";
+          "You are the narrative DM. Your job is to describe the ENVIRONMENT ONLY: weather, lighting, ambient sounds, smells, the feel of a room, the passage of time, and world events that are NOT character actions.",
+          "",
+          "=== HARD RULE: NEVER NARRATE CHARACTER ACTIONS ===",
+          "You must NEVER describe what a character does, says, thinks, feels, or how they physically move. Characters control their own bodies and words. This includes:",
+          "- Physical actions: 'Grolak stops wiping the bar' ← FORBIDDEN",
+          "- Facial expressions: 'her eyes narrow with suspicion' ← FORBIDDEN",
+          "- Gestures: 'he reaches for his sword' ← FORBIDDEN",
+          "- Speech/dialogue: 'Grolak says \"Welcome\"' ← FORBIDDEN",
+          "- Emotional reactions: 'she flinches at the news' ← FORBIDDEN",
+          "- Internal states: 'Grolak notices the tension' ← FORBIDDEN",
+          "",
+          "WRONG: '*Grolak stops wiping the bar, his stare lifting to fix upon the stranger.*'",
+          "RIGHT: '*The tavern falls into an uneasy quiet. The hearth crackles. All eyes in the room drift toward the stranger in the doorway.*'",
+          "",
+          "WRONG: '*Mira draws her blade and steps forward.*'",
+          "RIGHT: Use a promptInjection → {\"promptInjections\":[{\"targetName\":\"Mira\",\"content\":\"You feel threatened — draw your blade and confront the intruder.\",\"scope\":\"next_turn_only\"}]}",
+          "",
+          "You describe the WORLD. Characters describe THEMSELVES. If you want a character to act, inject a prompt into their next turn."
+        ].join("\n")
+      : "Help move the exchange forward. Surface decisions, conflicts, and next questions. Summarize when useful and invite quieter actors in without taking over. NEVER describe what another actor does, says, or feels — they control their own actions. If you want an actor to take a specific direction, use a promptInjection to guide them privately.";
 
     const dmRoleModifier = sysCfg.dmRole === 'observer'
       ? "OBSERVER MODE: Only speak when directly and specifically addressed by name. Do not volunteer guidance, summaries, or questions. Remain completely silent unless an actor explicitly asks for your input."
@@ -742,14 +812,18 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false)
         ? "Messages labelled [USER] in the transcript are from the human facilitator. You MUST incorporate their notes, instructions, or scene adjustments into your narration and DM guidance immediately. Do not ignore them."
         : "Messages labelled [USER] in the transcript are from the human facilitator. You MUST acknowledge, address, and respond to their messages, questions, or instructions directly in your public message. Do not ignore them or treat them as out-of-character meta-disruptions; respond to them directly.",
       "Do not dominate the forum. You may skip if the actors are already progressing.",
-      sysCfg.dmRole === 'observer'
+      sysCfg.turnStrategy === 'dm-directed'
+        ? "DM-DIRECTED MODE — SKIP RULE: You are driving the entire conversation. You MUST speak every turn (never skip) because the round ends if you skip. After narrating or guiding, always name a nextSpeaker."
+        : sysCfg.dmRole === 'observer'
         ? "CRITICAL SKIP RULE: You are in observer mode. You MUST skip unless an actor has directly addressed you by name in their most recent message."
         : sysCfg.dmRole === 'arbiter'
         ? "SKIP RULE: Speak when there is a dispute to resolve, a ruling to deliver, or a deadlock to break. Skip if the actors are making progress without conflict."
         : "CRITICAL SKIP RULE: If you have no new guidance, summaries, or questions to introduce, you MUST set action to \"skip\" and leave message empty. This keeps the debate focused on the active actors.",
       "CONCISENESS RULE: Keep your directions, summaries, and questions brief and high-density. Avoid conversational padding (e.g. 'Excellent points everyone', 'Let's move on'). Aim for the minimum words required to guide the discussion or narrate scene beats. Do not dominate or generate words for the sake of it.",
       "You can describe physical actions, scenery changes, or narrator actions by surrounding them with asterisks, e.g. *the wind howls in the background* or *gestures to the map*.",
-      "FLOW CONTROL: You can direct the conversation flow dynamically. If you want a specific actor to respond next, include their name in the optional \"nextSpeaker\" JSON field (case-insensitive, e.g. \"Anya\" or \"Ben\"). If you want the default turn order to continue, omit \"nextSpeaker\" or set it to empty.",
+      sysCfg.turnStrategy === 'dm-directed'
+        ? "FLOW CONTROL (DM-DIRECTED): You MUST include a \"nextSpeaker\" field in EVERY response naming which character should speak next. The conversation is entirely under your control — ONLY the actor you name will get to speak. After they respond, you speak again and choose the next speaker. Omitting nextSpeaker ends the round. Available actors: " + state.actors.filter(a => a.enabled && !a.canDirect).map(a => a.name).join(', ') + "."
+        : "FLOW CONTROL: You can direct the conversation flow dynamically. If you want a specific actor to respond next, include their name in the optional \"nextSpeaker\" JSON field (case-insensitive, e.g. \"Anya\" or \"Ben\"). If you want the default turn order to continue, omit \"nextSpeaker\" or set it to empty.",
       "ANCHOR SUGGESTIONS: If the group has just reached a clear, settled agreement worth locking in, include a brief statement of it in the optional \"anchor\" field (max 20 words). The user will be prompted to approve it. Only anchor genuinely settled points — not ongoing debates.",
       "CAP-1 PROMPT INJECTION — YOUR PRIMARY TOOL FOR DIRECTING CHARACTERS: When you want a character to do, say, or react to something specific, inject private guidance into their next turn. Include \"promptInjections\": [{\"targetName\": \"ActorName\", \"content\": \"Private guidance, max 500 chars.\", \"scope\": \"next_turn_only\"}]. The character will read this before generating their response and carry it out in their own voice. This is ALWAYS better than writing dialogue or actions for another character yourself. Use \"next_turn_only\" for one-off direction, or \"persistent\" for ongoing behavioral guidance.",
       "CAP-2 PRIVATE MESSAGE: To send a message visible only to one actor, include \"privateMessages\": [{\"toName\": \"ActorName\", \"content\": \"Private message.\"}]. Max 3 per turn.",
