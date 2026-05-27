@@ -15,6 +15,38 @@ const DEFAULT_COLORS = ['#2a9d8f', '#7c5cbf', '#4a7fd4', '#c97a40', '#e76f51', '
 
 const ACTOR_TEMPLATES = [
   {
+    label: '🎬 Director',
+    name: 'Director',
+    role: 'Discussion facilitator',
+    persona: 'Guide the discussion, summarize, and invite quieter actors.',
+    goal: 'Converge on clear decisions.',
+    voice: 'Calm, concise, neutral.',
+    canDirect: true,
+    canManageCast: true,
+    color: '#c8a830',
+  },
+  {
+    label: '🌐 Researcher',
+    name: 'Researcher',
+    role: 'Research Specialist',
+    goal: 'Provide up-to-date objective research.',
+    voice: 'Objective, fact-driven.',
+    canResearch: true,
+    temperature: 0.4,
+    color: '#457b9d',
+  },
+  {
+    label: '🔧 Manager',
+    name: 'Manager',
+    role: 'Cast Orchestrator',
+    persona: 'Observe what expertise the discussion needs and adjust the roster. Create specialized actors when new skills are required and silence actors who have finished contributing.',
+    goal: 'Ensure the right perspectives are in the room at the right time.',
+    voice: 'Decisive and brief. States what it is doing and why in one sentence.',
+    canManageCast: true,
+    temperature: 0.7,
+    color: '#1a7a6e',
+  },
+  {
     label: '🎓 Expert',
     name: 'Domain Expert',
     role: 'Subject-Matter Authority',
@@ -188,29 +220,50 @@ export function ActorsPanel() {
 
   return (
     <div>
-      <div className="btn-row" style={{ marginBottom: 8 }}>
-        <button className="btn" onClick={() => addActor()}>
-          <Ic.Plus /> Add
+      <div className="btn-row" style={{ marginBottom: 12 }}>
+        <button className="btn" onClick={() => addActor()} style={{ padding: '4px 10px', fontSize: 12, height: 28 }}>
+          <Ic.Plus /> Add Blank
         </button>
-        <button className="btn" onClick={() => addActor({
-          name: 'Director', role: 'Discussion facilitator',
-          persona: 'Guide the discussion, summarize, and invite quieter actors.',
-          goal: 'Converge on clear decisions.', voice: 'Calm, concise, neutral.',
-          canDirect: true, canManageCast: true, color: '#c8a830',
-        })}>🎬 Director</button>
-        <button className="btn" onClick={() => addActor({
-          name: 'Researcher', role: 'Research Specialist',
-          goal: 'Provide up-to-date objective research.',
-          voice: 'Objective, fact-driven.',
-          canResearch: true, temperature: 0.4, color: '#457b9d',
-        })}><Ic.Globe width={14} height={14} /> Researcher</button>
-        <button className="btn" onClick={() => addActor({
-          name: 'Manager', role: 'Cast Orchestrator',
-          persona: 'Observe what expertise the discussion needs and adjust the roster. Create specialized actors when new skills are required and silence actors who have finished contributing.',
-          goal: "Ensure the right perspectives are in the room at the right time.",
-          voice: 'Decisive and brief. States what it is doing and why in one sentence.',
-          canManageCast: true, temperature: 0.7, color: '#1a7a6e',
-        })}>🔧 Manager</button>
+        <select
+          className="btn"
+          style={{
+            flex: 1,
+            fontSize: '12px',
+            padding: '4px 8px',
+            height: 28,
+            cursor: 'pointer',
+            background: 'var(--bg-card)',
+            color: 'var(--fg)',
+            border: '1px solid var(--border)',
+            borderRadius: '6px'
+          }}
+          value=""
+          onChange={(e) => {
+            const tpl = ACTOR_TEMPLATES.find(t => t.name === e.target.value);
+            if (tpl) {
+              addActor({
+                name: tpl.name,
+                role: tpl.role,
+                persona: tpl.persona,
+                goal: tpl.goal,
+                voice: tpl.voice,
+                temperature: tpl.temperature,
+                color: tpl.color,
+                canDirect: !!tpl.canDirect,
+                canManageCast: !!tpl.canManageCast,
+                canResearch: !!tpl.canResearch,
+              });
+            }
+            e.target.value = "";
+          }}
+        >
+          <option value="" disabled>+ Add from template…</option>
+          {ACTOR_TEMPLATES.map(tpl => (
+            <option key={tpl.name} value={tpl.name}>
+              {tpl.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div style={{ marginBottom: 12 }}>
@@ -229,31 +282,6 @@ export function ActorsPanel() {
           </button>
         </div>
         {aiDescError && <div className="field-hint" style={{ color: 'var(--danger)', marginTop: 2 }}>{aiDescError}</div>}
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 11, color: 'var(--fg-mute)', marginBottom: 4 }}>Templates</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {ACTOR_TEMPLATES.map(tpl => (
-            <button
-              key={tpl.name}
-              className="btn sm"
-              style={{ fontSize: 11, padding: '2px 6px' }}
-              title={`Add ${tpl.name}: ${tpl.goal}`}
-              onClick={() => addActor({
-                name: tpl.name,
-                role: tpl.role,
-                persona: tpl.persona,
-                goal: tpl.goal,
-                voice: tpl.voice,
-                temperature: tpl.temperature,
-                color: tpl.color,
-              })}
-            >
-              {tpl.label}
-            </button>
-          ))}
-        </div>
       </div>
 
       {actors.map((a) => {
