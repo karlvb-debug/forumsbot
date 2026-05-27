@@ -95,10 +95,15 @@ export function Composer({ showThoughts, onToggleThoughts }) {
                 } else {
                   handleSubmit(e);
                 }
-              } else if (!e.shiftKey && !text.trim()) {
+              } else if (!e.shiftKey) {
                 e.preventDefault();
-                console.debug('[keydown] Empty input with simple Enter -> nextTurn');
-                if (!busy) nextTurn();
+                if (text.trim()) {
+                  console.debug('[keydown] Text present with simple Enter -> handleSubmit');
+                  handleSubmit(e);
+                } else {
+                  console.debug('[keydown] Empty input with simple Enter -> nextTurn');
+                  if (!busy) nextTurn();
+                }
               }
             }
           }}
