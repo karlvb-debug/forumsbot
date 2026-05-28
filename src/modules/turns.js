@@ -1,4 +1,5 @@
 import { RECENT_MESSAGE_LIMIT, PROMPT_MESSAGE_LIMIT, WORD_LIMITS, ANCHOR_WORD_CAP, colors } from './constants.js';
+import { buildActorSchema, buildSchemaPromptLine } from './schemas.js';
 import { state, saveState, logTransition, logWarning } from './state.js';
 import { chatCompletion, chatJson, setStatus, setCurrentSpeaker, getLastToolCalls } from './api.js';
 import { saveState as _hookSaveState, mutateState } from '../hooks/useForumState.js';
@@ -1026,7 +1027,8 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     }
 
     const directorUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
-    const result = await chatJson(directorSystem, directorUser, actor.temperature ?? state.settings.temperature, signal, onStream);
+    const schema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled });
+    const result = await chatJson(directorSystem, directorUser, actor.temperature ?? state.settings.temperature, signal, onStream, null, schema);
     result._promptParts = promptParts;
     return result;
   }

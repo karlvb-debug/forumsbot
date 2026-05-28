@@ -308,7 +308,9 @@ export async function chatCompletionMessages(messages, { temperature = state.set
  * Stream a single-round chat completion, calling onChunk(delta, accumulated) for each token.
  * No tool-call handling — use chatCompletion for that. Returns the full accumulated text.
  */
-export async function chatStream(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal } = {}, onChunk = null) {
+export async function chatStream(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, jsonSchema = null } = {}, onChunk = null) {
+  const stageDir = state.scenario?.systems?.stageDirections?.enabled ?? (state.scenario?.mode === 'story');
+  const isToolMode = state.settings.toolsEnabled && !stageDir;
   const payload = {
     model: state.settings.model,
     messages: [
@@ -321,6 +323,14 @@ export async function chatStream(system, user, { temperature = state.settings.te
     stream_options: { include_usage: true }
   };
   applySamplingParams(payload);
+
+  // JSON schema-constrained decoding for streaming path.
+  if (jsonSchema && !isToolMode) {
+    payload.response_format = {
+      type: "json_schema",
+      json_schema: { name: "response", strict: true, schema: jsonSchema }
+    };
+  }
 
   const startTime = Date.now();
   try {
@@ -441,7 +451,7 @@ async function _getEmbeddingsBatchDirect(texts) {
   return items.map(item => item.embedding).filter(Array.isArray);
 }
 
-export async function chatJson(system, user, temperature, signal, onStream = null, maxTokens = null) {
+export async function chatJson(system, user, temperature, signal, onStream = null, maxTokens = null, jsonSchema = null) {
   // Stream when a callback is provided and streaming is enabled.
   // Previously !isToolMode blocked streaming for most users (toolsEnabled=true by default).
   // Tool calls are now detected post-stream; the vast majority of turns have none.
@@ -455,7 +465,8 @@ export async function chatJson(system, user, temperature, signal, onStream = nul
     content = await chatStream(system, user, {
       temperature,
       maxTokens: resolvedMaxTokens,
-      signal
+      signal,
+      jsonSchema,
     }, (_delta, accumulated) => {
       onStream(extractStreamingDisplay(accumulated));
     });
@@ -496,7 +507,8 @@ ${result}
       temperature,
       maxTokens: resolvedMaxTokens,
       signal,
-      useTools: true
+      useTools: true,
+      jsonSchema,
     });
   }
 
