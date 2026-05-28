@@ -43,17 +43,17 @@ function extractStreamingMessage(accumulated) {
 // - Else → return empty string so the cursor stays alive
 function extractStreamingDisplay(accumulated) {
   if (/"message"\s*:\s*"/.test(accumulated)) {
-    return extractJsonField(accumulated, "message") ?? "";
+    return extractJsonField(accumulated, "message") ?? "Writing…";
   }
   if (/"thought"\s*:\s*"/.test(accumulated)) {
     const thought = extractJsonField(accumulated, "thought") ?? "";
     if (state.settings.showThoughts) {
-      return thought || "💭 Thinking\u2026";
+      return thought || "Reasoning…";
     }
     const wordCount = thought.split(/\s+/).filter(Boolean).length;
-    return wordCount > 5 ? `💭 Thinking\u2026 (${wordCount}w)` : "💭 Thinking\u2026";
+    return wordCount > 5 ? `Reasoning… (${wordCount}w)` : "Reasoning…";
   }
-  return ""; // preamble — keep cursor blinking
+  return "Generating…"; // preamble — JSON structure tokens before first field
 }
 
 // ── Request scheduler ────────────────────────────────────────────────────────
@@ -462,6 +462,7 @@ export async function chatJson(system, user, temperature, signal, onStream = nul
 
   let content;
   if (canStream) {
+    onStream("Sending to model…");
     content = await chatStream(system, user, {
       temperature,
       maxTokens: resolvedMaxTokens,
@@ -858,6 +859,25 @@ export async function pingConnection(silent = false) {
 export async function loadModels() {
   setStatus("Checking LM Studio…", "pending");
   await pingConnection(false);
+}
+
+/**
+ * Ask LM Studio to load a model by identifier (model must already be downloaded).
+ * Only supported with LM Studio's /api/v0/ extended API.
+ */
+export async function loadLmStudioModel(identifier) {
+  const response = await fetch("/api/load-model", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      baseUrl: state.settings.baseUrl,
+      apiKey: state.settings.apiKey,
+      identifier
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `Failed to load model (${response.status}).`);
+  return data;
 }
 
 let _pingInterval = null;

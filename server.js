@@ -394,9 +394,36 @@ async function githubPr(req, res) {
 }
 
 
+async function loadModel(req, res) {
+  try {
+    const { baseUrl, apiKey, identifier } = await readJson(req);
+    if (!identifier) return sendJson(res, 400, { error: "identifier required" });
+    const base = cleanBaseUrl(baseUrl).replace(/\/v1$/, "");
+    const headers = {
+      authorization: `Bearer ${apiKey || "lm-studio"}`,
+      "content-type": "application/json"
+    };
+    const response = await fetch(`${base}/api/v0/models/${encodeURIComponent(identifier)}/load`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({}),
+      signal: AbortSignal.timeout(60000)
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      return sendJson(res, response.status, { error: `LM Studio: ${response.status}${text ? ` — ${text.slice(0, 200)}` : ""}` });
+    }
+    const data = await response.json().catch(() => ({}));
+    return sendJson(res, 200, data);
+  } catch (error) {
+    return sendJson(res, 502, toLmStudioError(error, 502));
+  }
+}
+
 const server = createServer(async (req, res) => {
   if (req.method === "POST" && req.url === "/api/models") return proxyModels(req, res);
   if (req.method === "POST" && req.url === "/api/model-info") return proxyModelInfo(req, res);
+  if (req.method === "POST" && req.url === "/api/load-model") return loadModel(req, res);
   if (req.method === "POST" && req.url === "/api/chat") return proxyChat(req, res);
   if (req.method === "POST" && req.url === "/api/embeddings") return proxyEmbeddings(req, res);
   if (req.method === "POST" && req.url === "/api/tool-execute") return toolExecute(req, res);

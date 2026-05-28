@@ -37,6 +37,8 @@ const ACTOR_TEMPLATES = [
     turnSchedule: 'every-turn',
     actorMode: 'background',
     triggerOn: ['on_every_turn', 'on_user_message', 'on_conflict', 'on_agent_repetition'],
+    temperature: 0.6,
+    maxTokens: 600,
     color: '#c8a830',
   },
   {

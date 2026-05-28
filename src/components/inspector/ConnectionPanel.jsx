@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import * as Ic from '../Icons';
 import { Field, Toggle, Range } from '../shared/FormControls';
 import { useForumState, mutateState } from '../../hooks/useForumState';
@@ -104,7 +104,25 @@ export function ConnectionPanel() {
   const tokenSpeed = useForumState(s => s.ui?.tokenSpeed || null);
   const embeddingProbe = useForumState(s => s.ui?.embeddingProbeResult || null);
 
+  const [loadingModel, setLoadingModel] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+
   const { pingConnection } = useActions();
+
+  const handleLoadModel = async (identifier) => {
+    setLoadingModel(identifier);
+    setLoadError(null);
+    try {
+      const { loadLmStudioModel, loadModels } = await import('../../modules/api.js');
+      await loadLmStudioModel(identifier);
+      await loadModels();
+      mutateState(s => { s.settings.model = identifier; });
+    } catch (err) {
+      setLoadError(err.message);
+    } finally {
+      setLoadingModel(null);
+    }
+  };
 
   const cfg = PROVIDERS[provider] || PROVIDERS['custom'];
 
@@ -167,6 +185,35 @@ export function ConnectionPanel() {
 
         {tokenSpeed && <div className="card-row"><span className="lbl">Tok/s observed</span><span className="val">{tokenSpeed} tok/s</span></div>}
       </div>
+
+      {isLocal && status.tone === 'error' && (
+        <div className="card getting-started-card">
+          <div className="card-title"><h3>Getting Started</h3></div>
+          <ol className="getting-started-steps">
+            <li>Open <strong>LM Studio</strong> on this computer</li>
+            <li>Go to <strong>Models</strong> and download a model (e.g. Mistral 7B)</li>
+            <li>Click <strong>Load Model</strong> on the home screen</li>
+            <li>Click <strong>↻ Refresh</strong> below once the model is loaded</li>
+          </ol>
+          <button className="btn sm" onClick={pingConnection} style={{ marginTop: 8 }}>↻ Refresh connection</button>
+        </div>
+      )}
+
+      {isLocal && status.tone === 'ok' && availableModels.length > 0 && !model && (
+        <div className="card getting-started-card">
+          <div className="card-title"><h3>Select a model</h3></div>
+          <p style={{ marginBottom: 8, fontSize: '0.85em', color: 'var(--fg-dim)' }}>
+            LM Studio is connected. Pick a loaded model to get started.
+          </p>
+          {availableModels.map(id => (
+            <button key={id} className="btn sm" style={{ display: 'block', width: '100%', marginBottom: 4, textAlign: 'left' }}
+              onClick={() => mutateState(s => { s.settings.model = id; })}>
+              {id}
+            </button>
+          ))}
+          {loadError && <div className="field-hint hint-warn" style={{ marginTop: 6 }}>{loadError}</div>}
+        </div>
+      )}
 
       <div className="card">
         <div className="card-title"><h3>Models</h3><button className="btn sm ghost" onClick={pingConnection}>↻ Refresh</button></div>

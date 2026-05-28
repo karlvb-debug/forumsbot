@@ -1018,7 +1018,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
 
     const directorUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
     const schema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled });
-    const result = await chatJson(directorSystem, directorUser, actor.temperature ?? state.settings.temperature, signal, onStream, null, schema);
+    const result = await chatJson(directorSystem, directorUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || 600, schema);
     result._promptParts = promptParts;
     return result;
   }
@@ -1063,7 +1063,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     }
     const managerUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
     const managerSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled });
-    return chatJson(managerSystem, managerUser, actor.temperature ?? state.settings.temperature, signal, onStream, null, managerSchema);
+    return chatJson(managerSystem, managerUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || 600, managerSchema);
   }
 
   if (actor.canResearch) {

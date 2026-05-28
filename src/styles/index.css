@@ -655,6 +655,20 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
   margin: 4px 0 8px;
 }
 
+.getting-started-card {
+  border-color: oklch(from var(--accent) l c h / 0.4);
+  background: oklch(from var(--accent) l c h / 0.06);
+}
+.getting-started-steps {
+  padding-left: 18px;
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--fg-dim);
+}
+.getting-started-steps li { margin-bottom: 2px; }
+.getting-started-steps strong { color: var(--fg); }
+
 /* segmented mode pills */
 .seg {
   display: inline-flex;
