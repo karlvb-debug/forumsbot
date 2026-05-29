@@ -29,12 +29,14 @@ export function Composer({ showThoughts, onToggleThoughts }) {
 
   const handleSubmit = useCallback(async (e) => {
     e?.preventDefault();
-    if (!text.trim() || busy) return;
+    if (!text.trim()) return;
     await sendMessage(text.trim());
     setText('');
     if (taRef.current) taRef.current.style.height = 'auto';
-    runRound();
-  }, [text, sendMessage, runRound, busy]);
+    // If auto is running, the message is queued for the next prompt — don't trigger a new round.
+    // If idle, kick off a round so actors respond.
+    if (!autoRunning && !busy) runRound();
+  }, [text, sendMessage, runRound, busy, autoRunning]);
 
   const handleToggleTools = useCallback(() => {
     mutateState(s => { s.settings.toolsEnabled = !s.settings.toolsEnabled; });
@@ -187,7 +189,7 @@ export function Composer({ showThoughts, onToggleThoughts }) {
               <Ic.Play width={11} height={11} /> Auto
             </button>
           )}
-          <button type="submit" className="send-btn" title="Send (⌘↵)" disabled={!text.trim() || busy}>
+          <button type="submit" className="send-btn" title="Send (⌘↵)" disabled={!text.trim()}>
             <Ic.Send width={13} height={13} /> Send
             <span className="kbd">⌘↵</span>
           </button>

@@ -781,7 +781,25 @@ export function normalizeGoalVerdict(value) {
 // Called by the React StopModal component when the user makes a decision.
 let _stopResolve = null;
 export function resolveStopOrContinue(shouldStop, newGoal = "") {
-  if (_stopResolve) { _stopResolve({ shouldStop, newGoal }); _stopResolve = null; }
+  // Always clear the modal immediately so it dismisses
+  mutateState(s => { s.ui.stopModal = null; });
+
+  if (_stopResolve) {
+    _stopResolve({ shouldStop, newGoal });
+    _stopResolve = null;
+  } else {
+    // Fallback: auto-loop already exited, handle inline
+    if (shouldStop) {
+      state.autoRunning = false;
+      state.autoStop.roundsRun = 0;
+      setAutoStopStatus("Stopped by user.");
+    } else if (newGoal && newGoal.trim()) {
+      state.autoStop.goal = newGoal.trim();
+      state.autoStop.roundsRun = 0;
+      setAutoStopStatus("New goal saved. Press Auto to continue.");
+    }
+    saveState();
+  }
 }
 
 export async function promptStopOrContinue(reason, options = {}) {
@@ -793,7 +811,7 @@ export async function promptStopOrContinue(reason, options = {}) {
     _stopResolve = resolve;
     mutateState(s => { s.ui.stopModal = { reason, suggestedGoal: options.suggestedGoal || "" }; });
   });
-  mutateState(s => { s.ui.stopModal = null; });
+  // Modal is cleared by resolveStopOrContinue
 
   if (shouldStop) {
     state.autoStop.roundsRun = 0;
