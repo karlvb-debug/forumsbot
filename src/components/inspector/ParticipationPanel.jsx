@@ -153,7 +153,7 @@ export function ParticipationPanel() {
                 <span className="field-hint" style={{ marginTop: 2 }}>You: {p.userResponse}</span>
               )}
               {p.outcome === 'suppressed' && (
-                <span className="field-hint" style={{ marginTop: 2, color: 'var(--muted)' }}>Suppressed</span>
+                <span className="field-hint" style={{ marginTop: 2, color: 'var(--fg-mute)' }}>Suppressed</span>
               )}
             </div>
           ))}
