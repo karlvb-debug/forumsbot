@@ -65,18 +65,25 @@ export function HelpPanel() {
             <strong>Stop</strong> button or <strong>Esc</strong>.
           </li>
         </ul>
-        <p style={{ marginBottom: 8 }}>
-          <strong>Keyboard shortcuts:</strong>
+        <p style={{ marginBottom: 0 }}>
+          See the <strong>Keyboard Shortcuts</strong> section below for the full list.
         </p>
-        <ul style={{ margin: '4px 0 8px 0', paddingLeft: 16, lineHeight: 1.6 }}>
-          <li><strong>Alt+N</strong> — next turn</li>
-          <li><strong>Alt+R</strong> — full round</li>
-          <li><strong>Alt+A</strong> — auto mode</li>
-          <li><strong>Esc</strong> — stop generation</li>
-          <li><strong>Ctrl+K</strong> — command palette</li>
-          <li><strong>Alt+I</strong> — AI assistant</li>
-          <li><strong>Ctrl+F</strong> — search transcript</li>
-        </ul>
+      </HelpSection>
+
+      {/* Keyboard Shortcuts */}
+      <HelpSection id="shortcuts" title="Keyboard Shortcuts" openId={openId} setOpenId={setOpenId}>
+        <table className="shortcut-legend">
+          <tbody>
+            <tr><td><kbd>Alt</kbd>+<kbd>N</kbd></td><td>Next turn — the next actor speaks</td></tr>
+            <tr><td><kbd>Alt</kbd>+<kbd>R</kbd></td><td>Full round — every enabled actor speaks once</td></tr>
+            <tr><td><kbd>Alt</kbd>+<kbd>A</kbd></td><td>Auto mode — run continuously until a stop condition</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>Stop generation (also dismisses dialogs)</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd></td><td>Command palette</td></tr>
+            <tr><td><kbd>Alt</kbd>+<kbd>I</kbd></td><td>AI assistant</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>Search transcript</td></tr>
+            <tr><td><kbd>Enter</kbd></td><td>Send your message (in the composer)</td></tr>
+          </tbody>
+        </table>
       </HelpSection>
 
       {/* Topbar */}

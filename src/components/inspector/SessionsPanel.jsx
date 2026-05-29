@@ -4,6 +4,8 @@ import { Field } from '../shared/FormControls';
 
 export function SessionsPanel() {
   const [sessions, setSessions] = useState([]);
+  const [configs, setConfigs] = useState([]);
+  const [configName, setConfigName] = useState('');
   const [exportMode, setExportMode] = useState('debug');
   const [pendingReset, setPendingReset] = useState(false);
   const presetInputRef = useRef(null);
@@ -13,7 +15,34 @@ export function SessionsPanel() {
     setSessions(await db.getAllSessions() || []);
   };
 
-  useEffect(() => { refreshSessions(); }, []);
+  const refreshConfigs = async () => {
+    const mod = await import('../../modules/session.js');
+    setConfigs(mod.listConfigurations());
+  };
+
+  useEffect(() => { refreshSessions(); refreshConfigs(); }, []);
+
+  const handleSaveConfig = async () => {
+    const mod = await import('../../modules/session.js');
+    mod.saveConfiguration(configName);
+    setConfigName('');
+    await refreshConfigs();
+  };
+
+  const handleApplyConfig = async (config) => {
+    const mod = await import('../../modules/session.js');
+    const ok = await mod.requestConfirmPublic(
+      `Apply configuration "${config.name}"? This replaces the current scenario and cast. Your transcript is kept.`,
+      'Apply'
+    );
+    if (ok) mod.applyConfiguration(config);
+  };
+
+  const handleDeleteConfig = async (id) => {
+    const mod = await import('../../modules/session.js');
+    mod.deleteConfiguration(id);
+    await refreshConfigs();
+  };
 
   const saveSession = async () => {
     const { saveCurrentSession } = await import('../../modules/session.js');
@@ -82,6 +111,45 @@ export function SessionsPanel() {
           );
         })}
         {!sessions.length && <div className="empty">No saved sessions yet.</div>}
+        <div className="field-hint" style={{ marginTop: 8 }}>
+          Sessions snapshot the whole conversation. To reuse a <em>setup</em> (scenario + cast) without the transcript, save a Configuration below.
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title"><h3>Configurations</h3></div>
+        <div className="field-hint" style={{ marginBottom: 8 }}>
+          Save your current scenario, cast, and generation settings as a reusable setup — no transcript.
+        </div>
+        <div className="btn-row" style={{ marginBottom: 10 }}>
+          <input
+            style={{ flex: 1, fontSize: 12 }}
+            placeholder="Configuration name…"
+            value={configName}
+            onChange={e => setConfigName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleSaveConfig(); }}
+          />
+          <button className="btn sm primary" onClick={handleSaveConfig}>
+            <Ic.Plus width={12} height={12} /> Save setup
+          </button>
+        </div>
+        {configs.map((c) => (
+          <div key={c.id} className="session-row" onClick={() => handleApplyConfig(c)} title="Apply this configuration">
+            <div style={{ width: 8, height: 8, borderRadius: 99, background: 'var(--accent)', flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="session-name" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {c.name}
+              </div>
+              <div className="session-meta">
+                {c.savedAt ? new Date(c.savedAt).toLocaleDateString() : ''} · {c.actorCount ?? (c.actors?.length || 0)} actors
+              </div>
+            </div>
+            <button className="mini-icon-btn" title="Delete" onClick={(e) => { e.stopPropagation(); handleDeleteConfig(c.id); }}>
+              <Ic.Trash width={12} height={12} />
+            </button>
+          </div>
+        ))}
+        {!configs.length && <div className="empty">No saved configurations yet.</div>}
       </div>
 
       <div className="card">

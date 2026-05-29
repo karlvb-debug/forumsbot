@@ -12,23 +12,46 @@ import { PauseCard } from './components/PauseCard';
 import { AiAssistant } from './components/AiAssistant';
 import { ReadinessStrip } from './components/ReadinessStrip';
 import { DocEditorStage } from './components/DocEditorStage';
+import { BottomNav } from './components/BottomNav';
+import { Sheet } from './components/Sheet';
+import * as Ic from './components/Icons';
 // Importing state.js triggers loadState() at module level
 import './modules/state.js';
 import { setModuleRefs, useActions } from './hooks/useActions.js';
 import { mutateState, notifyStateChange, saveState, useForumState } from './hooks/useForumState.js';
+import { NAVIGATE_EVENT } from './hooks/navigation.js';
+
+// Small media-query hook (no dependency) — drives the mobile shell.
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(query).matches
+  );
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const onChange = () => setMatches(mql.matches);
+    onChange();
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, [query]);
+  return matches;
+}
 
 // Navigation items for the rail
+// Two tiers: `primary` = the core setup loop (connect → scenario → cast);
+// `advanced` = monitoring, artifacts & history. `bottom` pins to the rail
+// foot. On mobile, Actors/Memory live in the bottom nav and the rest are
+// grouped under the "More" sheet by tier.
 const NAV = [
-  { id: 'scenario',      label: 'Scenario',     icon: 'Target',   group: 1 },
-  { id: 'actors',        label: 'Actors',       icon: 'Actors',   group: 1 },
-  { id: 'participation', label: 'You',          icon: 'Info',     group: 1 },
-  { id: 'memory',        label: 'Memory',       icon: 'Brain',    group: 2 },
-  { id: 'telemetry',     label: 'Telemetry',    icon: 'Gauge',    group: 2 },
-  { id: 'documents',     label: 'Documents',    icon: 'Doc',      group: 2 },
-  { id: 'goal',          label: 'Goal',         icon: 'Sliders',  group: 3 },
-  { id: 'sessions',      label: 'Sessions',     icon: 'Sessions', group: 3 },
-  { id: 'connection',    label: 'Connection',   icon: 'Plug',     group: 4 },
-  { id: 'help',          label: 'Help',         icon: 'Info',     group: 4 },
+  { id: 'scenario',      label: 'Scenario',     icon: 'Target',        tier: 'primary'  },
+  { id: 'actors',        label: 'Actors',       icon: 'Actors',        tier: 'primary'  },
+  { id: 'connection',    label: 'Connection',   icon: 'Plug',          tier: 'primary'  },
+  { id: 'participation', label: 'You',          icon: 'MessageSquare', tier: 'advanced' },
+  { id: 'memory',        label: 'Memory',       icon: 'Brain',         tier: 'advanced' },
+  { id: 'telemetry',     label: 'Telemetry',    icon: 'Gauge',         tier: 'advanced' },
+  { id: 'goal',          label: 'Goal',         icon: 'Sliders',       tier: 'advanced' },
+  { id: 'documents',     label: 'Documents',    icon: 'Doc',           tier: 'advanced' },
+  { id: 'sessions',      label: 'Sessions',     icon: 'Sessions',      tier: 'advanced' },
+  { id: 'help',          label: 'Help',         icon: 'Info',          tier: 'bottom'   },
 ];
 
 const NAV_TITLES = {
@@ -52,9 +75,12 @@ export default function App() {
   const [inspectorPos, setInspectorPos] = useState('left');
   const [ready, setReady] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [sheet, setSheet] = useState(null); // mobile only: null | 'panel' | 'more'
+  const isMobile = useMediaQuery('(max-width: 759px)');
   const showThoughts = useForumState(s => s.settings?.showThoughts || false);
+  const autoRunning = useForumState(s => s.autoRunning || false);
 
-  const { nextTurn, runRound, startAuto, stopGeneration } = useActions();
+  const { nextTurn, runRound, startAuto, stopGeneration, directorBrief } = useActions();
   const stopModal = useForumState(s => s.ui?.stopModal || null);
   const confirmModal = useForumState(s => s.ui?.confirmModal || null);
   const pauseModal = useForumState(s => s.ui?.pauseModal || null);
@@ -164,22 +190,56 @@ export default function App() {
     document.body.classList.add(density === 'compact' ? 'density-compact' : 'density-comfy');
   }, [density]);
 
-  // Accent CSS vars
+  // Accent CSS vars — theme-aware: a darker accent on light backgrounds so
+  // accent text/fills keep adequate contrast (the inline value overrides the
+  // stylesheet's :root/.theme-light accent, so it must adapt to the theme).
   useEffect(() => {
     const map = {
-      amber:  { l: 0.78, c: 0.13, h: 65,  fg: 'oklch(0.20 0.04 65)' },
-      violet: { l: 0.72, c: 0.14, h: 295, fg: 'oklch(0.20 0.04 295)' },
-      teal:   { l: 0.74, c: 0.12, h: 195, fg: 'oklch(0.18 0.04 195)' },
-      coral:  { l: 0.72, c: 0.14, h: 25,  fg: 'oklch(0.20 0.04 25)' },
+      amber:  { h: 70,  c: 0.13 },
+      violet: { h: 295, c: 0.14 },
+      teal:   { h: 195, c: 0.12 },
+      coral:  { h: 25,  c: 0.14 },
     };
     const m = map[accent] || map.amber;
-    document.documentElement.style.setProperty('--accent', `oklch(${m.l} ${m.c} ${m.h})`);
-    document.documentElement.style.setProperty('--accent-soft', `oklch(${m.l} ${m.c} ${m.h} / 0.16)`);
-    document.documentElement.style.setProperty('--accent-fg', m.fg);
-  }, [accent]);
+    const light = theme === 'light';
+    const l = light ? 0.62 : 0.80;
+    const fg = light ? `oklch(0.99 0.01 ${m.h})` : `oklch(0.20 0.04 ${m.h})`;
+    const root = document.documentElement.style;
+    root.setProperty('--accent', `oklch(${l} ${m.c} ${m.h})`);
+    root.setProperty('--accent-soft', `oklch(${l} ${m.c} ${m.h} / ${light ? 0.14 : 0.16})`);
+    root.setProperty('--accent-fg', fg);
+  }, [accent, theme]);
+
+  // Cross-panel jump links: a panel dispatches NAVIGATE_EVENT, we switch the
+  // active panel (and surface the sheet on mobile).
+  useEffect(() => {
+    const onNavigate = (e) => {
+      const panel = e.detail?.panel;
+      if (!panel) return;
+      setActivePanel(panel);
+      if (isMobile) setSheet('panel');
+    };
+    window.addEventListener(NAVIGATE_EVENT, onNavigate);
+    return () => window.removeEventListener(NAVIGATE_EVENT, onNavigate);
+  }, [isMobile]);
 
   const inspectorOnLeft = inspectorPos === 'left';
   const meta = NAV_TITLES[activePanel] || { title: '', sub: '' };
+
+  // Mobile bottom-nav highlight + the "More" panel list
+  const navMode = sheet === null
+    ? 'forum'
+    : sheet === 'more'
+      ? 'more'
+      : (activePanel === 'actors' ? 'actors' : activePanel === 'memory' ? 'memory' : 'more');
+  // Actors + Memory are reachable directly from the bottom nav; everything
+  // else is grouped by tier inside the "More" sheet.
+  const inBottomNav = ['actors', 'memory'];
+  const moreGroups = [
+    { label: 'Setup',   items: NAV.filter(n => n.tier === 'primary'  && !inBottomNav.includes(n.id)) },
+    { label: 'Session', items: NAV.filter(n => n.tier === 'advanced' && !inBottomNav.includes(n.id)) },
+    { label: 'Help',    items: NAV.filter(n => n.tier === 'bottom') },
+  ].filter(g => g.items.length);
 
   return (
     <Shell inspectorOnLeft={inspectorOnLeft}>
@@ -194,7 +254,7 @@ export default function App() {
       <div className="main">
         <Topbar onOpenCmd={() => setCmdOpen(true)} />
         <div className={'workspace' + (inspectorOnLeft ? ' inspector-left-pos' : '')}>
-          {inspectorOnLeft && (
+          {!isMobile && inspectorOnLeft && (
             <Inspector active={activePanel} meta={meta} nav={NAV} />
           )}
           {focusedDocId ? (
@@ -224,11 +284,83 @@ export default function App() {
               />
             </div>
           )}
-          {!inspectorOnLeft && (
+          {!isMobile && !inspectorOnLeft && (
             <Inspector active={activePanel} meta={meta} nav={NAV} />
           )}
         </div>
       </div>
+
+      {isMobile && (
+        <>
+          <Sheet open={sheet === 'panel'} title={meta.title} sub={meta.sub} onClose={() => setSheet(null)}>
+            <Inspector active={activePanel} meta={meta} nav={NAV} embedded />
+          </Sheet>
+          <Sheet open={sheet === 'more'} title="More" sub="all panels & settings" onClose={() => setSheet(null)}>
+            <div className="more-section">
+              <div className="more-group-label">Run</div>
+              <div className="more-grid">
+                <button className="more-item" onClick={() => { setSheet(null); nextTurn(); }}>
+                  <Ic.Step width={20} height={20} /><span>Next</span>
+                </button>
+                <button className="more-item" onClick={() => { setSheet(null); runRound(); }}>
+                  <Ic.Round width={20} height={20} /><span>Round</span>
+                </button>
+                {autoRunning ? (
+                  <button className="more-item more-item--danger" onClick={() => { setSheet(null); stopGeneration(); }}>
+                    <Ic.Stop width={20} height={20} /><span>Stop</span>
+                  </button>
+                ) : (
+                  <button className="more-item" onClick={() => { setSheet(null); startAuto(); }}>
+                    <Ic.Play width={20} height={20} /><span>Auto</span>
+                  </button>
+                )}
+                <button className="more-item" onClick={() => { setSheet(null); directorBrief(); }}>
+                  <Ic.MessageSquare width={20} height={20} /><span>Brief</span>
+                </button>
+              </div>
+            </div>
+            {moreGroups.map(group => (
+              <div className="more-section" key={group.label}>
+                <div className="more-group-label">{group.label}</div>
+                <div className="more-grid">
+                  {group.items.map(n => {
+                    const I = Ic[n.icon];
+                    return (
+                      <button key={n.id} className="more-item" onClick={() => { setActivePanel(n.id); setSheet('panel'); }}>
+                        {I && <I width={20} height={20} />}
+                        <span>{n.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            <div className="more-section">
+              <div className="more-group-label">Settings</div>
+              <div className="more-grid">
+                <button className="more-item" onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))}>
+                  {theme === 'dark' ? <Ic.Sun width={20} height={20} /> : <Ic.Moon width={20} height={20} />}
+                  <span>Theme</span>
+                </button>
+                <button className="more-item" onClick={() => { setSheet(null); setCmdOpen(true); }}>
+                  <Ic.Cmd width={20} height={20} />
+                  <span>Commands</span>
+                </button>
+              </div>
+            </div>
+          </Sheet>
+          <BottomNav
+            mode={navMode}
+            onForum={() => setSheet(null)}
+            onActors={() => { setActivePanel('actors'); setSheet('panel'); }}
+            onMemory={() => { setActivePanel('memory'); setSheet('panel'); }}
+            onMore={() => setSheet('more')}
+            autoRunning={autoRunning}
+            onRun={nextTurn}
+            onStop={stopGeneration}
+          />
+        </>
+      )}
 
       <CommandPalette
         open={cmdOpen}

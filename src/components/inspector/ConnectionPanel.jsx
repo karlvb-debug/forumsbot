@@ -5,6 +5,7 @@ import { useForumState, mutateState } from '../../hooks/useForumState';
 import { isEmbeddingModel } from '../../modules/api.js';
 import { useActions, getConnectionStatus, getConnectionStatusVersion, subscribeConnectionStatus } from '../../hooks/useActions';
 import { useSyncExternalStore } from 'react';
+import { navigateToPanel } from '../../hooks/navigation.js';
 
 const PROVIDERS = {
   'lm-studio': {
@@ -283,24 +284,35 @@ export function ConnectionPanel() {
         )}
       </div>
 
-      <div className="card">
-        <div className="card-title"><h3>Generation</h3></div>
-        <Field label="Temperature" info="Default actor creativity. Individual actors can override.">
-          <Range value={temperature} onChange={(v) => updateSetting('temperature', v)} min={0} max={2} step={0.05} />
-        </Field>
-        <Field label="Max tokens / response">
-          <Range value={maxTokens} onChange={(v) => updateSetting('maxTokens', v)} min={200} max={8000} step={100} format={(v) => `${v}`} />
-        </Field>
-        <Field label="Top-P (nucleus)">
-          <Range value={topP} onChange={(v) => updateSetting('topP', v)} min={0.1} max={1} step={0.05} />
-        </Field>
-        <Field label="Repeat penalty">
-          <Range value={repeatPenalty} onChange={(v) => updateSetting('repeatPenalty', v)} min={1} max={1.5} step={0.05} />
-        </Field>
-        <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-          <Toggle checked={streaming} onChange={(v) => updateSetting('streamingEnabled', v)} label="Streaming" />
+      <details className="card card-disclosure">
+        <summary className="card-title">
+          <h3>Generation tuning</h3>
+          <span className="disclosure-sub">global defaults · advanced</span>
+        </summary>
+        <div className="disclosure-body">
+          <Field label="Temperature" info="Global default actor creativity. Individual actors can override this in Actors → Behavior.">
+            <Range value={temperature} onChange={(v) => updateSetting('temperature', v)} min={0} max={2} step={0.05} />
+          </Field>
+          <div className="field-hint" style={{ marginTop: -4 }}>
+            These are global defaults. &nbsp;
+            <button type="button" className="link-btn" onClick={() => navigateToPanel('actors')}>
+              Per-actor overrides →
+            </button>
+          </div>
+          <Field label="Max tokens / response">
+            <Range value={maxTokens} onChange={(v) => updateSetting('maxTokens', v)} min={200} max={8000} step={100} format={(v) => `${v}`} />
+          </Field>
+          <Field label="Top-P (nucleus)">
+            <Range value={topP} onChange={(v) => updateSetting('topP', v)} min={0.1} max={1} step={0.05} />
+          </Field>
+          <Field label="Repeat penalty">
+            <Range value={repeatPenalty} onChange={(v) => updateSetting('repeatPenalty', v)} min={1} max={1.5} step={0.05} />
+          </Field>
+          <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+            <Toggle checked={streaming} onChange={(v) => updateSetting('streamingEnabled', v)} label="Streaming" />
+          </div>
         </div>
-      </div>
+      </details>
     </div>
   );
 }

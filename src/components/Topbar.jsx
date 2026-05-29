@@ -3,6 +3,7 @@ import * as Ic from './Icons';
 import { useForumState, mutateState, saveState } from '../hooks/useForumState';
 import { useActions, getConnectionStatus, getConnectionStatusVersion, subscribeBusy, getBusy, subscribeConnectionStatus } from '../hooks/useActions';
 import { useSyncExternalStore } from 'react';
+import { navigateToPanel } from '../hooks/navigation.js';
 
 export function Topbar() {
   const assistantOpen = useForumState(s => s.ui?.assistantOpen || false);
@@ -29,7 +30,7 @@ export function Topbar() {
   const connClass = connStatus.tone === 'ok' ? 'live' : connStatus.tone === 'error' ? 'err' : '';
 
   const turboMode = useForumState(s => s.settings?.turboMode || false);
-  const { nextTurn, runRound, startAuto, stopGeneration } = useActions();
+  const { nextTurn, runRound, startAuto, stopGeneration, directorBrief } = useActions();
 
   const isSummarizing = useForumState(s => s.memory?.isSummarizing || false);
   const isExtracting = useForumState(s => s.outcomes?.isExtracting || false);
@@ -60,13 +61,25 @@ export function Topbar() {
             {bgTaskText}
           </span>
         )}
-        <span className={`status-pill ${connClass}`} title="Connection status">
-          <span className="dot" />{connStatus.message}
-        </span>
-        <span className="status-pill" title="Round status">R{roundNum} · {turnCount} turns</span>
+        {autoRunning && (
+          <span className="status-pill live" title="Auto-run is active">
+            <span className="dot" />Auto running
+          </span>
+        )}
+        <button
+          className={`status-pill status-pill--btn ${connClass}`}
+          title="Connection status — click to open the Connection panel"
+          onClick={() => navigateToPanel('connection')}
+        >
+          <span className="dot" /><span className="status-pill-label">{connStatus.message}</span>
+        </button>
+        <span className="status-pill status-round" title="Round status">R{roundNum} · {turnCount}t</span>
       </div>
 
       <div className="run-controls" role="group" aria-label="Run">
+        <button onClick={directorBrief} title="Ask the Director for a progress brief">
+          Brief
+        </button>
         <button onClick={nextTurn} title="Next AI turn (Alt+N)">
           <Ic.Step width={13} height={13} />Next
         </button>

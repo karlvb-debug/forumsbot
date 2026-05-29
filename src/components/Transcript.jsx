@@ -14,6 +14,24 @@ function wordCount(str) {
   return str.trim().split(/\s+/).filter(Boolean).length;
 }
 
+// Display-layer sanitizer. Actor output is a JSON envelope and tools are
+// text-tags ([SEARCH:]/[READ:]) that belong in the thought stream — but
+// legacy data and the occasional malformed parse leak envelope syntax into
+// the visible message. Strip the unambiguous artifacts before rendering.
+function cleanMessageText(raw) {
+  if (!raw) return '';
+  let t = String(raw);
+  // Tool-invocation tags — never render as prose
+  t = t.replace(/\[(?:SEARCH|READ|FETCH|TOOL)\s*:[^\]]*\]/gi, ' ');
+  // Trailing malformed-JSON tail: ...Story Idea 1. ");""Geophysics","Bio"]}  →  ...Story Idea 1.
+  t = t.replace(/\s*"\s*\)\s*;[\s\S]*[\]}]\s*$/, '');
+  // Orphaned JSON key/colon tail: ...premise. ":[  →  ...premise.
+  t = t.replace(/\s*"\s*:\s*\[?\s*$/, '');
+  // Trailing JSON close right after a quote: ...text"]}  →  ...text
+  t = t.replace(/"\s*[\]}]+\s*$/, '');
+  return t.replace(/[ \t]{2,}/g, ' ').trim();
+}
+
 function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork }) {
   const [thoughtExpanded, setThoughtExpanded] = useState(false);
   const [msgExpanded, setMsgExpanded] = useState(false);
@@ -57,7 +75,7 @@ function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork })
 
   // Parse thought from AI JSON envelope
   let thought = msg.thought || null;
-  let text = msg.content || msg.text || msg.message || '';
+  let text = cleanMessageText(msg.content || msg.text || msg.message || '');
 
   // Message collapse: >250 words collapses to 80
   const totalWords = wordCount(text);
@@ -69,8 +87,10 @@ function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork })
   // Tool calls display
   const toolCalls = msg.toolCalls || [];
 
+  const typeClass = msg.type === 'user' ? ' msg--user' : msg.type === 'dm' ? ' msg--dm' : '';
+
   return (
-    <article className="msg">
+    <article className={'msg' + typeClass}>
       <span className="swatch" style={{ background: actor.color }}>{(actor.name || '?')[0]}</span>
       <div className="msg-body">
         <div className="msg-head">
@@ -176,11 +196,21 @@ function RoundDivider({ round, time }) {
   );
 }
 
+function formatTokens(n) {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
+}
+
 export function Transcript({ showThoughts }) {
   const messages = useForumState(s => s.messages || []);
   const actors = useForumState(s => s.actors || []);
   const autoRunning = useForumState(s => s.autoRunning);
+  const contextInfo = useForumState(s => s.contextInfo || {});
   const streaming = useStreaming();
+
+  // Context-window usage meter (moved here from the composer)
+  const promptTokens = contextInfo.lastPromptTokens || 0;
+  const maxCtx = contextInfo.maxContextLength || 0;
+  const tokenPct = maxCtx > 0 ? Math.min(100, (promptTokens / maxCtx) * 100) : 0;
 
   const scrollRef = useRef(null);
   const wasAtBottomRef = useRef(true);
@@ -309,43 +339,52 @@ export function Transcript({ showThoughts }) {
 
   return (
     <div className="transcript" ref={scrollRef}>
-      <div className="transcript-meta">
-        <span>● {autoRunning ? 'Auto running' : `${turnCount} turns`}</span>
-        <span className="sep" />
-        <span>{anchoredCount} anchored</span>
-        <button
-          className="chip-btn"
-          style={{ marginLeft: 'auto', fontSize: 11 }}
-          title="Search transcript (Ctrl+F)"
-          onClick={() => { setSearchOpen(v => !v); if (searchOpen) setSearchQuery(''); }}
-        >
-          🔍
-        </button>
-      </div>
-
-      {searchOpen && (
-        <div className="transcript-search">
-          <input
-            autoFocus
-            className="search-input"
-            placeholder="Search messages…"
-            value={searchQuery}
-            onChange={e => { setSearchQuery(e.target.value); setSearchMatchIdx(0); }}
-          />
-          {searchLower && (
-            <span className="search-count">
-              {matchIds.length ? `${Math.min(searchMatchIdx + 1, matchIds.length)}/${matchIds.length}` : '0'}
+      <div className="transcript-header">
+        <div className="transcript-meta">
+          <span>● {autoRunning ? 'Auto running' : `${turnCount} turns`}</span>
+          <span className="sep" />
+          <span>{anchoredCount} anchored</span>
+          {maxCtx > 0 && (
+            <span className="token-meter" title="Tokens used in last prompt vs context window">
+              <span className="sep" />
+              <span>{formatTokens(promptTokens)} / {formatTokens(maxCtx)}</span>
+              <div className="token-bar"><div style={{ width: `${tokenPct}%` }} /></div>
             </span>
           )}
-          {matchIds.length > 1 && (
-            <>
-              <button className="chip-btn" onClick={() => setSearchMatchIdx(i => (i - 1 + matchIds.length) % matchIds.length)}>↑</button>
-              <button className="chip-btn" onClick={() => setSearchMatchIdx(i => (i + 1) % matchIds.length)}>↓</button>
-            </>
-          )}
-          <button className="chip-btn" onClick={() => { setSearchOpen(false); setSearchQuery(''); }}>✕</button>
+          <button
+            className="chip-btn"
+            style={{ marginLeft: 'auto', fontSize: 11 }}
+            title="Search transcript (Ctrl+F)"
+            onClick={() => { setSearchOpen(v => !v); if (searchOpen) setSearchQuery(''); }}
+          >
+            🔍
+          </button>
         </div>
-      )}
+
+        {searchOpen && (
+          <div className="transcript-search">
+            <input
+              autoFocus
+              className="search-input"
+              placeholder="Search messages…"
+              value={searchQuery}
+              onChange={e => { setSearchQuery(e.target.value); setSearchMatchIdx(0); }}
+            />
+            {searchLower && (
+              <span className="search-count">
+                {matchIds.length ? `${Math.min(searchMatchIdx + 1, matchIds.length)}/${matchIds.length}` : '0'}
+              </span>
+            )}
+            {matchIds.length > 1 && (
+              <>
+                <button className="chip-btn" onClick={() => setSearchMatchIdx(i => (i - 1 + matchIds.length) % matchIds.length)}>↑</button>
+                <button className="chip-btn" onClick={() => setSearchMatchIdx(i => (i + 1) % matchIds.length)}>↓</button>
+              </>
+            )}
+            <button className="chip-btn" onClick={() => { setSearchOpen(false); setSearchQuery(''); }}>✕</button>
+          </div>
+        )}
+      </div>
 
       {displayItems.map(item => {
         if (item.type === 'divider') {

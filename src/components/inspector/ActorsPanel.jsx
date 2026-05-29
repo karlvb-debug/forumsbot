@@ -3,6 +3,7 @@ import * as Ic from '../Icons';
 import { Field, Toggle, Range } from '../shared/FormControls';
 import { useForumState, mutateState, saveState } from '../../hooks/useForumState';
 import { putActorMemory } from '../../modules/db.js';
+import { navigateToPanel } from '../../hooks/navigation.js';
 
 const PERM_DEFS = [
   { key: 'canDirect',      label: 'Direct',      icon: '🎬', color: 'var(--gold)'   },
@@ -23,107 +24,7 @@ const TRIGGER_DEFS = [
   { key: 'on_agent_repetition', label: 'Repetition',   icon: '🔁' },
 ];
 
-const ACTOR_TEMPLATES = [
-  {
-    label: '🎬 Director',
-    name: 'Director',
-    role: 'Discussion facilitator',
-    persona: 'Guide the discussion, summarize, and invite quieter actors.',
-    goal: 'Converge on clear decisions.',
-    voice: 'Calm, concise, neutral.',
-    canDirect: true,
-    canManageCast: true,
-    canInject: true,
-    turnSchedule: 'every-turn',
-    actorMode: 'background',
-    triggerOn: ['on_every_turn', 'on_user_message', 'on_conflict', 'on_agent_repetition'],
-    temperature: 0.6,
-    maxTokens: 600,
-    color: '#c8a830',
-  },
-  {
-    label: '🌐 Researcher',
-    name: 'Researcher',
-    role: 'Research Specialist',
-    goal: 'Provide up-to-date objective research.',
-    voice: 'Objective, fact-driven.',
-    canResearch: true,
-    temperature: 0.4,
-    color: '#457b9d',
-  },
-  {
-    label: '🔧 Manager',
-    name: 'Manager',
-    role: 'Cast Orchestrator',
-    persona: 'Observe what expertise the discussion needs and adjust the roster. Create specialized actors when new skills are required and silence actors who have finished contributing.',
-    goal: 'Ensure the right perspectives are in the room at the right time.',
-    voice: 'Decisive and brief. States what it is doing and why in one sentence.',
-    canManageCast: true,
-    canInject: true,
-    temperature: 0.7,
-    color: '#1a7a6e',
-  },
-  {
-    label: '🎓 Expert',
-    name: 'Domain Expert',
-    role: 'Subject-Matter Authority',
-    persona: "An authority in their field who grounds the discussion in precise factual detail. Cites sources, corrects misconceptions, provides quantitative backing.",
-    goal: "Ensure factual accuracy and domain depth.",
-    voice: "Precise, citation-rich, confident but not condescending.",
-    temperature: 0.7,
-    color: '#355f9f',
-  },
-  {
-    label: '👹 Devil\'s Advocate',
-    name: "Devil's Advocate",
-    role: 'Rigorous Contrarian',
-    persona: "A rigorous contrarian who stress-tests every proposal. Not negative for its own sake — identifies the strongest version of opposing arguments.",
-    goal: "Expose weaknesses before they become problems.",
-    voice: "Sharp, direct, challenges with questions rather than assertions.",
-    temperature: 0.85,
-    color: '#b84738',
-  },
-  {
-    label: '🔗 Synthesizer',
-    name: 'Synthesizer',
-    role: 'Bridge Builder',
-    persona: "Identifies patterns across contributions, builds bridges between opposing views, and proposes integrated solutions.",
-    goal: "Turn fragmented ideas into coherent proposals.",
-    voice: "Measured, integrative, acknowledges multiple sides before proposing synthesis.",
-    temperature: 0.75,
-    color: '#4f7d2d',
-  },
-  {
-    label: '🔨 Pragmatist',
-    name: 'Pragmatist',
-    role: 'Execution Realist',
-    persona: "Cuts through theory to ask: what can we ship? Focuses on constraints, resources, timelines, and execution risk.",
-    goal: "Keep the group grounded in what's feasible.",
-    voice: "Blunt, concrete, focuses on blockers and trade-offs.",
-    temperature: 0.7,
-    color: '#7a5c1e',
-  },
-  {
-    label: '🔭 Visionary',
-    name: 'Visionary',
-    role: 'Systems Thinker',
-    persona: "Thinks in systems and long time horizons. Challenges the group to consider second-order effects and transformative possibilities.",
-    goal: "Prevent local optimization at the expense of the larger opportunity.",
-    voice: "Expansive, provocative, asks 'what if' and 'what else'.",
-    temperature: 0.9,
-    color: '#6a3d9f',
-  },
-  {
-    label: '👤 User Advocate',
-    name: 'User Advocate',
-    role: 'End User Voice',
-    persona: "Grounds every decision in real user needs. Questions whether proposed solutions solve the actual problem or just the stated one.",
-    goal: "Ensure decisions serve real people, not just internal logic.",
-    voice: "Empathetic, specific, brings in concrete user scenarios.",
-    temperature: 0.75,
-    color: '#1a7a6e',
-  },
-];
+const ACTOR_TEMPLATES = ACTOR_LIBRARY;
 
 function RelationshipAdd({ actors, currentId, onAdd }) {
   const [sel, setSel] = useState('');
@@ -144,7 +45,6 @@ export function ActorsPanel() {
   const actors = useForumState(s => s.actors);
   const messages = useForumState(s => s.messages || []);
   const [expanded, setExpanded] = useState(null);
-  const [activeTab, setActiveTab] = useState('profile');
   const [aiDesc, setAiDesc] = useState('');
   const [aiDescGenerating, setAiDescGenerating] = useState(false);
   const [aiDescError, setAiDescError] = useState(null);
@@ -271,7 +171,7 @@ export function ActorsPanel() {
           }}
           value=""
           onChange={(e) => {
-            const tpl = ACTOR_TEMPLATES.find(t => t.name === e.target.value);
+            const tpl = ACTOR_TEMPLATES.find(t => t.key === e.target.value);
             if (tpl) {
               addActor({
                 name: tpl.name,
@@ -285,19 +185,24 @@ export function ActorsPanel() {
                 canManageCast: !!tpl.canManageCast,
                 canInject: !!tpl.canInject,
                 canResearch: !!tpl.canResearch,
+                canSeeThoughts: !!tpl.canSeeThoughts,
+                authority: tpl.authority ?? 50,
                 turnSchedule: tpl.turnSchedule || 'normal',
                 actorMode: tpl.actorMode || 'participant',
                 triggerOn: Array.isArray(tpl.triggerOn) ? [...tpl.triggerOn] : [],
+                ...(tpl.maxTokens != null ? { maxTokens: tpl.maxTokens } : {}),
               });
             }
             e.target.value = "";
           }}
         >
-          <option value="" disabled>+ Add from template…</option>
-          {ACTOR_TEMPLATES.map(tpl => (
-            <option key={tpl.name} value={tpl.name}>
-              {tpl.label}
-            </option>
+          <option value="" disabled>+ Add from library…</option>
+          {[...new Set(ACTOR_TEMPLATES.map(t => t.group || 'Other'))].map(group => (
+            <optgroup key={group} label={group}>
+              {ACTOR_TEMPLATES.filter(t => (t.group || 'Other') === group).map(tpl => (
+                <option key={tpl.key} value={tpl.key}>{tpl.label}</option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </div>
@@ -335,7 +240,7 @@ export function ActorsPanel() {
             onDragLeave={() => { if (dropIdx === idx) setDropIdx(null); }}
             onDrop={(e) => { e.preventDefault(); const from = dragIdx ?? parseInt(e.dataTransfer.getData('text/plain'), 10); moveActor(from, idx); setDragIdx(null); setDropIdx(null); }}
           >
-            <div className="actor-card-head" onClick={() => { const opening = !isOpen; setExpanded(opening ? a.id : null); if (opening) setActiveTab('profile'); }}>
+            <div className="actor-card-head" onClick={() => { const opening = !isOpen; setExpanded(opening ? a.id : null); }}>
               <div className="actor-reorder">
                 <button className="reorder-btn" title="Move up" disabled={idx === 0} onClick={(e) => { e.stopPropagation(); moveActor(idx, idx - 1); }}>▲</button>
                 <button className="reorder-btn" title="Move down" disabled={idx === actors.length - 1} onClick={(e) => { e.stopPropagation(); moveActor(idx, idx + 1); }}>▼</button>
@@ -364,53 +269,61 @@ export function ActorsPanel() {
             </div>
             {isOpen ? (
               <div className="actor-card-body">
-                {/* ── Tab bar ── */}
-                <div className="actor-tabs">
-                  {[
-                    { key: 'profile',   label: 'Profile'   },
-                    { key: 'behavior',  label: 'Behavior'  },
-                    { key: 'control',   label: 'Control'   },
-                    { key: 'relations', label: 'Relations' },
-                  ].map(t => (
-                    <button
-                      key={t.key}
-                      className={"actor-tab" + (activeTab === t.key ? " active" : "")}
-                      onClick={e => { e.stopPropagation(); setActiveTab(t.key); }}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
+                {/* ── Identity (always visible) ── */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <Field label="Name"><input value={a.name} onChange={(e) => updateActor(a.id, 'name', e.target.value)} /></Field>
+                    <Field label="Role"><input value={a.role} onChange={(e) => updateActor(a.id, 'role', e.target.value)} /></Field>
+                  </div>
+                  <Field label="Persona"><textarea rows={3} value={a.persona} onChange={(e) => updateActor(a.id, 'persona', e.target.value)} /></Field>
+                  <Field label="Goal"><textarea rows={2} value={a.goal} onChange={(e) => updateActor(a.id, 'goal', e.target.value)} /></Field>
+                  <Field label="Voice"><input value={a.voice || ''} onChange={(e) => updateActor(a.id, 'voice', e.target.value)} /></Field>
                 </div>
 
-                {/* ── Profile tab ── */}
-                {activeTab === 'profile' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                      <Field label="Name"><input value={a.name} onChange={(e) => updateActor(a.id, 'name', e.target.value)} /></Field>
-                      <Field label="Role"><input value={a.role} onChange={(e) => updateActor(a.id, 'role', e.target.value)} /></Field>
-                    </div>
-                    <Field label="Persona"><textarea rows={3} value={a.persona} onChange={(e) => updateActor(a.id, 'persona', e.target.value)} /></Field>
-                    <Field label="Goal"><textarea rows={2} value={a.goal} onChange={(e) => updateActor(a.id, 'goal', e.target.value)} /></Field>
-                    <Field label="Voice"><input value={a.voice || ''} onChange={(e) => updateActor(a.id, 'voice', e.target.value)} /></Field>
+                {/* ── Behavior (always visible) ── */}
+                <div className="actor-section-divider" />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <Field label={`Authority — ${a.authority ?? 50}`} info="How much weight other actors give this actor's claims. Does NOT change speaking order.">
+                    <Range value={a.authority ?? 50} min={0} max={100} step={5} onChange={(v) => updateActor(a.id, 'authority', v)} />
+                  </Field>
+                  <div className="field-hint" style={{ marginTop: -4 }}>
+                    0 = background voice &nbsp;·&nbsp; 50 = peer &nbsp;·&nbsp; 100 = domain authority
                   </div>
-                )}
+                  <Field label={`Temperature — ${(a.temperature ?? 0.8).toFixed(2)}`} info="Per-actor creativity. Overrides the global default set in Connection → Generation.">
+                    <Range value={a.temperature ?? 0.8} min={0.1} max={1.5} step={0.05} onChange={(v) => updateActor(a.id, 'temperature', v)} />
+                  </Field>
+                  <div className="field-hint" style={{ marginTop: -4 }}>
+                    Low = focused &nbsp;·&nbsp; High = creative / unpredictable &nbsp;·&nbsp;
+                    <button type="button" className="link-btn" onClick={() => navigateToPanel('connection')}>
+                      Global default →
+                    </button>
+                  </div>
+                  <div>
+                    <div className="actor-section-label">Permissions</div>
+                    <div className="perm-chips" style={{ marginTop: 6 }}>
+                      {PERM_DEFS.map(p => (
+                        <button
+                          key={p.key}
+                          className={"perm-chip" + (a[p.key] ? " active" : "")}
+                          style={a[p.key] ? { '--perm-color': p.color } : {}}
+                          onClick={() => updateActor(a.id, p.key, !a[p.key])}
+                          title={p.label}
+                        >
+                          {p.icon} {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
 
-                {/* ── Behavior tab ── */}
-                {activeTab === 'behavior' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <Field label={`Authority — ${a.authority ?? 50}`}>
-                      <Range value={a.authority ?? 50} min={0} max={100} step={5} onChange={(v) => updateActor(a.id, 'authority', v)} />
-                    </Field>
-                    <div className="field-hint" style={{ marginTop: -4 }}>
-                      0 = background voice &nbsp;·&nbsp; 50 = peer &nbsp;·&nbsp; 100 = domain authority
-                    </div>
-                    <Field label={`Temperature — ${(a.temperature ?? 0.8).toFixed(2)}`}>
-                      <Range value={a.temperature ?? 0.8} min={0.1} max={1.5} step={0.05} onChange={(v) => updateActor(a.id, 'temperature', v)} />
-                    </Field>
-                    <div className="field-hint" style={{ marginTop: -4 }}>
-                      Low = focused &nbsp;·&nbsp; High = creative / unpredictable
-                    </div>
-                    <Field label="Max tokens">
+                {/* ── Advanced (collapsed by default) ── */}
+                <details className="actor-advanced card-disclosure">
+                  <summary>
+                    <span className="actor-section-label" style={{ textTransform: 'none', fontSize: 12, letterSpacing: 0 }}>Advanced</span>
+                    <span className="disclosure-sub">scheduling · triggers · relationships · tokens</span>
+                  </summary>
+                  <div className="disclosure-body">
+                    <Field label="Max tokens" info="Cap on this actor's response length. Leave blank to use the global default.">
                       <input
                         type="number"
                         placeholder="default"
@@ -425,33 +338,11 @@ export function ActorsPanel() {
                         style={{ width: 100 }}
                       />
                     </Field>
-                  </div>
-                )}
-
-                {/* ── Control tab ── */}
-                {activeTab === 'control' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <div>
-                      <div className="actor-section-label">Permissions</div>
-                      <div className="perm-chips" style={{ marginTop: 6 }}>
-                        {PERM_DEFS.map(p => (
-                          <button
-                            key={p.key}
-                            className={"perm-chip" + (a[p.key] ? " active" : "")}
-                            style={a[p.key] ? { '--perm-color': p.color } : {}}
-                            onClick={() => updateActor(a.id, p.key, !a[p.key])}
-                            title={p.label}
-                          >
-                            {p.icon} {p.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
 
                     <div>
                       <div className="actor-section-label">Scheduling</div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 6 }}>
-                        <Field label="Turn schedule">
+                        <Field label="Turn schedule" info="When this actor is eligible to speak: every round, every single turn, alternating rounds, or only when called on.">
                           <select value={a.turnSchedule || 'normal'} onChange={e => updateActor(a.id, 'turnSchedule', e.target.value)}>
                             <option value="normal">Normal — once per round</option>
                             <option value="every-turn">Every turn</option>
@@ -501,34 +392,34 @@ export function ActorsPanel() {
                         Actor fires when any checked event occurs, regardless of turn schedule.
                       </div>
                     </div>
-                  </div>
-                )}
 
-                {/* ── Relations tab ── */}
-                {activeTab === 'relations' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div className="field-hint">How this actor relates to others. Injected into their prompt context.</div>
-                    {Object.entries(a.relationships || {}).map(([name, rel]) => (
-                      <div key={name} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                        <span style={{ minWidth: 70, fontSize: 12, color: 'var(--fg-dim)' }}>{name}</span>
-                        <input
-                          style={{ flex: 1, fontSize: 12 }}
-                          value={rel}
-                          placeholder="e.g. trusts but challenges"
-                          onChange={e => updateActor(a.id, 'relationships', { ...a.relationships, [name]: e.target.value })}
-                        />
-                        <button className="mini-icon-btn" title="Remove" onClick={() => {
-                          const r = { ...(a.relationships || {}) };
-                          delete r[name];
-                          updateActor(a.id, 'relationships', r);
-                        }}><Ic.Trash width={10} height={10} /></button>
+                    <div>
+                      <div className="actor-section-label">Relationships</div>
+                      <div className="field-hint" style={{ marginTop: 4, marginBottom: 6 }}>How this actor relates to others. Injected into their prompt context.</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {Object.entries(a.relationships || {}).map(([name, rel]) => (
+                          <div key={name} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                            <span style={{ minWidth: 70, fontSize: 12, color: 'var(--fg-dim)' }}>{name}</span>
+                            <input
+                              style={{ flex: 1, fontSize: 12 }}
+                              value={rel}
+                              placeholder="e.g. trusts but challenges"
+                              onChange={e => updateActor(a.id, 'relationships', { ...a.relationships, [name]: e.target.value })}
+                            />
+                            <button className="mini-icon-btn" title="Remove" onClick={() => {
+                              const r = { ...(a.relationships || {}) };
+                              delete r[name];
+                              updateActor(a.id, 'relationships', r);
+                            }}><Ic.Trash width={10} height={10} /></button>
+                          </div>
+                        ))}
+                        <RelationshipAdd actors={actors} currentId={a.id} onAdd={(name) => {
+                          updateActor(a.id, 'relationships', { ...a.relationships, [name]: '' });
+                        }} />
                       </div>
-                    ))}
-                    <RelationshipAdd actors={actors} currentId={a.id} onAdd={(name) => {
-                      updateActor(a.id, 'relationships', { ...a.relationships, [name]: '' });
-                    }} />
+                    </div>
                   </div>
-                )}
+                </details>
 
                 {/* ── Always-visible action strip ── */}
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-soft)' }}>
