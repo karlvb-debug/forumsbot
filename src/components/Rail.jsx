@@ -19,6 +19,9 @@ export function Rail({ nav, active, onSelect, theme, onToggleTheme, onOpenCmd })
                 key={n.id}
                 className={'rail-btn' + (active === n.id ? ' active' : '')}
                 onClick={() => onSelect(n.id)}
+                title={n.label}
+                aria-label={n.label}
+                aria-current={active === n.id ? 'page' : undefined}
               >
                 <Icon />
                 <span className="rail-tip">{n.label}</span>
@@ -43,6 +46,9 @@ export function Rail({ nav, active, onSelect, theme, onToggleTheme, onOpenCmd })
               key={n.id}
               className={'rail-btn' + (active === n.id ? ' active' : '')}
               onClick={() => onSelect(n.id)}
+              title={n.label}
+              aria-label={n.label}
+              aria-current={active === n.id ? 'page' : undefined}
             >
               <Icon />
               <span className="rail-tip">{n.label}</span>
@@ -53,6 +59,7 @@ export function Rail({ nav, active, onSelect, theme, onToggleTheme, onOpenCmd })
           className="rail-btn"
           onClick={onToggleTheme}
           title="Toggle theme"
+          aria-label="Toggle light/dark theme"
         >
           {theme === 'dark' ? <Ic.Sun /> : <Ic.Moon />}
           <span className="rail-tip">Toggle theme</span>

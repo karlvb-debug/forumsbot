@@ -123,7 +123,7 @@ export function ScenarioPanel() {
           </>
         )}
 
-        <Field label="DM Role">
+        <Field label="DM Role" info="The director/host actor's job: narrate the scene, facilitate the discussion, settle disputes, or stay out of the way.">
           <select value={dmRoleVal} onChange={e => updateSystem('dmRole', 'role', e.target.value)}>
             <option value="narrator">Narrator — describes scene, drives story</option>
             <option value="facilitator">Facilitator — guides discussion, summarizes</option>
@@ -140,7 +140,7 @@ export function ScenarioPanel() {
           />
         </Field>
 
-        <Field label="Alignment Strictness">
+        <Field label="Alignment Strictness" info="How firmly actors are kept on the scenario's Objective. Stricter settings inject 'get back on topic' nudges when the discussion drifts.">
           <select value={alignStrictness} onChange={e => updateSystem('alignment', 'strictness', e.target.value)}>
             <option value="strict">Strict — hard redirects, alignment enforced</option>
             <option value="moderate">Moderate — gentle nudges when drifting</option>

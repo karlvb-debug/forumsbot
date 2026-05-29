@@ -398,13 +398,13 @@ export function ActorsPanel() {
                 {/* ── Behavior tab ── */}
                 {activeTab === 'behavior' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <Field label={`Authority — ${a.authority ?? 50}`}>
+                    <Field label={`Authority — ${a.authority ?? 50}`} info="How much weight other actors give this actor's claims. Does NOT change speaking order.">
                       <Range value={a.authority ?? 50} min={0} max={100} step={5} onChange={(v) => updateActor(a.id, 'authority', v)} />
                     </Field>
                     <div className="field-hint" style={{ marginTop: -4 }}>
                       0 = background voice &nbsp;·&nbsp; 50 = peer &nbsp;·&nbsp; 100 = domain authority
                     </div>
-                    <Field label={`Temperature — ${(a.temperature ?? 0.8).toFixed(2)}`}>
+                    <Field label={`Temperature — ${(a.temperature ?? 0.8).toFixed(2)}`} info="Per-actor creativity. Overrides the global default set in Connection → Generation.">
                       <Range value={a.temperature ?? 0.8} min={0.1} max={1.5} step={0.05} onChange={(v) => updateActor(a.id, 'temperature', v)} />
                     </Field>
                     <div className="field-hint" style={{ marginTop: -4 }}>
@@ -451,7 +451,7 @@ export function ActorsPanel() {
                     <div>
                       <div className="actor-section-label">Scheduling</div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 6 }}>
-                        <Field label="Turn schedule">
+                        <Field label="Turn schedule" info="When this actor is eligible to speak: every round, every single turn, alternating rounds, or only when called on.">
                           <select value={a.turnSchedule || 'normal'} onChange={e => updateActor(a.id, 'turnSchedule', e.target.value)}>
                             <option value="normal">Normal — once per round</option>
                             <option value="every-turn">Every turn</option>

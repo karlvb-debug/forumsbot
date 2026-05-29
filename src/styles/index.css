@@ -1590,6 +1590,26 @@ button:focus-visible { border-radius: 8px; }
 }
 .more-item:hover { border-color: var(--accent); color: var(--fg); }
 
+/* ───── Collapsible disclosure (advanced settings) ───── */
+.card-disclosure { cursor: default; }
+.card-disclosure > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.card-disclosure > summary::-webkit-details-marker { display: none; }
+.card-disclosure > summary::before {
+  content: "▸";
+  color: var(--fg-mute);
+  font-size: 11px;
+  transition: transform 0.15s ease;
+}
+.card-disclosure[open] > summary::before { transform: rotate(90deg); }
+.card-disclosure .disclosure-sub { color: var(--fg-faint); font-size: var(--fs-xs); font-weight: 500; }
+.card-disclosure .disclosure-body { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+
 /* ───── Selection color ───── */
 ::selection {
   background: oklch(from var(--accent) l c h / 0.3);
