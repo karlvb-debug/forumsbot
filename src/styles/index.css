@@ -1666,6 +1666,19 @@ button:focus-visible { border-radius: 8px; }
 .more-item--danger { color: var(--danger); }
 .more-item--danger:hover { border-color: var(--danger); color: var(--danger); }
 
+/* Blueprint gallery (Scenario panel) */
+.blueprint-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.blueprint-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  padding: 10px 12px; text-align: left;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-lg);
+  cursor: pointer; transition: border-color .15s, background .15s;
+}
+.blueprint-card:hover { border-color: var(--accent); background: var(--bg-elev); }
+.blueprint-icon { font-size: 18px; line-height: 1; }
+.blueprint-label { font-size: var(--fs-sm); font-weight: 600; color: var(--fg); }
+.blueprint-cast { font-size: var(--fs-xs); color: var(--fg-mute); font-family: var(--font-mono); }
+
 /* ───── Collapsible disclosure (advanced settings) ───── */
 .card-disclosure { cursor: default; }
 .card-disclosure > summary {

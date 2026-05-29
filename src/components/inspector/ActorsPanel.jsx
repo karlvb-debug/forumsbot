@@ -24,107 +24,7 @@ const TRIGGER_DEFS = [
   { key: 'on_agent_repetition', label: 'Repetition',   icon: '🔁' },
 ];
 
-const ACTOR_TEMPLATES = [
-  {
-    label: '🎬 Director',
-    name: 'Director',
-    role: 'Discussion facilitator',
-    persona: 'Guide the discussion, summarize, and invite quieter actors.',
-    goal: 'Converge on clear decisions.',
-    voice: 'Calm, concise, neutral.',
-    canDirect: true,
-    canManageCast: true,
-    canInject: true,
-    turnSchedule: 'every-turn',
-    actorMode: 'background',
-    triggerOn: ['on_every_turn', 'on_user_message', 'on_conflict', 'on_agent_repetition'],
-    temperature: 0.6,
-    maxTokens: 600,
-    color: '#c8a830',
-  },
-  {
-    label: '🌐 Researcher',
-    name: 'Researcher',
-    role: 'Research Specialist',
-    goal: 'Provide up-to-date objective research.',
-    voice: 'Objective, fact-driven.',
-    canResearch: true,
-    temperature: 0.4,
-    color: '#457b9d',
-  },
-  {
-    label: '🔧 Manager',
-    name: 'Manager',
-    role: 'Cast Orchestrator',
-    persona: 'Observe what expertise the discussion needs and adjust the roster. Create specialized actors when new skills are required and silence actors who have finished contributing.',
-    goal: 'Ensure the right perspectives are in the room at the right time.',
-    voice: 'Decisive and brief. States what it is doing and why in one sentence.',
-    canManageCast: true,
-    canInject: true,
-    temperature: 0.7,
-    color: '#1a7a6e',
-  },
-  {
-    label: '🎓 Expert',
-    name: 'Domain Expert',
-    role: 'Subject-Matter Authority',
-    persona: "An authority in their field who grounds the discussion in precise factual detail. Cites sources, corrects misconceptions, provides quantitative backing.",
-    goal: "Ensure factual accuracy and domain depth.",
-    voice: "Precise, citation-rich, confident but not condescending.",
-    temperature: 0.7,
-    color: '#355f9f',
-  },
-  {
-    label: '👹 Devil\'s Advocate',
-    name: "Devil's Advocate",
-    role: 'Rigorous Contrarian',
-    persona: "A rigorous contrarian who stress-tests every proposal. Not negative for its own sake — identifies the strongest version of opposing arguments.",
-    goal: "Expose weaknesses before they become problems.",
-    voice: "Sharp, direct, challenges with questions rather than assertions.",
-    temperature: 0.85,
-    color: '#b84738',
-  },
-  {
-    label: '🔗 Synthesizer',
-    name: 'Synthesizer',
-    role: 'Bridge Builder',
-    persona: "Identifies patterns across contributions, builds bridges between opposing views, and proposes integrated solutions.",
-    goal: "Turn fragmented ideas into coherent proposals.",
-    voice: "Measured, integrative, acknowledges multiple sides before proposing synthesis.",
-    temperature: 0.75,
-    color: '#4f7d2d',
-  },
-  {
-    label: '🔨 Pragmatist',
-    name: 'Pragmatist',
-    role: 'Execution Realist',
-    persona: "Cuts through theory to ask: what can we ship? Focuses on constraints, resources, timelines, and execution risk.",
-    goal: "Keep the group grounded in what's feasible.",
-    voice: "Blunt, concrete, focuses on blockers and trade-offs.",
-    temperature: 0.7,
-    color: '#7a5c1e',
-  },
-  {
-    label: '🔭 Visionary',
-    name: 'Visionary',
-    role: 'Systems Thinker',
-    persona: "Thinks in systems and long time horizons. Challenges the group to consider second-order effects and transformative possibilities.",
-    goal: "Prevent local optimization at the expense of the larger opportunity.",
-    voice: "Expansive, provocative, asks 'what if' and 'what else'.",
-    temperature: 0.9,
-    color: '#6a3d9f',
-  },
-  {
-    label: '👤 User Advocate',
-    name: 'User Advocate',
-    role: 'End User Voice',
-    persona: "Grounds every decision in real user needs. Questions whether proposed solutions solve the actual problem or just the stated one.",
-    goal: "Ensure decisions serve real people, not just internal logic.",
-    voice: "Empathetic, specific, brings in concrete user scenarios.",
-    temperature: 0.75,
-    color: '#1a7a6e',
-  },
-];
+const ACTOR_TEMPLATES = ACTOR_LIBRARY;
 
 function RelationshipAdd({ actors, currentId, onAdd }) {
   const [sel, setSel] = useState('');
@@ -271,7 +171,7 @@ export function ActorsPanel() {
           }}
           value=""
           onChange={(e) => {
-            const tpl = ACTOR_TEMPLATES.find(t => t.name === e.target.value);
+            const tpl = ACTOR_TEMPLATES.find(t => t.key === e.target.value);
             if (tpl) {
               addActor({
                 name: tpl.name,
@@ -285,19 +185,24 @@ export function ActorsPanel() {
                 canManageCast: !!tpl.canManageCast,
                 canInject: !!tpl.canInject,
                 canResearch: !!tpl.canResearch,
+                canSeeThoughts: !!tpl.canSeeThoughts,
+                authority: tpl.authority ?? 50,
                 turnSchedule: tpl.turnSchedule || 'normal',
                 actorMode: tpl.actorMode || 'participant',
                 triggerOn: Array.isArray(tpl.triggerOn) ? [...tpl.triggerOn] : [],
+                ...(tpl.maxTokens != null ? { maxTokens: tpl.maxTokens } : {}),
               });
             }
             e.target.value = "";
           }}
         >
-          <option value="" disabled>+ Add from template…</option>
-          {ACTOR_TEMPLATES.map(tpl => (
-            <option key={tpl.name} value={tpl.name}>
-              {tpl.label}
-            </option>
+          <option value="" disabled>+ Add from library…</option>
+          {[...new Set(ACTOR_TEMPLATES.map(t => t.group || 'Other'))].map(group => (
+            <optgroup key={group} label={group}>
+              {ACTOR_TEMPLATES.filter(t => (t.group || 'Other') === group).map(tpl => (
+                <option key={tpl.key} value={tpl.key}>{tpl.label}</option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </div>
