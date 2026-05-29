@@ -48,13 +48,45 @@ export function resolvePolicy(userContext) {
 
 // Called by PauseCard when the user submits a response.
 let _pauseResolve = null;
+let _pauseRecordId = null;
+
 export function resolvePause(response) {
-  if (_pauseResolve) { _pauseResolve(String(response || "")); _pauseResolve = null; }
+  if (_pauseResolve) {
+    _pauseResolve(String(response || ""));
+    _pauseResolve = null;
+    _pauseRecordId = null;
+  }
+}
+
+/**
+ * Re-show the pause modal for an honored-but-unresolved pause.
+ * Called from the UI when the user clicks on the "unanswered question" strip.
+ */
+export function reopenPause() {
+  const pending = (state.pendingPauses || []).find(p => p.outcome === "honored" && !p.userResponse && !p.resolvedAt);
+  if (pending) {
+    mutateState(s => {
+      s.ui.pauseModal = { pauseRecord: pending };
+      s.ui.awaitingUserInput = true;
+    });
+  }
 }
 
 async function promptPause(pauseRecord) {
+  // If another pause is already pending, auto-resolve it with its default
+  if (_pauseResolve) {
+    console.warn(`[pause] New pause replacing unresolved pause ${_pauseRecordId} — resolving with default`);
+    const oldResolve = _pauseResolve;
+    const oldId = _pauseRecordId;
+    _pauseResolve = null;
+    _pauseRecordId = null;
+    // Resolve the old one with its default response
+    const oldPause = (state.pendingPauses || []).find(p => p.id === oldId);
+    oldResolve(oldPause?.defaultIfNoResponse || "");
+  }
   return new Promise(resolve => {
     _pauseResolve = resolve;
+    _pauseRecordId = pauseRecord.id;
     mutateState(s => { s.ui.pauseModal = { pauseRecord }; s.ui.awaitingUserInput = true; });
   });
 }

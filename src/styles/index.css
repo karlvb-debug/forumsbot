@@ -1741,6 +1741,36 @@ button:focus-visible { border-radius: 8px; }
   border-top: 1px solid oklch(0.78 0.13 65 / 0.3);
 }
 
+/* ───── Unanswered pause reopen strip ───── */
+.unanswered-pause-strip {
+  position: fixed;
+  bottom: 0;
+  left: var(--rail-w);
+  right: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 20px;
+  background: oklch(0.78 0.13 65 / 0.18);
+  border-top: 2px solid var(--accent);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .15s;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.unanswered-pause-strip:hover {
+  background: oklch(0.78 0.13 65 / 0.28);
+}
+.unanswered-pause-icon {
+  font-size: 16px;
+  animation: pulse 1.6s infinite;
+}
+
 /* ───── Document Editor Stage ───── */
 .doc-editor-stage {
   display: grid;

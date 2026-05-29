@@ -60,6 +60,9 @@ export default function App() {
   const pauseModal = useForumState(s => s.ui?.pauseModal || null);
   const awaitingUserInput = useForumState(s => s.ui?.awaitingUserInput || false);
   const focusedDocId = useForumState(s => s.ui?.focusedDocId || null);
+  const hasUnresolvedPause = useForumState(s =>
+    (s.pendingPauses || []).some(p => p.outcome === "honored" && !p.userResponse && !p.resolvedAt)
+  );
 
   // Load modules on mount
   useEffect(() => {
@@ -240,6 +243,16 @@ export default function App() {
               interactive={true}
             />
           </div>
+        </div>
+      )}
+      {/* Persistent strip to reopen a dismissed/vanished pause modal */}
+      {!pauseModal && hasUnresolvedPause && (
+        <div
+          className="unanswered-pause-strip"
+          onClick={() => import('./modules/turns.js').then(m => m.reopenPause())}
+        >
+          <span className="unanswered-pause-icon">⏸</span>
+          <span>An actor asked you a question — <strong>click here to reopen</strong></span>
         </div>
       )}
     </Shell>
