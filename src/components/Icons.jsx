@@ -148,6 +148,12 @@ export const Chevron = (props) => (
   </svg>
 );
 
+export const ChevronDown = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M6 8l4 4 4-4" />
+  </svg>
+);
+
 export const Sun = (props) => (
   <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
     <circle cx="10" cy="10" r="3.5" />

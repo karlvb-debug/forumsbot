@@ -1,11 +1,15 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Field, Toggle } from '../shared/FormControls';
 import { useForumState, mutateState, saveState } from '../../hooks/useForumState';
-import { renderMarkdown } from '../../modules/markdown.js';
 import * as Ic from '../Icons';
 
-function DocEntry({ entry, actors, onUpdate, onDelete }) {
-  const [view, setView] = useState('preview');
+/* ────────────────────────────────────────────────────────
+   DocRow — compact file-browser-style row per document.
+   Collapsed: icon · title · word-count · type badge · open · toggle
+   Expanded:  settings (AI-editable, visibility, URL) + delete
+   ──────────────────────────────────────────────────────── */
+function DocRow({ entry, actors, onUpdate, onDelete }) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [fetchingId, setFetchingId] = useState(false);
   const [fetchError, setFetchError] = useState(null);
 
@@ -29,129 +33,126 @@ function DocEntry({ entry, actors, onUpdate, onDelete }) {
     }
   };
 
-  const attrLines = entry.lineAttribution || [];
-  const enabledActors = actors.filter(a => a.enabled);
+  const wordCount = entry.wordCount || 0;
+  const versionCount = entry.versions?.length || 0;
 
   return (
-    <div className="doc-entry">
-      <div className="card-title">
-        <input
-          className="doc-entry-title-input"
-          value={entry.title || ''}
-          placeholder="Title"
-          onChange={(e) => update({ title: e.target.value })}
-        />
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span className={`doc-type-badge ${entry.type === 'link' ? 'link' : ''}`}>{entry.type || 'doc'}</span>
-          {entry.aiEditable && <span className="doc-ai-badge">AI editable</span>}
-          <Toggle checked={entry.enabled !== false} onChange={(v) => update({ enabled: v })} />
-        </div>
-      </div>
-
-      <div className="card-row" style={{ gap: 8, flexWrap: 'wrap' }}>
-        <label style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-mute)' }}>AI can edit</label>
-        <Toggle checked={!!entry.aiEditable} onChange={(v) => update({ aiEditable: v })} />
-        <label style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-mute)', marginLeft: 12 }}>Visible to</label>
-        <select
-          style={{ fontSize: 'var(--fs-xs)', padding: '2px 6px', borderRadius: 4, background: 'var(--bg-input)', border: '1px solid var(--border-soft)', color: 'var(--fg)' }}
-          value={entry.target === 'all' ? 'all' : 'specific'}
-          onChange={(e) => update({ target: e.target.value === 'all' ? 'all' : [] })}
+    <div className={`doc-row ${settingsOpen ? 'open' : ''}`}>
+      {/* ── Main row ─────────────────────────────────────── */}
+      <div className="doc-row-main">
+        <button
+          className="doc-row-chevron"
+          onClick={() => setSettingsOpen(v => !v)}
+          title={settingsOpen ? 'Hide settings' : 'Show settings'}
         >
-          <option value="all">All actors</option>
-          <option value="specific">Selected actors…</option>
-        </select>
-        {Array.isArray(entry.target) && (
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-            {actors.filter(a => a.enabled).map(a => (
-              <label key={a.id} style={{ fontSize: 'var(--fs-xs)', display: 'flex', alignItems: 'center', gap: 3, color: 'var(--fg-dim)' }}>
-                <input
-                  type="checkbox"
-                  checked={entry.target.includes(a.id)}
-                  onChange={(e) => {
-                    const next = e.target.checked
-                      ? [...entry.target, a.id]
-                      : entry.target.filter(id => id !== a.id);
-                    update({ target: next });
-                  }}
-                />
-                {a.name}
-              </label>
-            ))}
+          <Ic.ChevronDown width={12} height={12} style={{ transform: settingsOpen ? 'rotate(0)' : 'rotate(-90deg)', transition: 'transform .15s' }} />
+        </button>
+
+        <span className={`doc-type-badge ${entry.type === 'link' ? 'link' : ''}`}>
+          {entry.type === 'link' ? '🔗' : '📄'}
+        </span>
+
+        <input
+          className="doc-row-title"
+          value={entry.title || ''}
+          placeholder="Untitled"
+          onChange={(e) => update({ title: e.target.value })}
+          onClick={(e) => e.stopPropagation()}
+        />
+
+        <span className="doc-row-meta">
+          {wordCount > 0 && <span className="doc-row-words">{wordCount}w</span>}
+          {versionCount > 0 && <span className="doc-row-versions">v{versionCount}</span>}
+          {entry.aiEditable && <span className="doc-ai-badge">AI</span>}
+        </span>
+
+        <button
+          className="mini-icon-btn"
+          onClick={() => mutateState(s => { s.ui.focusedDocId = entry.id; })}
+          title="Open in editor"
+        >
+          <Ic.Expand width={13} height={13} />
+        </button>
+
+        <Toggle
+          checked={entry.enabled !== false}
+          onChange={(v) => update({ enabled: v })}
+        />
+      </div>
+
+      {/* ── Settings (expanded) ──────────────────────────── */}
+      {settingsOpen && (
+        <div className="doc-row-settings">
+          <div className="doc-row-setting">
+            <label>AI can edit</label>
+            <Toggle checked={!!entry.aiEditable} onChange={(v) => update({ aiEditable: v })} />
           </div>
-        )}
-      </div>
 
-      {entry.type === 'link' && (
-        <Field label="URL">
-          <input value={entry.url || ''} onChange={(e) => update({ url: e.target.value })} placeholder="https://…" />
-        </Field>
-      )}
+          <div className="doc-row-setting">
+            <label>Visible to</label>
+            <select
+              value={entry.target === 'all' ? 'all' : 'specific'}
+              onChange={(e) => update({ target: e.target.value === 'all' ? 'all' : [] })}
+            >
+              <option value="all">All actors</option>
+              <option value="specific">Selected actors…</option>
+            </select>
+          </div>
 
-      <div className="subnav" style={{ marginBottom: 8 }}>
-        <button className={view === 'preview' ? 'active' : ''} onClick={() => setView('preview')}>Preview</button>
-        <button className={view === 'edit' ? 'active' : ''} onClick={() => setView('edit')}>Edit</button>
-        {entry.aiEditable && (
-          <button className={view === 'history' ? 'active' : ''} onClick={() => setView('history')}>
-            History {entry.versions?.length ? `(${entry.versions.length})` : ''}
-          </button>
-        )}
-      </div>
-
-      {view === 'preview' && (
-        <div style={{ background: 'var(--bg-input)', border: '1px solid var(--border-soft)', borderRadius: 8, padding: 12, fontSize: 'var(--fs-sm)', color: 'var(--fg-dim)', lineHeight: 1.55, minHeight: 120 }}>
-          {entry.content
-            ? <div className="md-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(entry.content) }} />
-            : <div className="empty">No content yet.</div>}
-        </div>
-      )}
-
-      {view === 'edit' && (
-        <Field label="Content" hint={`${entry.wordCount || 0} words`}>
-          <textarea rows={10} value={entry.content || ''} onChange={(e) => update({ content: e.target.value })} />
-        </Field>
-      )}
-
-      {view === 'history' && (
-        <div>
-          {(entry.versions || []).slice().reverse().map((v, i) => (
-            <div className="card-row" key={i}>
-              <span className="lbl">v{(entry.versions.length) - i} · {new Date(v.timestamp || v.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
-              <span className="val">{v.author || 'System'}</span>
+          {Array.isArray(entry.target) && (
+            <div className="doc-row-actors">
+              {actors.filter(a => a.enabled).map(a => (
+                <label key={a.id}>
+                  <input
+                    type="checkbox"
+                    checked={entry.target.includes(a.id)}
+                    onChange={(e) => {
+                      const next = e.target.checked
+                        ? [...entry.target, a.id]
+                        : entry.target.filter(id => id !== a.id);
+                      update({ target: next });
+                    }}
+                  />
+                  {a.name}
+                </label>
+              ))}
             </div>
-          ))}
-          {!(entry.versions?.length) && <div className="empty">No version history yet.</div>}
+          )}
+
+          {entry.type === 'link' && (
+            <div className="doc-row-setting">
+              <label>URL</label>
+              <input
+                value={entry.url || ''}
+                onChange={(e) => update({ url: e.target.value })}
+                placeholder="https://…"
+                style={{ flex: 1 }}
+              />
+              <button className="btn sm" onClick={fetchLink} disabled={fetchingId || !entry.url}>
+                {fetchingId ? '…' : 'Fetch'}
+              </button>
+            </div>
+          )}
+
+          {fetchError && <div className="field-hint hint-warn">⚠ {fetchError}</div>}
+
+          <div className="doc-row-actions">
+            <button
+              className="btn sm"
+              onClick={() => mutateState(s => { s.ui.focusedDocId = entry.id; })}
+            >
+              <Ic.Expand width={12} height={12} /> Open editor
+            </button>
+            <button
+              className="btn ghost sm"
+              style={{ color: 'var(--danger)' }}
+              onClick={() => onDelete(entry.id)}
+            >
+              <Ic.Trash width={12} height={12} /> Delete
+            </button>
+          </div>
         </div>
       )}
-
-      {entry.aiEditable && enabledActors.length > 0 && attrLines.length > 0 && (
-        <div style={{ marginTop: 8 }}>
-          {enabledActors.map(a => {
-            const pct = Math.round((attrLines.filter(l => l.author === a.name).length / attrLines.length) * 100);
-            return (
-              <div className="influence-row" key={a.id}>
-                <span style={{ minWidth: 50, color: 'var(--fg-dim)', fontSize: 'var(--fs-xs)' }}>{a.name}</span>
-                <div className="influence-bar"><div style={{ width: `${pct}%`, background: a.color }} /></div>
-                <span className="influence-pct">{pct}%</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="btn-row" style={{ marginTop: 8 }}>
-        {entry.type === 'link' && (
-          <button className="btn sm" onClick={fetchLink} disabled={fetchingId || !entry.url} title={!entry.url ? 'Enter a URL first' : 'Fetch page content'}>
-            {fetchingId ? 'Fetching…' : 'Fetch'}
-          </button>
-        )}
-        <button className="btn sm" onClick={() => mutateState(s => { s.ui.focusedDocId = entry.id; })} title="Open in full-width editor">
-          <Ic.Expand width={12} height={12} /> Expand
-        </button>
-        <button className="btn ghost sm" style={{ color: 'var(--danger)' }} onClick={() => onDelete(entry.id)}>
-          <Ic.Trash width={12} height={12} /> Delete
-        </button>
-      </div>
-      {fetchError && <div className="field-hint hint-warn" style={{ marginTop: 4 }}>⚠ {fetchError}</div>}
     </div>
   );
 }
@@ -335,23 +336,23 @@ export function DocumentsPanel() {
       <div className="card">
         <div className="card-title">
           <h3><Ic.Doc /> Working Documents</h3>
+          <span className="doc-count-badge">{workingDocs.length}</span>
         </div>
-        <div className="field-hint" style={{ marginBottom: 10 }}>
-          AI actors can propose edits to these documents. Each edit is versioned with author attribution.
+        <div className="doc-file-list">
+          {workingDocs.map(entry => (
+            <DocRow
+              key={entry.id}
+              entry={entry}
+              actors={actors}
+              onUpdate={persistEntry}
+              onDelete={deleteEntry}
+            />
+          ))}
+          {!workingDocs.length && <div className="empty">No working documents yet.</div>}
         </div>
-        {workingDocs.map(entry => (
-          <DocEntry
-            key={entry.id}
-            entry={entry}
-            actors={actors}
-            onUpdate={persistEntry}
-            onDelete={deleteEntry}
-          />
-        ))}
-        {!workingDocs.length && <div className="empty">No working documents. Add one below.</div>}
-        <div className="btn-row" style={{ marginTop: 10 }}>
-          <button className="btn" onClick={() => addEntry('document', true)}><Ic.Plus width={12} height={12} /> Add working document</button>
-          <button className="btn" onClick={() => addEntry('link', true)}><Ic.Globe width={12} height={12} /> Add working link</button>
+        <div className="btn-row" style={{ marginTop: 8, padding: '0 0 4px' }}>
+          <button className="btn sm" onClick={() => addEntry('document', true)}><Ic.Plus width={11} height={11} /> Document</button>
+          <button className="btn sm" onClick={() => addEntry('link', true)}><Ic.Globe width={11} height={11} /> Link</button>
         </div>
       </div>
 
@@ -359,23 +360,23 @@ export function DocumentsPanel() {
       <div className="card">
         <div className="card-title">
           <h3><Ic.Search /> Reference Documents</h3>
+          <span className="doc-count-badge">{refDocs.length}</span>
         </div>
-        <div className="field-hint" style={{ marginBottom: 10 }}>
-          Read-only context injected into actor prompts. Actors can reference but not edit these.
+        <div className="doc-file-list">
+          {refDocs.map(entry => (
+            <DocRow
+              key={entry.id}
+              entry={entry}
+              actors={actors}
+              onUpdate={persistEntry}
+              onDelete={deleteEntry}
+            />
+          ))}
+          {!refDocs.length && <div className="empty">No reference documents.</div>}
         </div>
-        {refDocs.map(entry => (
-          <DocEntry
-            key={entry.id}
-            entry={entry}
-            actors={actors}
-            onUpdate={persistEntry}
-            onDelete={deleteEntry}
-          />
-        ))}
-        {!refDocs.length && <div className="empty">No reference documents. Add documents or links to ground actor responses.</div>}
-        <div className="btn-row" style={{ marginTop: 10 }}>
-          <button className="btn" onClick={() => addEntry('document', false)}><Ic.Plus width={12} height={12} /> Add reference document</button>
-          <button className="btn" onClick={() => addEntry('link', false)}><Ic.Globe width={12} height={12} /> Add reference link</button>
+        <div className="btn-row" style={{ marginTop: 8, padding: '0 0 4px' }}>
+          <button className="btn sm" onClick={() => addEntry('document', false)}><Ic.Plus width={11} height={11} /> Document</button>
+          <button className="btn sm" onClick={() => addEntry('link', false)}><Ic.Globe width={11} height={11} /> Link</button>
         </div>
       </div>
     </div>

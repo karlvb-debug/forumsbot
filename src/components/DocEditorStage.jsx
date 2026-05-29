@@ -6,7 +6,8 @@ import * as Ic from './Icons';
 
 /**
  * Full-width document editor that takes over the stage area.
- * Shows a split: [document editor 65%] | [transcript 35%]
+ * Shows a split: [document editor] | [resize handle] | [transcript]
+ * The user can drag the handle to resize the panes horizontally.
  */
 export function DocEditorStage({ transcript, composer }) {
   const focusedDocId = useForumState(s => s.ui.focusedDocId);
@@ -17,6 +18,43 @@ export function DocEditorStage({ transcript, composer }) {
   const [view, setView] = useState('edit');
   const [historyIdx, setHistoryIdx] = useState(null);
   const editorRef = useRef(null);
+  const containerRef = useRef(null);
+
+  // ── Resize state ──────────────────────────────────────────
+  const [splitPx, setSplitPx] = useState(340);
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef(false); // avoid stale closure
+
+  const onMouseDown = useCallback((e) => {
+    e.preventDefault();
+    dragRef.current = true;
+    setDragging(true);
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+  }, []);
+
+  useEffect(() => {
+    const onMouseMove = (e) => {
+      if (!dragRef.current || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const rightWidth = rect.right - e.clientX;
+      const maxW = rect.width * 0.6;
+      setSplitPx(Math.max(240, Math.min(maxW, rightWidth)));
+    };
+    const onMouseUp = () => {
+      if (!dragRef.current) return;
+      dragRef.current = false;
+      setDragging(false);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
 
   // Auto-resize textarea
   const autoResize = useCallback(() => {
@@ -71,7 +109,11 @@ export function DocEditorStage({ transcript, composer }) {
   const wordCount = doc.wordCount || 0;
 
   return (
-    <div className="doc-editor-stage">
+    <div
+      className="doc-editor-stage"
+      ref={containerRef}
+      style={{ gridTemplateColumns: `1fr 5px ${splitPx}px` }}
+    >
       {/* ── Left: Document Editor ─────────────────────────────── */}
       <div className="doc-editor-pane">
         <div className="doc-editor-toolbar">
@@ -192,6 +234,12 @@ export function DocEditorStage({ transcript, composer }) {
           </div>
         )}
       </div>
+
+      {/* ── Resize Handle ──────────────────────────────────────── */}
+      <div
+        className={`doc-resize-handle ${dragging ? 'dragging' : ''}`}
+        onMouseDown={onMouseDown}
+      />
 
       {/* ── Right: Transcript + Composer ──────────────────────── */}
       <div className="doc-transcript-pane">
