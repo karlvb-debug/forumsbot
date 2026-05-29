@@ -309,43 +309,45 @@ export function Transcript({ showThoughts }) {
 
   return (
     <div className="transcript" ref={scrollRef}>
-      <div className="transcript-meta">
-        <span>● {autoRunning ? 'Auto running' : `${turnCount} turns`}</span>
-        <span className="sep" />
-        <span>{anchoredCount} anchored</span>
-        <button
-          className="chip-btn"
-          style={{ marginLeft: 'auto', fontSize: 11 }}
-          title="Search transcript (Ctrl+F)"
-          onClick={() => { setSearchOpen(v => !v); if (searchOpen) setSearchQuery(''); }}
-        >
-          🔍
-        </button>
-      </div>
-
-      {searchOpen && (
-        <div className="transcript-search">
-          <input
-            autoFocus
-            className="search-input"
-            placeholder="Search messages…"
-            value={searchQuery}
-            onChange={e => { setSearchQuery(e.target.value); setSearchMatchIdx(0); }}
-          />
-          {searchLower && (
-            <span className="search-count">
-              {matchIds.length ? `${Math.min(searchMatchIdx + 1, matchIds.length)}/${matchIds.length}` : '0'}
-            </span>
-          )}
-          {matchIds.length > 1 && (
-            <>
-              <button className="chip-btn" onClick={() => setSearchMatchIdx(i => (i - 1 + matchIds.length) % matchIds.length)}>↑</button>
-              <button className="chip-btn" onClick={() => setSearchMatchIdx(i => (i + 1) % matchIds.length)}>↓</button>
-            </>
-          )}
-          <button className="chip-btn" onClick={() => { setSearchOpen(false); setSearchQuery(''); }}>✕</button>
+      <div className="transcript-header">
+        <div className="transcript-meta">
+          <span>● {autoRunning ? 'Auto running' : `${turnCount} turns`}</span>
+          <span className="sep" />
+          <span>{anchoredCount} anchored</span>
+          <button
+            className="chip-btn"
+            style={{ marginLeft: 'auto', fontSize: 11 }}
+            title="Search transcript (Ctrl+F)"
+            onClick={() => { setSearchOpen(v => !v); if (searchOpen) setSearchQuery(''); }}
+          >
+            🔍
+          </button>
         </div>
-      )}
+
+        {searchOpen && (
+          <div className="transcript-search">
+            <input
+              autoFocus
+              className="search-input"
+              placeholder="Search messages…"
+              value={searchQuery}
+              onChange={e => { setSearchQuery(e.target.value); setSearchMatchIdx(0); }}
+            />
+            {searchLower && (
+              <span className="search-count">
+                {matchIds.length ? `${Math.min(searchMatchIdx + 1, matchIds.length)}/${matchIds.length}` : '0'}
+              </span>
+            )}
+            {matchIds.length > 1 && (
+              <>
+                <button className="chip-btn" onClick={() => setSearchMatchIdx(i => (i - 1 + matchIds.length) % matchIds.length)}>↑</button>
+                <button className="chip-btn" onClick={() => setSearchMatchIdx(i => (i + 1) % matchIds.length)}>↓</button>
+              </>
+            )}
+            <button className="chip-btn" onClick={() => { setSearchOpen(false); setSearchQuery(''); }}>✕</button>
+          </div>
+        )}
+      </div>
 
       {displayItems.map(item => {
         if (item.type === 'divider') {

@@ -337,15 +337,21 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
   min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 24px clamp(20px, 5vw, 64px) 8px;
+  padding: 0 clamp(20px, 5vw, 64px) 8px;
+}
+.transcript-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
+  margin-bottom: 18px;
 }
 .transcript-meta {
   display: flex; gap: 12px; align-items: center;
   font-size: var(--fs-sm);
   color: var(--fg-mute);
   font-family: var(--font-mono);
-  margin-bottom: 18px;
-  padding-bottom: 12px;
+  padding: 6px 0 10px;
   border-bottom: 1px dashed var(--border-soft);
 }
 .transcript-meta .sep { width: 1px; height: 12px; background: var(--border); }
@@ -536,9 +542,11 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
   border-top: 1px solid var(--border-soft);
   background: var(--bg);
   padding: 14px clamp(20px, 5vw, 64px);
+  min-width: 0;
+  overflow: hidden;
 }
 .composer-inner {
-  max-width: 920px; margin: 0 auto;
+  max-width: 920px; width: 100%; margin: 0 auto;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
@@ -548,6 +556,8 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
 .composer-inner:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .composer textarea {
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   background: transparent;
   border: 0;
   color: var(--fg);
