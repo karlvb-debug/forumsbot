@@ -129,7 +129,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [nextTurn, runRound, startAuto]);
+  }, [nextTurn, runRound, startAuto, confirmModal, stopModal, pauseModal]);
 
   // ── Command palette handler ─────────────────────────────────
   const handleCommand = useCallback((item) => {

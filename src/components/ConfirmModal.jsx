@@ -2,8 +2,8 @@ import React from 'react';
 
 export function ConfirmModal({ message, confirmLabel = 'Confirm', onConfirm, onCancel }) {
   return (
-    <div className="modal-overlay">
-      <div className="modal-card">
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <p className="modal-reason">{message}</p>
         <div className="btn-row">
           <button className="btn" onClick={onCancel}>Cancel</button>
