@@ -4,26 +4,15 @@ import { chatCompletion, getEmbedding, getEmbeddingsBatch, setStatus } from './a
 import { saveState as _hookSaveState } from '../hooks/useForumState.js';
 import { setBusy, getBusy as getIsGenerating } from '../hooks/useActions.js';
 import { getAllChunks, putChunk, clearChunks, countChunks, getAllMessages } from './db.js';
-import { trimWords, stringifyList, normalizeStringArray, extractKeywords, stringifyBullets, stripCodeFence, extractBalancedObjects, sanitizeJsonString } from './utils.js';
+import { trimWords, stringifyList, normalizeStringArray, extractKeywords, stringifyBullets, stripCodeFence, extractBalancedObjects, sanitizeJsonString, cosineSimilarity } from './utils.js';
 
 // Minimum cosine similarity for a chunk to be injected into a prompt.
 // Chunks scoring below this are noise, not signal. Only applies when
 // vector embeddings are available; keyword-scored chunks always pass.
 const MIN_RECALL_SIMILARITY = 0.20;
 
-export function cosineSimilarity(vecA, vecB) {
-  if (!vecA || !vecB || vecA.length !== vecB.length) return 0;
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < vecA.length; i++) {
-    dotProduct += vecA[i] * vecB[i];
-    normA += vecA[i] * vecA[i];
-    normB += vecB[i] * vecB[i];
-  }
-  if (normA === 0 || normB === 0) return 0;
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-}
+// Re-exported from utils so existing import paths keep working.
+export { cosineSimilarity };
 
 export async function recallRelevantChunks(actor) {
   const chunks = await getAllChunks();

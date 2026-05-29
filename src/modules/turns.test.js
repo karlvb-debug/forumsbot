@@ -60,6 +60,7 @@ vi.mock('./api.js', () => ({
   chatCompletion: vi.fn(),
   setCurrentSpeaker: vi.fn(),
   getLastToolCalls: vi.fn(() => []),
+  isJsonSchemaSupported: vi.fn(() => false),
 }));
 
 vi.mock('../hooks/useForumState.js', () => ({
