@@ -14,6 +14,24 @@ function wordCount(str) {
   return str.trim().split(/\s+/).filter(Boolean).length;
 }
 
+// Display-layer sanitizer. Actor output is a JSON envelope and tools are
+// text-tags ([SEARCH:]/[READ:]) that belong in the thought stream — but
+// legacy data and the occasional malformed parse leak envelope syntax into
+// the visible message. Strip the unambiguous artifacts before rendering.
+function cleanMessageText(raw) {
+  if (!raw) return '';
+  let t = String(raw);
+  // Tool-invocation tags — never render as prose
+  t = t.replace(/\[(?:SEARCH|READ|FETCH|TOOL)\s*:[^\]]*\]/gi, ' ');
+  // Trailing malformed-JSON tail: ...Story Idea 1. ");""Geophysics","Bio"]}  →  ...Story Idea 1.
+  t = t.replace(/\s*"\s*\)\s*;[\s\S]*[\]}]\s*$/, '');
+  // Orphaned JSON key/colon tail: ...premise. ":[  →  ...premise.
+  t = t.replace(/\s*"\s*:\s*\[?\s*$/, '');
+  // Trailing JSON close right after a quote: ...text"]}  →  ...text
+  t = t.replace(/"\s*[\]}]+\s*$/, '');
+  return t.replace(/[ \t]{2,}/g, ' ').trim();
+}
+
 function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork }) {
   const [thoughtExpanded, setThoughtExpanded] = useState(false);
   const [msgExpanded, setMsgExpanded] = useState(false);
@@ -57,7 +75,7 @@ function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork })
 
   // Parse thought from AI JSON envelope
   let thought = msg.thought || null;
-  let text = msg.content || msg.text || msg.message || '';
+  let text = cleanMessageText(msg.content || msg.text || msg.message || '');
 
   // Message collapse: >250 words collapses to 80
   const totalWords = wordCount(text);
@@ -69,8 +87,10 @@ function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork })
   // Tool calls display
   const toolCalls = msg.toolCalls || [];
 
+  const typeClass = msg.type === 'user' ? ' msg--user' : msg.type === 'dm' ? ' msg--dm' : '';
+
   return (
-    <article className="msg">
+    <article className={'msg' + typeClass}>
       <span className="swatch" style={{ background: actor.color }}>{(actor.name || '?')[0]}</span>
       <div className="msg-body">
         <div className="msg-head">

@@ -265,6 +265,15 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
 .status-pill.err .dot { background: var(--danger); }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
+/* Clickable connection pill — keep the model name from blowing out the bar */
+.status-pill--btn { cursor: pointer; transition: border-color .15s, color .15s; }
+.status-pill--btn:hover { border-color: var(--accent); color: var(--fg); }
+.status-pill-label { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Round/turns reads as a quiet stat, not a control */
+.status-round { background: transparent; border-color: transparent; color: var(--fg-faint); padding-left: 4px; padding-right: 4px; }
+/* Collapse the connection label to just the dot when the bar gets tight */
+@media (max-width: 1040px) { .status-pill-label { display: none; } .status-pill--btn { padding: 4px 8px; } }
+
 .status-pill.bg-task {
   color: var(--accent);
   border-color: var(--accent-soft);
@@ -396,6 +405,24 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
 .msg-time { font-size: 11px; color: var(--fg-faint); font-family: var(--font-mono); margin-left: 4px; }
 .msg-text { color: var(--fg-talk); line-height: 1.55; font-size: var(--fs); }
 .msg-text strong { color: var(--fg); font-weight: 600; }
+
+/* Message-type accents — distinguish your own and the director's turns
+   from the cast at a glance. */
+.msg--user {
+  background: oklch(from var(--accent) l c h / 0.06);
+  border-left: 2px solid oklch(from var(--accent) l c h / 0.55);
+}
+.msg--user:hover { background: oklch(from var(--accent) l c h / 0.10); }
+.msg--user .swatch { box-shadow: 0 0 0 2px oklch(from var(--accent) l c h / 0.35); }
+.msg--user .msg-name { color: var(--accent); }
+.msg--dm {
+  border-left: 2px solid oklch(from var(--violet) l c h / 0.45);
+}
+.msg--dm .msg-role {
+  color: var(--violet);
+  border-color: oklch(from var(--violet) l c h / 0.35);
+  background: oklch(from var(--violet) l c h / 0.08);
+}
 
 /* ── Markdown body — scoped to .md-body ────────────────── */
 .md-body { line-height: 1.6; }

@@ -3,6 +3,7 @@ import * as Ic from './Icons';
 import { useForumState, mutateState, saveState } from '../hooks/useForumState';
 import { useActions, getConnectionStatus, getConnectionStatusVersion, subscribeBusy, getBusy, subscribeConnectionStatus } from '../hooks/useActions';
 import { useSyncExternalStore } from 'react';
+import { navigateToPanel } from '../hooks/navigation.js';
 
 export function Topbar() {
   const assistantOpen = useForumState(s => s.ui?.assistantOpen || false);
@@ -65,10 +66,14 @@ export function Topbar() {
             <span className="dot" />Auto running
           </span>
         )}
-        <span className={`status-pill ${connClass}`} title="Connection status">
-          <span className="dot" />{connStatus.message}
-        </span>
-        <span className="status-pill" title="Round status">R{roundNum} · {turnCount} turns</span>
+        <button
+          className={`status-pill status-pill--btn ${connClass}`}
+          title="Connection status — click to open the Connection panel"
+          onClick={() => navigateToPanel('connection')}
+        >
+          <span className="dot" /><span className="status-pill-label">{connStatus.message}</span>
+        </button>
+        <span className="status-pill status-round" title="Round status">R{roundNum} · {turnCount}t</span>
       </div>
 
       <div className="run-controls" role="group" aria-label="Run">
