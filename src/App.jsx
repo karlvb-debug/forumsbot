@@ -91,15 +91,18 @@ export default function App() {
   useEffect(() => {
     const onKey = (e) => {
       const mod = e.metaKey || e.ctrlKey;
-      // Escape — dismiss modal overlays (read state directly to avoid stale closures)
+      // Escape — dismiss modal overlays by directly clearing state
       if (e.key === 'Escape') {
-        import('./modules/state.js').then(({ state: s }) => {
-          if (s.ui?.confirmModal) {
-            import('./modules/session.js').then(m => m.resolveConfirmModal(false));
-          } else if (s.ui?.stopModal) {
-            import('./modules/turns.js').then(m => m.resolveStopOrContinue(false));
-          } else if (s.ui?.pauseModal) {
-            mutateState(st => { st.ui.pauseModal = null; });
+        // Force clear whichever modal is open, then try to resolve the promise chain
+        mutateState(s => {
+          if (s.ui.confirmModal) {
+            s.ui.confirmModal = null;
+            import('./modules/session.js').then(m => m.resolveConfirmModal(false)).catch(() => {});
+          } else if (s.ui.stopModal) {
+            s.ui.stopModal = null;
+            import('./modules/turns.js').then(m => m.resolveStopOrContinue(false)).catch(() => {});
+          } else if (s.ui.pauseModal) {
+            s.ui.pauseModal = null;
           }
         });
         e.preventDefault();
