@@ -7,7 +7,26 @@ import {
   normalizeStringArray,
   normalizeAiResult,
   normalizeQuickStartConfig,
+  cosineSimilarity,
 } from './utils.js';
+
+describe('cosineSimilarity', () => {
+  it('returns 1 for identical vectors', () => {
+    expect(cosineSimilarity([1, 2, 3], [1, 2, 3])).toBeCloseTo(1);
+  });
+  it('returns 0 for orthogonal vectors', () => {
+    expect(cosineSimilarity([1, 0], [0, 1])).toBe(0);
+  });
+  it('returns 0 for zero, mismatched-length, or non-array inputs', () => {
+    expect(cosineSimilarity([0, 0], [0, 0])).toBe(0);
+    expect(cosineSimilarity([1, 2, 3], [1, 2])).toBe(0);
+    expect(cosineSimilarity(null, [1, 2])).toBe(0);
+  });
+  it('is symmetric', () => {
+    const a = [0.2, 0.5, 0.9], b = [0.1, 0.4, 0.3];
+    expect(cosineSimilarity(a, b)).toBeCloseTo(cosineSimilarity(b, a));
+  });
+});
 
 describe('estimateTokens', () => {
   it('returns 0 for empty input', () => {

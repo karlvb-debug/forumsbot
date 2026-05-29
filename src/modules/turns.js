@@ -973,25 +973,19 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
           : "";
       })(),
       (!sysCfg.stageDirectionsEnabled && state.settings.toolsEnabled)
-        ? (() => {
-            const lastUserMsg = [...state.messages].reverse().find((m) => m.type === "user");
-            const userWantsSearch = lastUserMsg && /search|look.?up|research|find out|check|googl|web|online/i.test(lastUserMsg.content || "");
-            return [
-              userWantsSearch
-                ? (showThoughts
-                    ? "IMPORTANT: The user has asked for a web search. Use [SEARCH: query] in your thought field."
-                    : "IMPORTANT: The user has asked for a web search. Use [SEARCH: query] in your JSON thought field (keep it empty other than the tag).")
-                : (showThoughts
-                    ? "WEB TOOLS: You have access to live web tools. To guide the panel effectively, verify facts, or check recent benchmarks, you are STRONGLY ENCOURAGED to use [SEARCH: query] or [READ: url] inside your thought field rather than relying on stale information."
-                    : "WEB TOOLS: You have access to live web tools. To guide the panel effectively, verify facts, or check recent benchmarks, you are STRONGLY ENCOURAGED to use [SEARCH: query] or [READ: url] inside your JSON thought field."),
-              showThoughts
-                ? "DIRECTOR RESEARCH RULE: Use [SEARCH: query] to look up specs, news, or details if the panelists raise technical debates, so you can synthesize and resolve discrepancies with fresh ground truth."
-                : "DIRECTOR RESEARCH RULE: Use [SEARCH: query] to look up specs, news, or details if the panelists raise technical debates.",
-              showThoughts
-                ? "Example: {\"thought\":\"I should look up the latest specs. [SEARCH: latest local LLM benchmarks 2026]\",\"action\":\"speak\",\"message\":\"\"}"
-                : "Example: {\"thought\":\"[SEARCH: latest local LLM benchmarks 2026]\",\"action\":\"speak\",\"message\":\"\"}"
-            ].join("\n");
-          })()
+        ? [
+            // Static web-tools guidance only; the per-turn "user asked for a search"
+            // directive is injected via the dynamic user context (buildPromptContext).
+            showThoughts
+              ? "WEB TOOLS: You have access to live web tools. To guide the panel effectively, verify facts, or check recent benchmarks, you are STRONGLY ENCOURAGED to use [SEARCH: query] or [READ: url] inside your thought field rather than relying on stale information."
+              : "WEB TOOLS: You have access to live web tools. To guide the panel effectively, verify facts, or check recent benchmarks, you are STRONGLY ENCOURAGED to use [SEARCH: query] or [READ: url] inside your JSON thought field.",
+            showThoughts
+              ? "DIRECTOR RESEARCH RULE: Use [SEARCH: query] to look up specs, news, or details if the panelists raise technical debates, so you can synthesize and resolve discrepancies with fresh ground truth."
+              : "DIRECTOR RESEARCH RULE: Use [SEARCH: query] to look up specs, news, or details if the panelists raise technical debates.",
+            showThoughts
+              ? "Example: {\"thought\":\"I should look up the latest specs. [SEARCH: latest local LLM benchmarks 2026]\",\"action\":\"speak\",\"message\":\"\"}"
+              : "Example: {\"thought\":\"[SEARCH: latest local LLM benchmarks 2026]\",\"action\":\"speak\",\"message\":\"\"}"
+          ].join("\n")
         : ""
     ].filter(Boolean).join("\n");
 
@@ -1185,29 +1179,22 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
         ].join("\n")
       : "",
     (!sysCfg.stageDirectionsEnabled && state.settings.toolsEnabled)
-      ? (() => {
-          const lastUserMsg = [...state.messages].reverse().find((m) => m.type === "user");
-          const userWantsSearch = lastUserMsg && /search|look.?up|research|find out|check|googl|web|online/i.test(lastUserMsg.content || "");
-          return [
-            userWantsSearch
-              ? (showThoughts
-                  ? "IMPORTANT: The user has explicitly asked for a web search. You MUST use [SEARCH: your query] in your thought field before responding. Do not skip the search."
-                  : "IMPORTANT: The user has explicitly asked for a web search. You MUST use [SEARCH: your query] in your JSON thought field (keep it empty other than the tag). Do not skip the search.")
-              : (showThoughts
-                  ? "WEB TOOLS: You have access to real-time search and web page reading. You are STRONGLY ENCOURAGED to make liberal use of these tools rather than relying on stale training weights. Before explaining technical details, citing specs, recommending libraries, or comparing tools, perform a quick search to ensure your facts are current."
-                  : "WEB TOOLS: You have access to real-time search and web page reading. You are STRONGLY ENCOURAGED to make liberal use of these tools rather than relying on stale training weights. Before explaining technical details, citing specs, recommending libraries, or comparing tools, perform a quick search to ensure your facts are current."),
-            showThoughts
-              ? "PROBLEM-SOLVING MODE RESEARCH DRILL: You are in problem-solving mode. Challenge assumptions and bring fresh external facts. If your turn requires citing specifications, library features, benchmarks, or API signatures, you are STRONGLY ENCOURAGED to run a search query (e.g. `[SEARCH: latest react router v7 features]`) to fetch ground truth."
-              : "PROBLEM-SOLVING MODE RESEARCH DRILL: You are in problem-solving mode. Challenge assumptions and bring fresh external facts. If your turn requires citing specifications, library features, benchmarks, or API signatures, you are STRONGLY ENCOURAGED to run a search query (e.g. `[SEARCH: latest react router v7 features]`) using your thought field.",
-            "To use a tool, embed the search tag INSIDE your thought field. The system will pause, fetch the results, and let you finalise your message:",
-            showThoughts
-              ? "{\"thought\":\"I need current data. [SEARCH: best quantization methods for local LLMs 2026]\",\"action\":\"speak\",\"message\":\"\"}"
-              : "{\"thought\":\"[SEARCH: best quantization methods for local LLMs 2026]\",\"action\":\"speak\",\"message\":\"\"}",
-            showThoughts
-              ? "Use [SEARCH: your query] to search the web, or [READ: https://example.com] to read a specific page. Search early in the discussion to ground your inputs in actual facts."
-              : "Use [SEARCH: your query] in your JSON thought field to search the web, or [READ: https://example.com] to read a specific page."
-          ].join("\n");
-        })()
+      ? [
+          // Static web-tools guidance only. The per-turn "user explicitly asked for
+          // a search" directive lives in the dynamic user context (buildPromptContext)
+          // so this system block stays byte-stable for KV-cache reuse.
+          "WEB TOOLS: You have access to real-time search and web page reading. You are STRONGLY ENCOURAGED to make liberal use of these tools rather than relying on stale training weights. Before explaining technical details, citing specs, recommending libraries, or comparing tools, perform a quick search to ensure your facts are current.",
+          showThoughts
+            ? "PROBLEM-SOLVING MODE RESEARCH DRILL: You are in problem-solving mode. Challenge assumptions and bring fresh external facts. If your turn requires citing specifications, library features, benchmarks, or API signatures, you are STRONGLY ENCOURAGED to run a search query (e.g. `[SEARCH: latest react router v7 features]`) to fetch ground truth."
+            : "PROBLEM-SOLVING MODE RESEARCH DRILL: You are in problem-solving mode. Challenge assumptions and bring fresh external facts. If your turn requires citing specifications, library features, benchmarks, or API signatures, you are STRONGLY ENCOURAGED to run a search query (e.g. `[SEARCH: latest react router v7 features]`) using your thought field.",
+          "To use a tool, embed the search tag INSIDE your thought field. The system will pause, fetch the results, and let you finalise your message:",
+          showThoughts
+            ? "{\"thought\":\"I need current data. [SEARCH: best quantization methods for local LLMs 2026]\",\"action\":\"speak\",\"message\":\"\"}"
+            : "{\"thought\":\"[SEARCH: best quantization methods for local LLMs 2026]\",\"action\":\"speak\",\"message\":\"\"}",
+          showThoughts
+            ? "Use [SEARCH: your query] to search the web, or [READ: https://example.com] to read a specific page. Search early in the discussion to ground your inputs in actual facts."
+            : "Use [SEARCH: your query] in your JSON thought field to search the web, or [READ: https://example.com] to read a specific page."
+        ].join("\n")
       : "",
     !sysCfg.stageDirectionsEnabled
       ? [
@@ -1608,6 +1595,23 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
         .map(a => `${a.name}: ${a.thoughts.split("\n").slice(-2).join(" ")}`)
         .join("\n");
       if (digest) assembled += `\n\n[Relationship memory — private]\n${digest}`;
+    }
+  }
+
+  // Per-turn web-search directive — relocated here from the system prompt so the
+  // system prefix stays byte-stable for KV-cache reuse. Fires when the latest user
+  // message explicitly asks for a search, for tool-capable actors in non-story mode.
+  // (Pure cast managers never had this guidance, so they're excluded.)
+  if (
+    kind === "actor" &&
+    state.settings.toolsEnabled &&
+    !sysCfg.stageDirectionsEnabled &&
+    !(actor.canManageCast && !actor.canDirect)
+  ) {
+    const lastUserMsg = [...messageSource].reverse().find(m => m.type === "user");
+    const wantsSearch = lastUserMsg && /search|look.?up|research|find out|check|googl|web|online/i.test(lastUserMsg.content || "");
+    if (wantsSearch) {
+      assembled += "\n\n[The user has explicitly asked for a web search this turn. You MUST use [SEARCH: your query] in your thought field before responding — do not skip the search.]";
     }
   }
 
