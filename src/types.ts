@@ -114,6 +114,7 @@ export interface UI {
   chatModels?: string[];
   embeddingModels?: string[];
   tokenSpeed?: number | null;
+  focusedDocId?: string | null;
 }
 
 export interface Memory {

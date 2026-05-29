@@ -144,6 +144,9 @@ function DocEntry({ entry, actors, onUpdate, onDelete }) {
             {fetchingId ? 'Fetching…' : 'Fetch'}
           </button>
         )}
+        <button className="btn sm" onClick={() => mutateState(s => { s.ui.focusedDocId = entry.id; })} title="Open in full-width editor">
+          <Ic.Expand width={12} height={12} /> Expand
+        </button>
         <button className="btn ghost sm" style={{ color: 'var(--danger)' }} onClick={() => onDelete(entry.id)}>
           <Ic.Trash width={12} height={12} /> Delete
         </button>

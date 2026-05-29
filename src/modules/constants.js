@@ -112,7 +112,8 @@ export const defaultState = {
     currentSpeaker: "",         // name of actor currently generating
     assistantOpen: false,       // AI assistant drawer open/closed
     pauseModal: null,           // { pauseRecord } — set by promptPause()
-    awaitingUserInput: false    // true while a pause modal is open
+    awaitingUserInput: false,   // true while a pause modal is open
+    focusedDocId: null           // when set, stage shows the document editor
   },
   memory: {
     enabled: true,

@@ -11,6 +11,7 @@ import { ConfirmModal } from './components/ConfirmModal';
 import { PauseCard } from './components/PauseCard';
 import { AiAssistant } from './components/AiAssistant';
 import { ReadinessStrip } from './components/ReadinessStrip';
+import { DocEditorStage } from './components/DocEditorStage';
 // Importing state.js triggers loadState() at module level
 import './modules/state.js';
 import { setModuleRefs, useActions } from './hooks/useActions.js';
@@ -58,6 +59,7 @@ export default function App() {
   const confirmModal = useForumState(s => s.ui?.confirmModal || null);
   const pauseModal = useForumState(s => s.ui?.pauseModal || null);
   const awaitingUserInput = useForumState(s => s.ui?.awaitingUserInput || false);
+  const focusedDocId = useForumState(s => s.ui?.focusedDocId || null);
 
   // Load modules on mount
   useEffect(() => {
@@ -175,21 +177,33 @@ export default function App() {
           {inspectorOnLeft && (
             <Inspector active={activePanel} meta={meta} nav={NAV} />
           )}
-          <div className="stage">
-            <div className="stage-inner">
-              <Transcript showThoughts={showThoughts} />
-            </div>
-            <ReadinessStrip />
-            {awaitingUserInput && (
-              <div className="awaiting-input-strip">
-                ⏸ An actor is waiting for your response — see the pause card above
-              </div>
-            )}
-            <Composer
-              showThoughts={showThoughts}
-              onToggleThoughts={() => mutateState(s => { s.settings.showThoughts = !s.settings.showThoughts; })}
+          {focusedDocId ? (
+            <DocEditorStage
+              transcript={<Transcript showThoughts={showThoughts} />}
+              composer={
+                <Composer
+                  showThoughts={showThoughts}
+                  onToggleThoughts={() => mutateState(s => { s.settings.showThoughts = !s.settings.showThoughts; })}
+                />
+              }
             />
-          </div>
+          ) : (
+            <div className="stage">
+              <div className="stage-inner">
+                <Transcript showThoughts={showThoughts} />
+              </div>
+              <ReadinessStrip />
+              {awaitingUserInput && (
+                <div className="awaiting-input-strip">
+                  ⏸ An actor is waiting for your response — see the pause card above
+                </div>
+              )}
+              <Composer
+                showThoughts={showThoughts}
+                onToggleThoughts={() => mutateState(s => { s.settings.showThoughts = !s.settings.showThoughts; })}
+              />
+            </div>
+          )}
           {!inspectorOnLeft && (
             <Inspector active={activePanel} meta={meta} nav={NAV} />
           )}

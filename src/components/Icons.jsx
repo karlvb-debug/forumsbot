@@ -250,3 +250,28 @@ export const Wrench = (props) => (
     <path d="M14 3a3 3 0 0 0-3 4l-7 7 2 2 7-7a3 3 0 0 0 4-3l-2 2-2-2 1-3z" />
   </svg>
 );
+
+export const Expand = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M3 7V4a1 1 0 0 1 1-1h3M13 3h3a1 1 0 0 1 1 1v3M17 13v3a1 1 0 0 1-1 1h-3M7 17H4a1 1 0 0 1-1-1v-3" />
+  </svg>
+);
+
+export const Close = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M5 5l10 10M15 5L5 15" />
+  </svg>
+);
+
+export const Clock = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <circle cx="10" cy="10" r="7" />
+    <path d="M10 6v4l3 2" />
+  </svg>
+);
+
+export const MessageSquare = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M3 4h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-4l-3 3-3-3H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
+  </svg>
+);

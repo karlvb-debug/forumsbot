@@ -123,6 +123,7 @@ function normalizeState(value) {
   merged.memory.distillingActor = "";
   merged.ui.pauseModal = null;
   merged.ui.awaitingUserInput = false;
+  merged.ui.focusedDocId = null;
   if (!value.settings?.baseUrl || value.settings.baseUrl === "http://localhost:1234/v1") {
     merged.settings.baseUrl = defaultState.settings.baseUrl;
   }
