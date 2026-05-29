@@ -116,7 +116,7 @@
 
 /* ───── Reset ───── */
 *, *::before, *::after { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: var(--fs); line-height: var(--lh); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: var(--fs); line-height: var(--lh); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
 #root { min-height: 100vh; }
 
@@ -364,7 +364,9 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); fon
   color: white; font-weight: 600; font-size: 12px;
   flex-shrink: 0;
 }
+.msg { max-width: 100%; min-width: 0; }
 .msg-body { min-width: 0; overflow-wrap: break-word; word-break: break-word; }
+.msg-text { overflow-wrap: break-word; word-break: break-word; }
 .msg-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .msg-name { font-weight: 600; font-size: var(--fs); color: var(--fg); }
 .msg-role {
@@ -1493,10 +1495,10 @@ button:focus-visible { border-radius: 8px; }
   .workspace { grid-template-columns: 1fr !important; }
   .inspector:not(.inspector--embedded) { display: none; }
 
-  /* Topbar: run controls live in the Composer + bottom nav on mobile */
-  .topbar { gap: 8px; }
+  /* Topbar: run controls + status live in bottom nav / panels on mobile */
+  .topbar { gap: 8px; overflow: hidden; }
   .topbar .run-controls { display: none; }
-  .status-pill[title="Round status"] { display: none; }
+  .topbar .status-cluster { display: none; }
   .session-title h1 { font-size: var(--fs-lg); }
 
   .stage-inner { padding-left: 16px; padding-right: 16px; }
