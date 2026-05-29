@@ -80,19 +80,6 @@ export function TelemetryPanel() {
       </div>
 
       <div className="card">
-        <div className="card-title"><h3>Session Texture</h3><span className="badge">visual</span></div>
-        <div className="tension-grid">
-          {(sparkData.length > 0 ? sparkData : Array(10).fill(50)).map((v, i) => (
-            <div key={i} className="tension-cell" style={{
-              background: `oklch(from var(--accent) l c h / ${(v / 100) * 0.6})`,
-              transform: `scale(${0.6 + (v / 100) * 0.4})`,
-            }} />
-          ))}
-        </div>
-        <div className="field-hint" style={{ marginTop: 6 }}>Visualises recent alignment history.</div>
-      </div>
-
-      <div className="card">
         <div className="card-title"><h3>Influence Budget</h3></div>
         {hasRealInfluence ? (
           enabledActors.map(a => (
@@ -133,9 +120,12 @@ export function TelemetryPanel() {
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-title"><h3>Optimization</h3></div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <details className="card card-disclosure">
+        <summary className="card-title">
+          <h3>Optimization</h3>
+          <span className="disclosure-sub">routing · sampling · diagnostics</span>
+        </summary>
+        <div className="disclosure-body">
           <Toggle checked={settings.enablePreflightRouter !== false} onChange={(v) => mutateState(s => { s.settings.enablePreflightRouter = v; })} label="Preflight skip router" />
           <Toggle checked={settings.roundSnapshotEnabled !== false} onChange={(v) => mutateState(s => { s.settings.roundSnapshotEnabled = v; })} label="Round snapshot · KV cache reuse" />
           <Toggle checked={!!settings.enableHypothesisSampling} onChange={(v) => mutateState(s => { s.settings.enableHypothesisSampling = v; })} label="Hypothesis sampling" />
@@ -149,14 +139,27 @@ export function TelemetryPanel() {
           )}
           <Toggle checked={!!settings.showInfluenceBars} onChange={(v) => mutateState(s => { s.settings.showInfluenceBars = v; })} label="Show influence bars on messages" />
           <Toggle checked={settings.includeTraces !== false} onChange={(v) => mutateState(s => { s.settings.includeTraces = v; })} label="Include prompt traces in diagnostics" />
+          <div>
+            <Field label={`Gravity sensitivity: ${settings.gravitySensitivity ?? 50}`}>
+              <Range value={settings.gravitySensitivity ?? 50} min={0} max={100} step={5} onChange={(v) => mutateState(s => { s.settings.gravitySensitivity = v; })} />
+            </Field>
+            <div className="field-hint">Controls how strongly off-topic drift nudges actors back to the objective.</div>
+          </div>
+          {sparkData.length > 0 && (
+            <div>
+              <div className="field-hint" style={{ marginBottom: 6 }}>Session texture — recent alignment history.</div>
+              <div className="tension-grid">
+                {sparkData.map((v, i) => (
+                  <div key={i} className="tension-cell" style={{
+                    background: `oklch(from var(--accent) l c h / ${(v / 100) * 0.6})`,
+                    transform: `scale(${0.6 + (v / 100) * 0.4})`,
+                  }} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-        <div style={{ marginTop: 8 }}>
-          <Field label={`Gravity sensitivity: ${settings.gravitySensitivity ?? 50}`}>
-            <Range value={settings.gravitySensitivity ?? 50} min={0} max={100} step={5} onChange={(v) => mutateState(s => { s.settings.gravitySensitivity = v; })} />
-          </Field>
-          <div className="field-hint">Controls how strongly off-topic drift nudges actors back to the objective.</div>
-        </div>
-      </div>
+      </details>
     </div>
   );
 }

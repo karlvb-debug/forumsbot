@@ -48,21 +48,22 @@ export function GoalPanel() {
         )}
       </div>
 
-      <div className="card">
-        <div className="card-title"><h3>Stop Conditions</h3></div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <details className="card card-disclosure">
+        <summary className="card-title">
+          <h3>Stop Conditions</h3>
+          <span className="disclosure-sub">goal judge · skip · max rounds</span>
+        </summary>
+        <div className="disclosure-body">
           <Toggle checked={autoStop.goalCheckEnabled ?? true} onChange={(v) => update('goalCheckEnabled', v)} label="Judge goal after each round" />
           <Toggle checked={autoStop.stopOnAllSkip ?? true} onChange={(v) => update('stopOnAllSkip', v)} label="Stop when everyone skips" />
           <Toggle checked={autoStop.maxRoundsEnabled ?? false} onChange={(v) => update('maxRoundsEnabled', v)} label="Max rounds" />
-        </div>
-        <div style={{ marginTop: 10 }}>
           <Field label="Max rounds">
             <input type="number" value={autoStop.maxRounds ?? 5} min={1} max={50}
               onChange={(e) => update('maxRounds', parseInt(e.target.value) || 5)}
               disabled={!autoStop.maxRoundsEnabled} />
           </Field>
         </div>
-      </div>
+      </details>
 
       <div className="card">
         <div className="card-title"><h3>Status</h3></div>
