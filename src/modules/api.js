@@ -1,6 +1,6 @@
 import { AVAILABLE_TOOLS, MAX_TOOL_ROUNDS } from './constants.js';
 import { state, saveState } from './state.js';
-import { parseAiJson, parseTextToolCalls, stripTextToolCalls, stripCodeFence } from './utils.js';
+import { parseAiJson, parseTextToolCalls, stripTextToolCalls, stripCodeFence, estimateTokens } from './utils.js';
 import { setConnectionStatus } from '../hooks/useActions.js';
 import { notifyStateChange, mutateState } from '../hooks/useForumState.js';
 
@@ -187,7 +187,7 @@ async function _chatCompletionDirect(system, user, { temperature = state.setting
       latencyMs,
       tokensPerSecondCompletion: tokensPerSecond,
       status: "ok",
-      estimatedCostCents: Number(((promptTokens * 0.00015 + completionTokens * 0.0006) / 1000).toFixed(4))
+      estimatedCostCents: 0 // local LM Studio inference is free — cloud token pricing does not apply
     };
     if (!state.diagnostics) state.diagnostics = {};
     if (!Array.isArray(state.diagnostics.apiCallLogs)) state.diagnostics.apiCallLogs = [];
@@ -293,7 +293,7 @@ export async function chatCompletionMessages(messages, { temperature = state.set
   const completionTokens = data?.usage?.completion_tokens || 0;
   if (!state.diagnostics) state.diagnostics = {};
   if (!Array.isArray(state.diagnostics.apiCallLogs)) state.diagnostics.apiCallLogs = [];
-  state.diagnostics.apiCallLogs.push({ timestamp: new Date().toISOString(), endpoint: "/v1/chat/completions", model: payload.model || "unknown", promptTokens, completionTokens, latencyMs, tokensPerSecondCompletion: completionTokens && latencyMs > 0 ? Math.round(completionTokens / (latencyMs / 1000)) : 0, status: "ok", estimatedCostCents: Number(((promptTokens * 0.00015 + completionTokens * 0.0006) / 1000).toFixed(4)) });
+  state.diagnostics.apiCallLogs.push({ timestamp: new Date().toISOString(), endpoint: "/v1/chat/completions", model: payload.model || "unknown", promptTokens, completionTokens, latencyMs, tokensPerSecondCompletion: completionTokens && latencyMs > 0 ? Math.round(completionTokens / (latencyMs / 1000)) : 0, status: "ok", estimatedCostCents: 0 });
   if (state.diagnostics.apiCallLogs.length > 100) state.diagnostics.apiCallLogs.shift();
   if (data.usage) {
     state.contextInfo.lastPromptTokens = promptTokens;
@@ -354,7 +354,10 @@ export async function chatStream(system, user, { temperature = state.settings.te
     let accumulated = "";
     let sseBuffer = "";
     let promptTokens = 0;
-    let completionTokens = 0;
+    // Real token counts come from the final usage chunk (stream_options.include_usage).
+    // SSE deltas are NOT 1:1 with tokens, so we never count chunks — if usage is
+    // absent we fall back to a char-based estimate of the accumulated text.
+    let usageCompletionTokens = 0;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -371,17 +374,17 @@ export async function chatStream(system, user, { temperature = state.settings.te
           const delta = parsed.choices?.[0]?.delta?.content;
           if (delta) {
             accumulated += delta;
-            completionTokens++;
             if (onChunk) onChunk(delta, accumulated);
           }
           if (parsed.usage) {
-            promptTokens = parsed.usage.prompt_tokens || 0;
-            completionTokens = parsed.usage.completion_tokens || completionTokens;
+            promptTokens = parsed.usage.prompt_tokens || promptTokens;
+            usageCompletionTokens = parsed.usage.completion_tokens || usageCompletionTokens;
           }
         } catch { /* ignore malformed SSE line */ }
       }
     }
 
+    const completionTokens = usageCompletionTokens || estimateTokens(accumulated);
     const latencyMs = Date.now() - startTime;
     const tokensPerSecond = completionTokens && latencyMs > 0 ? Math.round(completionTokens / (latencyMs / 1000)) : 0;
     const apiLog = {
@@ -393,7 +396,7 @@ export async function chatStream(system, user, { temperature = state.settings.te
       latencyMs,
       tokensPerSecondCompletion: tokensPerSecond,
       status: "ok",
-      estimatedCostCents: Number(((promptTokens * 0.00015 + completionTokens * 0.0006) / 1000).toFixed(4))
+      estimatedCostCents: 0 // local LM Studio inference is free — cloud token pricing does not apply
     };
     if (!state.diagnostics) state.diagnostics = {};
     if (!Array.isArray(state.diagnostics.apiCallLogs)) state.diagnostics.apiCallLogs = [];
@@ -516,10 +519,14 @@ ${result}
   // Detect truncation: JSON that ends mid-string, mid-key, or with an unclosed brace
   // is almost always a token-budget hit rather than a model error.
   const looksLikeTruncation = (text) => {
-    const t = text.trimEnd();
-    // Ends without a closing brace, or ends inside a string value
-    if (!t.endsWith("}") && !t.endsWith('"}') && !t.endsWith('"}')) return true;
-    try { JSON.parse(stripCodeFence(t)); return false; } catch { return true; }
+    const t = stripCodeFence(text.trimEnd());
+    // A complete envelope ends with the closing brace. If it doesn't, the
+    // response was cut off mid-field. (The two trailing-quote variants in the
+    // old check were redundant subsets of "}" — a string like '..."}' already
+    // ends with "}".) The JSON.parse below catches truncation that ends inside
+    // a string value but still happens to terminate on a brace.
+    if (!t.endsWith("}")) return true;
+    try { JSON.parse(t); return false; } catch { return true; }
   };
 
   let finalContent = content;
