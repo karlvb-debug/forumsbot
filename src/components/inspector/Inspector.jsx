@@ -25,12 +25,43 @@ const PANELS = {
   help: HelpPanel,
 };
 
-export function Inspector({ active, meta, nav }) {
+export function Inspector({ active, meta, nav, embedded = false }) {
   const [showPrompt, setShowPrompt] = useState(false);
 
   const navItem = nav.find(n => n.id === active);
   const Icon = navItem ? Ic[navItem.icon] : null;
   const Panel = PANELS[active];
+
+  const promptToggle = (
+    <button
+      className={"chip-btn" + (showPrompt ? " active" : "")}
+      style={{ marginLeft: 'auto' }}
+      title="View the last prompt sent to the model"
+      onClick={() => setShowPrompt(v => !v)}
+    >
+      {showPrompt ? '← Back' : '🔬 Prompt'}
+    </button>
+  );
+
+  const body = (
+    <div className="inspector-body">
+      {showPrompt
+        ? <PromptViewerPanel />
+        : (Panel ? <Panel /> : <div className="empty" style={{ padding: 40 }}>Panel not found</div>)
+      }
+    </div>
+  );
+
+  // Embedded (mobile sheet): the Sheet supplies the title chrome, so render a
+  // slim prompt-toggle row plus the shared panel body — same panels, no dupes.
+  if (embedded) {
+    return (
+      <div className="inspector inspector--embedded" aria-label="Inspector">
+        <div className="inspector-embedded-actions">{promptToggle}</div>
+        {body}
+      </div>
+    );
+  }
 
   return (
     <aside className="inspector" aria-label="Inspector">
@@ -40,21 +71,9 @@ export function Inspector({ active, meta, nav }) {
           {showPrompt ? 'Prompt Viewer' : meta.title}
           <small>· {showPrompt ? 'last assembled prompt' : meta.sub}</small>
         </h2>
-        <button
-          className={"chip-btn" + (showPrompt ? " active" : "")}
-          style={{ marginLeft: 'auto', fontSize: 11 }}
-          title="View the last prompt sent to the model"
-          onClick={() => setShowPrompt(v => !v)}
-        >
-          {showPrompt ? '← Back' : '🔬 Prompt'}
-        </button>
+        {promptToggle}
       </header>
-      <div className="inspector-body">
-        {showPrompt
-          ? <PromptViewerPanel />
-          : (Panel ? <Panel /> : <div className="empty" style={{ padding: 40 }}>Panel not found</div>)
-        }
-      </div>
+      {body}
     </aside>
   );
 }

@@ -12,10 +12,28 @@ import { PauseCard } from './components/PauseCard';
 import { AiAssistant } from './components/AiAssistant';
 import { ReadinessStrip } from './components/ReadinessStrip';
 import { DocEditorStage } from './components/DocEditorStage';
+import { BottomNav } from './components/BottomNav';
+import { Sheet } from './components/Sheet';
+import * as Ic from './components/Icons';
 // Importing state.js triggers loadState() at module level
 import './modules/state.js';
 import { setModuleRefs, useActions } from './hooks/useActions.js';
 import { mutateState, notifyStateChange, saveState, useForumState } from './hooks/useForumState.js';
+
+// Small media-query hook (no dependency) — drives the mobile shell.
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(query).matches
+  );
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const onChange = () => setMatches(mql.matches);
+    onChange();
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, [query]);
+  return matches;
+}
 
 // Navigation items for the rail
 const NAV = [
@@ -52,7 +70,10 @@ export default function App() {
   const [inspectorPos, setInspectorPos] = useState('left');
   const [ready, setReady] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [sheet, setSheet] = useState(null); // mobile only: null | 'panel' | 'more'
+  const isMobile = useMediaQuery('(max-width: 759px)');
   const showThoughts = useForumState(s => s.settings?.showThoughts || false);
+  const autoRunning = useForumState(s => s.autoRunning || false);
 
   const { nextTurn, runRound, startAuto, stopGeneration } = useActions();
   const stopModal = useForumState(s => s.ui?.stopModal || null);
@@ -164,22 +185,36 @@ export default function App() {
     document.body.classList.add(density === 'compact' ? 'density-compact' : 'density-comfy');
   }, [density]);
 
-  // Accent CSS vars
+  // Accent CSS vars — theme-aware: a darker accent on light backgrounds so
+  // accent text/fills keep adequate contrast (the inline value overrides the
+  // stylesheet's :root/.theme-light accent, so it must adapt to the theme).
   useEffect(() => {
     const map = {
-      amber:  { l: 0.78, c: 0.13, h: 65,  fg: 'oklch(0.20 0.04 65)' },
-      violet: { l: 0.72, c: 0.14, h: 295, fg: 'oklch(0.20 0.04 295)' },
-      teal:   { l: 0.74, c: 0.12, h: 195, fg: 'oklch(0.18 0.04 195)' },
-      coral:  { l: 0.72, c: 0.14, h: 25,  fg: 'oklch(0.20 0.04 25)' },
+      amber:  { h: 70,  c: 0.13 },
+      violet: { h: 295, c: 0.14 },
+      teal:   { h: 195, c: 0.12 },
+      coral:  { h: 25,  c: 0.14 },
     };
     const m = map[accent] || map.amber;
-    document.documentElement.style.setProperty('--accent', `oklch(${m.l} ${m.c} ${m.h})`);
-    document.documentElement.style.setProperty('--accent-soft', `oklch(${m.l} ${m.c} ${m.h} / 0.16)`);
-    document.documentElement.style.setProperty('--accent-fg', m.fg);
-  }, [accent]);
+    const light = theme === 'light';
+    const l = light ? 0.62 : 0.80;
+    const fg = light ? `oklch(0.99 0.01 ${m.h})` : `oklch(0.20 0.04 ${m.h})`;
+    const root = document.documentElement.style;
+    root.setProperty('--accent', `oklch(${l} ${m.c} ${m.h})`);
+    root.setProperty('--accent-soft', `oklch(${l} ${m.c} ${m.h} / ${light ? 0.14 : 0.16})`);
+    root.setProperty('--accent-fg', fg);
+  }, [accent, theme]);
 
   const inspectorOnLeft = inspectorPos === 'left';
   const meta = NAV_TITLES[activePanel] || { title: '', sub: '' };
+
+  // Mobile bottom-nav highlight + the "More" panel list
+  const navMode = sheet === null
+    ? 'forum'
+    : sheet === 'more'
+      ? 'more'
+      : (activePanel === 'actors' ? 'actors' : activePanel === 'memory' ? 'memory' : 'more');
+  const moreItems = NAV.filter(n => !['actors', 'memory'].includes(n.id));
 
   return (
     <Shell inspectorOnLeft={inspectorOnLeft}>
@@ -194,7 +229,7 @@ export default function App() {
       <div className="main">
         <Topbar onOpenCmd={() => setCmdOpen(true)} />
         <div className={'workspace' + (inspectorOnLeft ? ' inspector-left-pos' : '')}>
-          {inspectorOnLeft && (
+          {!isMobile && inspectorOnLeft && (
             <Inspector active={activePanel} meta={meta} nav={NAV} />
           )}
           {focusedDocId ? (
@@ -224,11 +259,50 @@ export default function App() {
               />
             </div>
           )}
-          {!inspectorOnLeft && (
+          {!isMobile && !inspectorOnLeft && (
             <Inspector active={activePanel} meta={meta} nav={NAV} />
           )}
         </div>
       </div>
+
+      {isMobile && (
+        <>
+          <Sheet open={sheet === 'panel'} title={meta.title} sub={meta.sub} onClose={() => setSheet(null)}>
+            <Inspector active={activePanel} meta={meta} nav={NAV} embedded />
+          </Sheet>
+          <Sheet open={sheet === 'more'} title="More" sub="all panels & settings" onClose={() => setSheet(null)}>
+            <div className="more-grid">
+              {moreItems.map(n => {
+                const I = Ic[n.icon];
+                return (
+                  <button key={n.id} className="more-item" onClick={() => { setActivePanel(n.id); setSheet('panel'); }}>
+                    {I && <I width={20} height={20} />}
+                    <span>{n.label}</span>
+                  </button>
+                );
+              })}
+              <button className="more-item" onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))}>
+                {theme === 'dark' ? <Ic.Sun width={20} height={20} /> : <Ic.Moon width={20} height={20} />}
+                <span>Theme</span>
+              </button>
+              <button className="more-item" onClick={() => { setSheet(null); setCmdOpen(true); }}>
+                <Ic.Cmd width={20} height={20} />
+                <span>Commands</span>
+              </button>
+            </div>
+          </Sheet>
+          <BottomNav
+            mode={navMode}
+            onForum={() => setSheet(null)}
+            onActors={() => { setActivePanel('actors'); setSheet('panel'); }}
+            onMemory={() => { setActivePanel('memory'); setSheet('panel'); }}
+            onMore={() => setSheet('more')}
+            autoRunning={autoRunning}
+            onRun={nextTurn}
+            onStop={stopGeneration}
+          />
+        </>
+      )}
 
       <CommandPalette
         open={cmdOpen}
