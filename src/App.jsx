@@ -36,17 +36,21 @@ function useMediaQuery(query) {
 }
 
 // Navigation items for the rail
+// Two tiers: `primary` = the core setup loop (connect → scenario → cast);
+// `advanced` = monitoring, artifacts & history. `bottom` pins to the rail
+// foot. On mobile, Actors/Memory live in the bottom nav and the rest are
+// grouped under the "More" sheet by tier.
 const NAV = [
-  { id: 'scenario',      label: 'Scenario',     icon: 'Target',   group: 1 },
-  { id: 'actors',        label: 'Actors',       icon: 'Actors',   group: 1 },
-  { id: 'participation', label: 'You',          icon: 'Info',     group: 1 },
-  { id: 'memory',        label: 'Memory',       icon: 'Brain',    group: 2 },
-  { id: 'telemetry',     label: 'Telemetry',    icon: 'Gauge',    group: 2 },
-  { id: 'documents',     label: 'Documents',    icon: 'Doc',      group: 2 },
-  { id: 'goal',          label: 'Goal',         icon: 'Sliders',  group: 3 },
-  { id: 'sessions',      label: 'Sessions',     icon: 'Sessions', group: 3 },
-  { id: 'connection',    label: 'Connection',   icon: 'Plug',     group: 4 },
-  { id: 'help',          label: 'Help',         icon: 'Info',     group: 4 },
+  { id: 'scenario',      label: 'Scenario',     icon: 'Target',        tier: 'primary'  },
+  { id: 'actors',        label: 'Actors',       icon: 'Actors',        tier: 'primary'  },
+  { id: 'connection',    label: 'Connection',   icon: 'Plug',          tier: 'primary'  },
+  { id: 'participation', label: 'You',          icon: 'MessageSquare', tier: 'advanced' },
+  { id: 'memory',        label: 'Memory',       icon: 'Brain',         tier: 'advanced' },
+  { id: 'telemetry',     label: 'Telemetry',    icon: 'Gauge',         tier: 'advanced' },
+  { id: 'goal',          label: 'Goal',         icon: 'Sliders',       tier: 'advanced' },
+  { id: 'documents',     label: 'Documents',    icon: 'Doc',           tier: 'advanced' },
+  { id: 'sessions',      label: 'Sessions',     icon: 'Sessions',      tier: 'advanced' },
+  { id: 'help',          label: 'Help',         icon: 'Info',          tier: 'bottom'   },
 ];
 
 const NAV_TITLES = {
@@ -214,7 +218,14 @@ export default function App() {
     : sheet === 'more'
       ? 'more'
       : (activePanel === 'actors' ? 'actors' : activePanel === 'memory' ? 'memory' : 'more');
-  const moreItems = NAV.filter(n => !['actors', 'memory'].includes(n.id));
+  // Actors + Memory are reachable directly from the bottom nav; everything
+  // else is grouped by tier inside the "More" sheet.
+  const inBottomNav = ['actors', 'memory'];
+  const moreGroups = [
+    { label: 'Setup',   items: NAV.filter(n => n.tier === 'primary'  && !inBottomNav.includes(n.id)) },
+    { label: 'Session', items: NAV.filter(n => n.tier === 'advanced' && !inBottomNav.includes(n.id)) },
+    { label: 'Help',    items: NAV.filter(n => n.tier === 'bottom') },
+  ].filter(g => g.items.length);
 
   return (
     <Shell inspectorOnLeft={inspectorOnLeft}>
@@ -271,24 +282,34 @@ export default function App() {
             <Inspector active={activePanel} meta={meta} nav={NAV} embedded />
           </Sheet>
           <Sheet open={sheet === 'more'} title="More" sub="all panels & settings" onClose={() => setSheet(null)}>
-            <div className="more-grid">
-              {moreItems.map(n => {
-                const I = Ic[n.icon];
-                return (
-                  <button key={n.id} className="more-item" onClick={() => { setActivePanel(n.id); setSheet('panel'); }}>
-                    {I && <I width={20} height={20} />}
-                    <span>{n.label}</span>
-                  </button>
-                );
-              })}
-              <button className="more-item" onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))}>
-                {theme === 'dark' ? <Ic.Sun width={20} height={20} /> : <Ic.Moon width={20} height={20} />}
-                <span>Theme</span>
-              </button>
-              <button className="more-item" onClick={() => { setSheet(null); setCmdOpen(true); }}>
-                <Ic.Cmd width={20} height={20} />
-                <span>Commands</span>
-              </button>
+            {moreGroups.map(group => (
+              <div className="more-section" key={group.label}>
+                <div className="more-group-label">{group.label}</div>
+                <div className="more-grid">
+                  {group.items.map(n => {
+                    const I = Ic[n.icon];
+                    return (
+                      <button key={n.id} className="more-item" onClick={() => { setActivePanel(n.id); setSheet('panel'); }}>
+                        {I && <I width={20} height={20} />}
+                        <span>{n.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            <div className="more-section">
+              <div className="more-group-label">Settings</div>
+              <div className="more-grid">
+                <button className="more-item" onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))}>
+                  {theme === 'dark' ? <Ic.Sun width={20} height={20} /> : <Ic.Moon width={20} height={20} />}
+                  <span>Theme</span>
+                </button>
+                <button className="more-item" onClick={() => { setSheet(null); setCmdOpen(true); }}>
+                  <Ic.Cmd width={20} height={20} />
+                  <span>Commands</span>
+                </button>
+              </div>
             </div>
           </Sheet>
           <BottomNav

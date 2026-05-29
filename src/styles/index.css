@@ -154,6 +154,10 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
 }
 .rail-group { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; }
 .rail-group + .rail-group { border-top: 1px solid var(--border-soft); margin-top: 4px; }
+.rail-divider {
+  width: 24px; height: 1px; margin: 2px auto;
+  background: var(--border); opacity: 0.7;
+}
 .rail-btn {
   appearance: none;
   background: transparent;
@@ -1593,7 +1597,13 @@ button:focus-visible { border-radius: 8px; }
 .inspector-embedded-actions { display: flex; justify-content: flex-end; padding: 4px 0; }
 
 /* "More" navigation grid */
-.more-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 8px 2px; }
+.more-section + .more-section { margin-top: 6px; }
+.more-group-label {
+  font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--fg-mute);
+  padding: 8px 4px 2px;
+}
+.more-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 4px 2px; }
 .more-item {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
   padding: 16px 8px;
