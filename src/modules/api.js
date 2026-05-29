@@ -4,6 +4,18 @@ import { parseAiJson, parseTextToolCalls, stripTextToolCalls, stripCodeFence } f
 import { setConnectionStatus } from '../hooks/useActions.js';
 import { notifyStateChange, mutateState } from '../hooks/useForumState.js';
 
+/**
+ * Detect if a model identifier is an embedding model (not suitable for chat).
+ * Uses common naming patterns from major model families.
+ */
+export function isEmbeddingModel(id) {
+  if (!id) return false;
+  const lower = id.toLowerCase();
+  return /\b(embed|embedding)\b/.test(lower)
+    || /^(e5-|bge-|gte-|nomic-embed|jina-embed|mxbai-embed)/.test(lower)
+    || /text-embedding/.test(lower);
+}
+
 // Extract the message field content progressively from a streaming JSON buffer.
 // Handles {"thought":"...","action":"...","message":"..."} with proper JSON unescape.
 function extractJsonField(accumulated, fieldName) {
@@ -785,9 +797,18 @@ export async function pingConnection(silent = false) {
     // Store models in state for React to render
     state.ui = state.ui || {};
     state.ui.availableModels = models;
-    // Auto-select first model if none chosen
-    if (!state.settings.model && models[0]) {
-      state.settings.model = models[0];
+    // Split into chat vs embedding models for filtered dropdowns
+    state.ui.chatModels = models.filter(id => !isEmbeddingModel(id));
+    state.ui.embeddingModels = models.filter(id => isEmbeddingModel(id));
+    // Auto-select first CHAT model if none chosen (skip embedding models)
+    if (!state.settings.model && state.ui.chatModels.length) {
+      state.settings.model = state.ui.chatModels[0];
+    } else if (!state.settings.model && models[0]) {
+      state.settings.model = models[0]; // fallback: no chat models detected
+    }
+    // Auto-populate embedding model if we detected one and none is set
+    if (!state.settings.embeddingModel && state.ui.embeddingModels.length) {
+      state.settings.embeddingModel = state.ui.embeddingModels[0];
     }
     saveState();
     // Persist last known good connection

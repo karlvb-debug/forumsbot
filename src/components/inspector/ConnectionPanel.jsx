@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import * as Ic from '../Icons';
 import { Field, Toggle, Range } from '../shared/FormControls';
 import { useForumState, mutateState } from '../../hooks/useForumState';
+import { isEmbeddingModel } from '../../modules/api.js';
 import { useActions, getConnectionStatus, getConnectionStatusVersion, subscribeConnectionStatus } from '../../hooks/useActions';
 import { useSyncExternalStore } from 'react';
 
@@ -101,7 +102,10 @@ export function ConnectionPanel() {
   const repeatPenalty = useForumState(s => s.settings?.repeatPenalty ?? 1.1);
   const streaming = useForumState(s => s.settings?.streamingEnabled !== false);
   const availableModels = useForumState(s => s.ui?.availableModels || []);
+  const chatModels = useForumState(s => s.ui?.chatModels || []);
+  const embeddingModels = useForumState(s => s.ui?.embeddingModels || []);
   const tokenSpeed = useForumState(s => s.ui?.tokenSpeed || null);
+  const modelIsEmbedding = isEmbeddingModel(model);
   const embeddingProbe = useForumState(s => s.ui?.embeddingProbeResult || null);
 
   const [loadingModel, setLoadingModel] = useState(null);
@@ -220,10 +224,17 @@ export function ConnectionPanel() {
 
         <Field label="Chat model" info="Used for all actor, director, and system turns">
           {isLocal ? (
-            <select value={model} onChange={(e) => updateSetting('model', e.target.value)}>
-              <option value="">— select a model —</option>
-              {availableModels.map((id) => <option key={id} value={id}>{id}</option>)}
-            </select>
+            <>
+              <select value={model} onChange={(e) => updateSetting('model', e.target.value)}>
+                <option value="">— select a model —</option>
+                {(chatModels.length ? chatModels : availableModels).map((id) => <option key={id} value={id}>{id}</option>)}
+              </select>
+              {modelIsEmbedding && (
+                <div className="field-hint hint-warn" style={{ marginTop: 4 }}>
+                  ⚠ "{model}" looks like an embedding model, not a chat model. Actors will likely produce errors or garbage output.
+                </div>
+              )}
+            </>
           ) : hasSuggestions ? (
             <>
               <select value={cfg.suggestedModels.includes(model) ? model : ''} onChange={(e) => e.target.value && updateSetting('model', e.target.value)}>
@@ -247,7 +258,7 @@ export function ConnectionPanel() {
             {isLocal ? (
               <select value={embModel} onChange={(e) => updateSetting('embeddingModel', e.target.value)}>
                 <option value="">— fall back to chat model —</option>
-                {availableModels.map((id) => <option key={id} value={id}>{id}</option>)}
+                {(embeddingModels.length ? embeddingModels : availableModels).map((id) => <option key={id} value={id}>{id}</option>)}
               </select>
             ) : hasEmbSuggestions ? (
               <>

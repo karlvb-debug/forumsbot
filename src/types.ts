@@ -111,6 +111,8 @@ export interface UI {
   embeddingProbeResult: EmbeddingProbeResult | null;
   currentSpeaker: string;
   availableModels?: string[];
+  chatModels?: string[];
+  embeddingModels?: string[];
   tokenSpeed?: number | null;
 }
 
