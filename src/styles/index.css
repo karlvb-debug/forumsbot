@@ -647,20 +647,6 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
   color: oklch(from var(--accent-fg) l c h / 0.9);
 }
 
-/* Run controls grouped into one segment, set apart from the toggle chips */
-.composer-run {
-  display: inline-flex; align-items: center; gap: 2px;
-  padding: 2px; border-radius: 9px;
-  background: var(--bg-rail);
-  border: 1px solid var(--border-soft);
-}
-.composer .chip-btn.danger { color: var(--danger); }
-.composer .chip-btn.danger.active {
-  background: oklch(from var(--danger) l c h / 0.15);
-  color: var(--danger);
-  border-color: oklch(from var(--danger) l c h / 0.35);
-}
-
 .token-meter {
   display: flex; align-items: center; gap: 8px;
   font-family: var(--font-mono); font-size: 10.5px;
@@ -1577,7 +1563,7 @@ button:focus-visible { border-radius: 8px; }
 
   .stage-inner { padding-left: 16px; padding-right: 16px; }
   .composer-inner { padding: 10px 12px; }
-  .composer-row { overflow-x: auto; }
+  .composer-row { flex-wrap: wrap; }
 
   /* full-width, reachable modals */
   .modal-card { width: min(96vw, 480px); }
@@ -1677,6 +1663,8 @@ button:focus-visible { border-radius: 8px; }
   color: var(--fg-dim); cursor: pointer; font-size: var(--fs-sm); font-weight: 600;
 }
 .more-item:hover { border-color: var(--accent); color: var(--fg); }
+.more-item--danger { color: var(--danger); }
+.more-item--danger:hover { border-color: var(--danger); color: var(--danger); }
 
 /* ───── Collapsible disclosure (advanced settings) ───── */
 .card-disclosure { cursor: default; }

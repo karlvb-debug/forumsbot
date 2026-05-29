@@ -13,9 +13,8 @@ export function Composer({ showThoughts, onToggleThoughts }) {
 
   const toolsEnabled = useForumState(s => s.settings?.toolsEnabled !== false);
   const autoRunning = useForumState(s => s.autoRunning);
-  const contextInfo = useForumState(s => s.contextInfo || {});
 
-  const { nextTurn, runRound, startAuto, stopGeneration, sendMessage, directorBrief } = useActions();
+  const { nextTurn, runRound, sendMessage } = useActions();
 
   // Subscribe to busy state
   useSyncExternalStore(subscribeBusy, getBusyVersion);
@@ -49,12 +48,6 @@ export function Composer({ showThoughts, onToggleThoughts }) {
     setNoteText('');
     setNoteOpen(false);
   }, [noteText]);
-
-  // Token meter
-  const promptTokens = contextInfo.lastPromptTokens || 0;
-  const maxCtx = contextInfo.maxContextLength || 0;
-  const tokenPct = maxCtx > 0 ? Math.min(100, (promptTokens / maxCtx) * 100) : 0;
-  const formatTokens = (n) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
 
   return (
     <form className="composer" onSubmit={handleSubmit}>
@@ -126,61 +119,6 @@ export function Composer({ showThoughts, onToggleThoughts }) {
             📌 Note
           </button>
           <span className="grow" />
-          {maxCtx > 0 && (
-            <span className="token-meter" title="Tokens used in last prompt vs context window">
-              <span>{formatTokens(promptTokens)} / {formatTokens(maxCtx)}</span>
-              <div className="token-bar"><div style={{ width: `${tokenPct}%` }} /></div>
-            </span>
-          )}
-          <div className="composer-run" role="group" aria-label="Run controls">
-            <button
-              type="button"
-              className="chip-btn"
-              onClick={directorBrief}
-              disabled={busy}
-              title="Ask the Director for a progress brief"
-            >
-              Brief
-            </button>
-            <button
-              type="button"
-              className="chip-btn"
-              onClick={nextTurn}
-              disabled={busy}
-              title="Next AI turn (Enter on empty input)"
-            >
-              <Ic.Step width={12} height={12} /> Next
-            </button>
-            <button
-              type="button"
-              className="chip-btn"
-              onClick={runRound}
-              disabled={busy}
-              title="Run a full round"
-            >
-              <Ic.Round width={12} height={12} /> Round
-            </button>
-            {autoRunning ? (
-              <button
-                type="button"
-                className="chip-btn active danger"
-                onClick={stopGeneration}
-                title="Stop auto"
-              >
-                <Ic.Stop width={11} height={11} /> Stop
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="chip-btn"
-                onClick={startAuto}
-                disabled={busy}
-                title="Run continuously"
-              >
-                <Ic.Play width={11} height={11} /> Auto
-              </button>
-            )}
-          </div>
           <button type="submit" className="send-btn" title="Send (Enter)" disabled={!text.trim()}>
             <Ic.Send width={13} height={13} /> Send
             <span className="kbd">↵</span>

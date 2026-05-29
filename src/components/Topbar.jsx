@@ -30,7 +30,7 @@ export function Topbar() {
   const connClass = connStatus.tone === 'ok' ? 'live' : connStatus.tone === 'error' ? 'err' : '';
 
   const turboMode = useForumState(s => s.settings?.turboMode || false);
-  const { nextTurn, runRound, startAuto, stopGeneration } = useActions();
+  const { nextTurn, runRound, startAuto, stopGeneration, directorBrief } = useActions();
 
   const isSummarizing = useForumState(s => s.memory?.isSummarizing || false);
   const isExtracting = useForumState(s => s.outcomes?.isExtracting || false);
@@ -77,6 +77,9 @@ export function Topbar() {
       </div>
 
       <div className="run-controls" role="group" aria-label="Run">
+        <button onClick={directorBrief} title="Ask the Director for a progress brief">
+          Brief
+        </button>
         <button onClick={nextTurn} title="Next AI turn (Alt+N)">
           <Ic.Step width={13} height={13} />Next
         </button>

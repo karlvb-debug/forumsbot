@@ -196,11 +196,21 @@ function RoundDivider({ round, time }) {
   );
 }
 
+function formatTokens(n) {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
+}
+
 export function Transcript({ showThoughts }) {
   const messages = useForumState(s => s.messages || []);
   const actors = useForumState(s => s.actors || []);
   const autoRunning = useForumState(s => s.autoRunning);
+  const contextInfo = useForumState(s => s.contextInfo || {});
   const streaming = useStreaming();
+
+  // Context-window usage meter (moved here from the composer)
+  const promptTokens = contextInfo.lastPromptTokens || 0;
+  const maxCtx = contextInfo.maxContextLength || 0;
+  const tokenPct = maxCtx > 0 ? Math.min(100, (promptTokens / maxCtx) * 100) : 0;
 
   const scrollRef = useRef(null);
   const wasAtBottomRef = useRef(true);
@@ -334,6 +344,13 @@ export function Transcript({ showThoughts }) {
           <span>● {autoRunning ? 'Auto running' : `${turnCount} turns`}</span>
           <span className="sep" />
           <span>{anchoredCount} anchored</span>
+          {maxCtx > 0 && (
+            <span className="token-meter" title="Tokens used in last prompt vs context window">
+              <span className="sep" />
+              <span>{formatTokens(promptTokens)} / {formatTokens(maxCtx)}</span>
+              <div className="token-bar"><div style={{ width: `${tokenPct}%` }} /></div>
+            </span>
+          )}
           <button
             className="chip-btn"
             style={{ marginLeft: 'auto', fontSize: 11 }}

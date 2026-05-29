@@ -80,7 +80,7 @@ export default function App() {
   const showThoughts = useForumState(s => s.settings?.showThoughts || false);
   const autoRunning = useForumState(s => s.autoRunning || false);
 
-  const { nextTurn, runRound, startAuto, stopGeneration } = useActions();
+  const { nextTurn, runRound, startAuto, stopGeneration, directorBrief } = useActions();
   const stopModal = useForumState(s => s.ui?.stopModal || null);
   const confirmModal = useForumState(s => s.ui?.confirmModal || null);
   const pauseModal = useForumState(s => s.ui?.pauseModal || null);
@@ -296,6 +296,29 @@ export default function App() {
             <Inspector active={activePanel} meta={meta} nav={NAV} embedded />
           </Sheet>
           <Sheet open={sheet === 'more'} title="More" sub="all panels & settings" onClose={() => setSheet(null)}>
+            <div className="more-section">
+              <div className="more-group-label">Run</div>
+              <div className="more-grid">
+                <button className="more-item" onClick={() => { setSheet(null); nextTurn(); }}>
+                  <Ic.Step width={20} height={20} /><span>Next</span>
+                </button>
+                <button className="more-item" onClick={() => { setSheet(null); runRound(); }}>
+                  <Ic.Round width={20} height={20} /><span>Round</span>
+                </button>
+                {autoRunning ? (
+                  <button className="more-item more-item--danger" onClick={() => { setSheet(null); stopGeneration(); }}>
+                    <Ic.Stop width={20} height={20} /><span>Stop</span>
+                  </button>
+                ) : (
+                  <button className="more-item" onClick={() => { setSheet(null); startAuto(); }}>
+                    <Ic.Play width={20} height={20} /><span>Auto</span>
+                  </button>
+                )}
+                <button className="more-item" onClick={() => { setSheet(null); directorBrief(); }}>
+                  <Ic.MessageSquare width={20} height={20} /><span>Brief</span>
+                </button>
+              </div>
+            </div>
             {moreGroups.map(group => (
               <div className="more-section" key={group.label}>
                 <div className="more-group-label">{group.label}</div>
