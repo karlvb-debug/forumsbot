@@ -1911,6 +1911,26 @@ export async function applyAiResult(participant, result) {
   // Pause infrastructure — actor requests user input
   if (result.pauseRequest && typeof result.pauseRequest === "object") {
     const pr = result.pauseRequest;
+
+    // Validate pause request fields — reject garbage from truncated JSON repairs
+    const REPAIR_ARTIFACTS = /completing.*truncated|previously truncated|resume.*json|complete.*json|n\/a/i;
+    const rawQuestion = String(pr.question || "").trim();
+    const rawContext = String(pr.context || "").trim();
+    const questionIsGarbage = !rawQuestion || rawQuestion.length < 3 || REPAIR_ARTIFACTS.test(rawQuestion);
+    const contextIsGarbage = !rawContext || rawContext.length < 3 || REPAIR_ARTIFACTS.test(rawContext);
+
+    // If both question and context are garbage, the pause request is from a repair — skip it
+    if (questionIsGarbage && contextIsGarbage) {
+      console.warn(`[pause] Rejected garbage pause request from ${speakerName}: question="${rawQuestion}", context="${rawContext}"`);
+    } else {
+    // Use actor's message as fallback context when the fields are unhelpful
+    const question = questionIsGarbage
+      ? (result.message ? `${speakerName} needs your input: "${String(result.message).slice(0, 200)}"` : "What would you like to do?")
+      : rawQuestion;
+    const context = contextIsGarbage
+      ? (result.message ? String(result.message).slice(0, 300) : "")
+      : rawContext;
+
     const policy = resolvePolicy(state.userContext);
     const roundPauses = (state.pendingPauses || []).filter(p => p.outcome === "pending" || p.outcome === "honored").length;
     const allowed = policy.allowedReasons.includes(pr.reason) && roundPauses < policy.maxPausesPerRound;
@@ -1920,9 +1940,9 @@ export async function applyAiResult(participant, result) {
       requesterId: actor.id,
       requesterName: speakerName,
       reason: String(pr.reason || "question"),
-      context: String(pr.context || "").slice(0, 500),
-      question: String(pr.question || "").slice(0, 300),
-      options: Array.isArray(pr.options) ? pr.options.slice(0, 5).map(o => String(o).slice(0, 100)) : [],
+      context: context.slice(0, 500),
+      question: question.slice(0, 300),
+      options: Array.isArray(pr.options) ? pr.options.filter(o => o && String(o).trim() && !REPAIR_ARTIFACTS.test(String(o))).slice(0, 5).map(o => String(o).slice(0, 100)) : [],
       defaultIfNoResponse: String(pr.defaultIfNoResponse || "").slice(0, 200),
       requestedAt: new Date().toISOString(),
       outcome: allowed ? "honored" : "suppressed",
@@ -1963,6 +1983,7 @@ export async function applyAiResult(participant, result) {
       });
       if (wasAutoRunning) state.autoRunning = true;
     }
+    } // end else (non-garbage pause)
   }
 
   // Repetition safeguard
