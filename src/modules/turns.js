@@ -1499,13 +1499,30 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
 
   // Build sections and enforce token budget with graceful degradation.
   const buildSections = (chunks, msgs, memOverride = null) => {
-    const lastMsg = msgs[msgs.length - 1];
-    const lastMsgIsFacilitator = lastMsg && (lastMsg.type === "user" || (lastMsg.type === "system" && lastMsg.speaker === "Moderator"));
-    const facilitatorDirectAddress = lastMsgIsFacilitator
-      ? (sysCfg.stageDirectionsEnabled
-          ? "IMPORTANT FACILITATOR DIRECTIVE: The very last message in the transcript is a note/instruction from the human facilitator (Moderator/USER). You MUST actively and immediately execute this note/instruction in your character's actions, thoughts, and speech on this turn. Incorporate it fully and visibly into the story now."
-          : "IMPORTANT FACILITATOR DIRECTIVE: The very last message in the transcript is a direct question, instruction, or note from the human facilitator (Moderator/USER). You MUST address them directly, acknowledge the note, and respond to it in your public output. Do not ignore it or treat it as an out-of-character disruption.")
-      : "";
+    // Scan for unanswered user/moderator messages in the recent window.
+    // A user message is "unanswered" if no subsequent actor message references it.
+    // We surface ALL unanswered user messages, not just the very last message.
+    const unansweredUserMsgs = [];
+    for (let i = 0; i < msgs.length; i++) {
+      const m = msgs[i];
+      if (m.type === "user" || (m.type === "system" && m.speaker === "Moderator")) {
+        // Check if any subsequent actor message exists after this user message
+        const hasActorReply = msgs.slice(i + 1).some(r => r.type === "actor" || r.type === "dm");
+        // Always surface if no actor has replied yet; surface if it's recent (within last 3 actor turns)
+        const actorTurnsAfter = msgs.slice(i + 1).filter(r => r.type === "actor" || r.type === "dm").length;
+        if (!hasActorReply || actorTurnsAfter <= 2) {
+          unansweredUserMsgs.push(m);
+        }
+      }
+    }
+
+    let facilitatorDirective = "";
+    if (unansweredUserMsgs.length > 0) {
+      const preview = unansweredUserMsgs.map(m => `"${(m.content || m.text || "").slice(0, 120)}"`).join("; ");
+      facilitatorDirective = sysCfg.stageDirectionsEnabled
+        ? `⚠ PRIORITY — FACILITATOR DIRECTIVE: The human facilitator has sent a message that has NOT been addressed yet: ${preview}. You MUST incorporate their instruction into your character's actions and speech on THIS turn. This overrides the skip rule — do NOT skip when the facilitator has spoken.`
+        : `⚠ PRIORITY — FACILITATOR DIRECTIVE: The human facilitator has sent a message that has NOT been adequately addressed yet: ${preview}. You MUST respond to the facilitator's input directly and substantively in your public message on THIS turn. Acknowledge what they said and address it. This overrides the skip rule — do NOT skip when the facilitator has spoken.`;
+    }
 
     return [
       scenarioBlock(),
@@ -1527,7 +1544,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
             ? "You are the Researcher. Analyze the open questions, run a web search using `[SEARCH: query]` in your thought field if facts are needed, cite your sources, and skip your turn if no further research is required right now."
             : "Take your next turn now. Write as you would speak aloud in a real conversation — plain English, direct, natural rhythm. One to three sentences is usually enough. Do NOT use filler openers (e.g. 'Certainly', 'Absolutely', 'Great point', 'It's worth noting', 'In conclusion', 'I would argue that', 'Building on that'). Do NOT use hedging academic constructions. Say the thing directly.")
         : "Take the director turn now. Be brief and direct. Keep summaries and guidance to plain conversational English — no formal preamble.",
-      facilitatorDirectAddress
+      facilitatorDirective
     ].filter(Boolean).join("\n\n");
   };
 
@@ -1545,11 +1562,15 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
     assembled = buildSections(recallChunks, recentMessages);
   }
 
-  // Stage 2: trim transcript to 4 messages minimum
+  // Stage 2: trim transcript to 4 messages minimum, preserving user messages
   let transcriptLimit = workingMemoryN;
   while (estimateTokens(assembled) > PROMPT_TOKEN_BUDGET && transcriptLimit > 4) {
     transcriptLimit -= 2;
-    recentMessages = messageSource.slice(-transcriptLimit);
+    const tail = messageSource.slice(-transcriptLimit);
+    // Preserve any user/moderator messages from the trimmed portion so they're never lost
+    const trimmedPortion = messageSource.slice(-workingMemoryN, -transcriptLimit);
+    const droppedUserMsgs = trimmedPortion.filter(m => m.type === "user" || (m.type === "system" && m.speaker === "Moderator"));
+    recentMessages = [...droppedUserMsgs, ...tail];
     assembled = buildSections(recallChunks, recentMessages);
   }
 
