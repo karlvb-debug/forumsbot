@@ -354,7 +354,7 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
 
 .msg {
   display: grid;
-  grid-template-columns: 28px 1fr;
+  grid-template-columns: 28px minmax(0, 1fr);
   gap: 12px;
   padding: 12px 14px 14px;
   border-radius: var(--r);
