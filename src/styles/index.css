@@ -1484,7 +1484,7 @@ button:focus-visible { border-radius: 8px; }
 /* ── Mobile shell (< 760px): bottom tab bar + bottom-sheet panels ── */
 @media (max-width: 759px) {
   .shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
     padding-bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom, 0px));
   }
   .rail { display: none; }
