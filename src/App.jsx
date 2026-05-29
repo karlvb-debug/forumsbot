@@ -91,24 +91,19 @@ export default function App() {
   useEffect(() => {
     const onKey = (e) => {
       const mod = e.metaKey || e.ctrlKey;
-      // Escape — dismiss modal overlays
+      // Escape — dismiss modal overlays (read state directly to avoid stale closures)
       if (e.key === 'Escape') {
-        if (confirmModal) {
-          e.preventDefault();
-          import('./modules/session.js').then(m => m.resolveConfirmModal(false));
-          return;
-        }
-        if (stopModal) {
-          e.preventDefault();
-          import('./modules/turns.js').then(m => m.resolveStopOrContinue(false));
-          return;
-        }
-        if (pauseModal) {
-          // Don't destroy the pause, just hide the modal — the reopen strip will persist
-          e.preventDefault();
-          mutateState(s => { s.ui.pauseModal = null; });
-          return;
-        }
+        import('./modules/state.js').then(({ state: s }) => {
+          if (s.ui?.confirmModal) {
+            import('./modules/session.js').then(m => m.resolveConfirmModal(false));
+          } else if (s.ui?.stopModal) {
+            import('./modules/turns.js').then(m => m.resolveStopOrContinue(false));
+          } else if (s.ui?.pauseModal) {
+            mutateState(st => { st.ui.pauseModal = null; });
+          }
+        });
+        e.preventDefault();
+        return;
       }
       // Ctrl+K / ⌘K — command palette
       if (mod && !e.shiftKey && !e.altKey && e.key === 'k') { e.preventDefault(); setCmdOpen(v => !v); return; }
@@ -129,7 +124,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [nextTurn, runRound, startAuto, confirmModal, stopModal, pauseModal]);
+  }, [nextTurn, runRound, startAuto]);
 
   // ── Command palette handler ─────────────────────────────────
   const handleCommand = useCallback((item) => {
