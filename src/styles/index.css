@@ -1580,7 +1580,8 @@ button:focus-visible { border-radius: 8px; }
   margin-left: auto; background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--r); color: var(--fg-dim); cursor: pointer; font-size: 14px;
 }
-.sheet-body { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 4px 6px 20px; }
+.sheet-body { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 4px 8px 20px; }
+.sheet-body .inspector-body { padding: 0; }
 .sheet-body .card { padding: 10px 12px; }
 .sheet-body .card + .card { margin-top: 8px; }
 .sheet-body .card-title { margin-bottom: 6px; }
