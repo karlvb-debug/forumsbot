@@ -25,7 +25,7 @@ export function BottomNav({ mode, onForum, onActors, onMemory, onMore, autoRunni
 
   return (
     <nav className="bottomnav" aria-label="Primary">
-      {tab('forum', 'Forum', Ic.Round, onForum)}
+      {tab('forum', 'Forum', Ic.Forum, onForum)}
       {tab('actors', 'Actors', Ic.Actors, onActors)}
 
       {/* Center action: advance the conversation (or stop when auto-running) */}
