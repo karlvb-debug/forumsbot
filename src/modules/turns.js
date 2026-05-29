@@ -1519,15 +1519,32 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
     let facilitatorDirective = "";
     if (unansweredUserMsgs.length > 0) {
       const preview = unansweredUserMsgs.map(m => `"${(m.content || m.text || "").slice(0, 120)}"`).join("; ");
+      // Check if user is asking about documents/writing
+      const userText = unansweredUserMsgs.map(m => (m.content || m.text || "").toLowerCase()).join(" ");
+      const mentionsDoc = /\b(document|doc|write|draft|edit|update|fill|add to|working doc|note|outline|summary doc|report)\b/i.test(userText);
+      const docReminder = mentionsDoc && editableDocsSection
+        ? ` The user appears to be asking about documents. You have Working Documents available (shown above in your context). To edit them, include a "documentEdits" array in your JSON response with the document's id and your content.`
+        : "";
       facilitatorDirective = sysCfg.stageDirectionsEnabled
-        ? `⚠ PRIORITY — FACILITATOR DIRECTIVE: The human facilitator has sent a message that has NOT been addressed yet: ${preview}. You MUST incorporate their instruction into your character's actions and speech on THIS turn. This overrides the skip rule — do NOT skip when the facilitator has spoken.`
-        : `⚠ PRIORITY — FACILITATOR DIRECTIVE: The human facilitator has sent a message that has NOT been adequately addressed yet: ${preview}. You MUST respond to the facilitator's input directly and substantively in your public message on THIS turn. Acknowledge what they said and address it. This overrides the skip rule — do NOT skip when the facilitator has spoken.`;
+        ? `⚠ PRIORITY — FACILITATOR DIRECTIVE: The human facilitator has sent a message that has NOT been addressed yet: ${preview}. You MUST incorporate their instruction into your character's actions and speech on THIS turn. This overrides the skip rule — do NOT skip when the facilitator has spoken.${docReminder}`
+        : `⚠ PRIORITY — FACILITATOR DIRECTIVE: The human facilitator has sent a message that has NOT been adequately addressed yet: ${preview}. You MUST respond to the facilitator's input directly and substantively in your public message on THIS turn. Acknowledge what they said and address it. This overrides the skip rule — do NOT skip when the facilitator has spoken.${docReminder}`;
+    }
+
+    // Nudge actors to actually use documents when they exist
+    let docActionNudge = "";
+    if (editableDocsSection && kind === "actor" && !actor.canResearch) {
+      const editableDocs = (state.documents || []).filter(d => d.aiEditable && d.enabled !== false);
+      const emptyDocs = editableDocs.filter(d => !d.content || d.content.trim().length < 10);
+      if (emptyDocs.length > 0) {
+        docActionNudge = `📝 DOCUMENT REMINDER: You have ${emptyDocs.length} empty working document${emptyDocs.length > 1 ? "s" : ""} (${emptyDocs.map(d => `"${d.title}"`).join(", ")}). If the discussion has produced findings, decisions, or actionable content relevant to ${emptyDocs.length > 1 ? "these documents" : "this document"}, start drafting by including "documentEdits" in your JSON. Use op "full" or "append" with the document's id.`;
+      }
     }
 
     return [
       scenarioBlock(),
       state.memory.enabled ? memoryBlock(chunks) : "",
       editableDocsSection,
+      docActionNudge,
       crossSessionBlock,
       kbSection,
       memOverride || participantMemory,
