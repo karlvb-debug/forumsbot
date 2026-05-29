@@ -123,11 +123,11 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
 /* ───── App shell ───── */
 .shell {
   display: grid;
-  grid-template-columns: var(--rail-w) 1fr;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
 }
-.shell.inspector-left { grid-template-columns: var(--rail-w) 1fr; }
+.shell.inspector-left { grid-template-columns: var(--rail-w) minmax(0, 1fr); }
 
 /* ───── Left Rail ───── */
 .rail {
@@ -203,6 +203,7 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
   display: grid;
   grid-template-rows: var(--header-h) 1fr;
   height: 100vh;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -312,18 +313,20 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
 /* ───── Workspace: stage + inspector ───── */
 .workspace {
   display: grid;
-  grid-template-columns: 1fr var(--inspector-w);
+  grid-template-columns: minmax(0, 1fr) var(--inspector-w);
   min-height: 0;
+  min-width: 0;
   height: 100%;
 }
-.workspace.no-inspector { grid-template-columns: 1fr; }
-.workspace.inspector-left-pos { grid-template-columns: var(--inspector-w) 1fr; }
+.workspace.no-inspector { grid-template-columns: minmax(0, 1fr); }
+.workspace.inspector-left-pos { grid-template-columns: var(--inspector-w) minmax(0, 1fr); }
 
 /* ───── Stage (transcript + composer) ───── */
 .stage {
   display: grid;
   grid-template-rows: 1fr auto;
   min-height: 0;
+  min-width: 0;
   overflow-x: hidden;
   position: relative;
   background: var(--bg);
@@ -1489,11 +1492,11 @@ button:focus-visible { border-radius: 8px; }
 /* ── Mobile shell (< 760px): bottom tab bar + bottom-sheet panels ── */
 @media (max-width: 759px) {
   .shell {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: minmax(0, 1fr) !important;
     padding-bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom, 0px));
   }
   .rail { display: none; }
-  .workspace { grid-template-columns: 1fr !important; }
+  .workspace { grid-template-columns: minmax(0, 1fr) !important; }
   .inspector:not(.inspector--embedded) { display: none; }
 
   /* Topbar: run controls + status live in bottom nav / panels on mobile */
