@@ -1,16 +1,31 @@
 import React from 'react';
 import * as Ic from '../Icons';
 
-export const Field = ({ label, hint, children, info }) => (
-  <div className="field">
-    <label className="field-label">
-      {label}
-      {info ? <span className="info" title={info}><Ic.Info width={11} height={11} /></span> : null}
-    </label>
-    {children}
-    {hint ? <div className="field-hint">{hint}</div> : null}
-  </div>
-);
+export const Field = ({ label, hint, children, info }) => {
+  const autoId = React.useId();
+  const single = React.isValidElement(children) && React.Children.count(children) === 1;
+  const controlId = single ? (children.props.id || autoId) : undefined;
+  const hintId = hint ? `${autoId}-hint` : undefined;
+
+  // Associate the single form control with its label + hint for screen readers.
+  const control = single
+    ? React.cloneElement(children, {
+        id: controlId,
+        'aria-describedby': [children.props['aria-describedby'], hintId].filter(Boolean).join(' ') || undefined,
+      })
+    : children;
+
+  return (
+    <div className="field">
+      <label className="field-label" htmlFor={controlId}>
+        {label}
+        {info ? <span className="info" title={info}><Ic.Info width={11} height={11} /></span> : null}
+      </label>
+      {control}
+      {hint ? <div className="field-hint" id={hintId}>{hint}</div> : null}
+    </div>
+  );
+};
 
 export const Toggle = ({ checked, onChange, label }) => (
   <label className="toggle">

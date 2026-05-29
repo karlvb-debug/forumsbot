@@ -60,6 +60,11 @@ export function Topbar() {
             {bgTaskText}
           </span>
         )}
+        {autoRunning && (
+          <span className="status-pill live" title="Auto-run is active">
+            <span className="dot" />Auto running
+          </span>
+        )}
         <span className={`status-pill ${connClass}`} title="Connection status">
           <span className="dot" />{connStatus.message}
         </span>
