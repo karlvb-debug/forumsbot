@@ -202,6 +202,7 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
 .main {
   display: grid;
   grid-template-rows: var(--header-h) 1fr;
+  grid-template-columns: minmax(0, 1fr);
   height: 100vh;
   min-width: 0;
   overflow: hidden;
@@ -325,6 +326,7 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
 .stage {
   display: grid;
   grid-template-rows: 1fr auto;
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
   overflow-x: hidden;
@@ -332,6 +334,7 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
   background: var(--bg);
 }
 .stage-inner {
+  min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 24px clamp(20px, 5vw, 64px) 8px;
