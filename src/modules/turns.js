@@ -92,6 +92,7 @@ async function promptPause(pauseRecord) {
 }
 
 export let abortController = null;
+let _stopFlag = false;
 let _lastPromptParts = null;
 export function getLastPromptParts() { return _lastPromptParts; }
 
@@ -298,6 +299,10 @@ async function countdownRetry(attempt, maxMs) {
 
 export async function runNextTurn(options = {}) {
   console.log('[turns] runNextTurn called', options);
+  if (_stopFlag) {
+    console.log('[turns] runNextTurn blocked by stop flag');
+    return false;
+  }
   if (!state.settings.model) {
     setStatus("Choose or type a model first.", "warn");
     return false;
@@ -565,6 +570,7 @@ export async function runNextTurn(options = {}) {
 export async function runRound(options = {}) {
   console.log('[turns] runRound called', options);
   abortController = null; // Reset abort state for the new round
+  _stopFlag = false;       // Clear stop flag for this round
   const count = state.actors.filter((actor) => actor.enabled).length;
   if (!count) {
     setStatus("Add at least one enabled actor or turn on the DM.", "warn");
@@ -595,7 +601,7 @@ export async function runRound(options = {}) {
     // Start with the Director
     state.turnQueue = [director.id];
     while (turnsThisRound < maxTurns) {
-      if (abortController?.signal.aborted) break;
+      if (_stopFlag || abortController?.signal.aborted) break;
       const ok = await runNextTurn({ summarizeCycle: false, isRoundContinuation: true });
       if (!ok) break;
       completedTurns++;
@@ -631,7 +637,7 @@ export async function runRound(options = {}) {
   } else {
     // ── Round-robin (default) ─────────────────────────────────────
     for (let index = 0; index < count; index += 1) {
-      if (abortController?.signal.aborted) break;
+      if (_stopFlag || abortController?.signal.aborted) break;
       const ok = await runNextTurn({ summarizeCycle: false, isRoundContinuation: true });
       if (!ok) break;
       completedTurns += 1;
@@ -668,6 +674,7 @@ export function participantCycleCount() {
 export async function runAutoLoop() {
   const starting = !state.autoRunning;
   state.autoRunning = starting;
+  _stopFlag = false;
   if (starting) {
     state.autoStop.roundsRun = 0;
     setAutoStopStatus("Auto running.");
@@ -699,8 +706,9 @@ export async function runAutoLoop() {
 
 export function stopGeneration() {
   state.autoRunning = false;
+  _stopFlag = true;
   abortController?.abort();
-  setAutoStopStatus("Auto paused.");
+  setAutoStopStatus("Stopped.");
   saveState();
   extractOutcomes();
 }
