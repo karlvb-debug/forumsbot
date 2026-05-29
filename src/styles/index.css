@@ -118,7 +118,7 @@
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: var(--fs); line-height: var(--lh); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
-#root { min-height: 100vh; }
+#root { min-height: 100vh; max-width: 100vw; overflow-x: hidden; }
 
 /* ───── App shell ───── */
 .shell {
@@ -344,7 +344,7 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
 }
 .transcript-meta .sep { width: 1px; height: 12px; background: var(--border); }
 
-.transcript { display: flex; flex-direction: column; gap: 18px; max-width: 920px; margin: 0 auto; }
+.transcript { display: flex; flex-direction: column; gap: 18px; width: 100%; max-width: 920px; margin: 0 auto; overflow: hidden; }
 
 .msg {
   display: grid;
@@ -364,10 +364,11 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
   color: white; font-weight: 600; font-size: 12px;
   flex-shrink: 0;
 }
-.msg { max-width: 100%; min-width: 0; }
-.msg-body { min-width: 0; overflow-wrap: break-word; word-break: break-word; }
+.msg { width: 100%; min-width: 0; overflow: hidden; }
+.msg-body { min-width: 0; overflow: hidden; overflow-wrap: break-word; word-break: break-word; }
 .msg-text { overflow-wrap: break-word; word-break: break-word; }
-.msg-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.md-body { overflow-wrap: break-word; word-break: break-word; }
+.msg-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin-bottom: 4px; overflow: hidden; }
 .msg-name { font-weight: 600; font-size: var(--fs); color: var(--fg); }
 .msg-role {
   font-size: 11px;
@@ -1499,6 +1500,10 @@ button:focus-visible { border-radius: 8px; }
   .topbar { gap: 8px; overflow: hidden; }
   .topbar .run-controls { display: none; }
   .topbar .status-cluster { display: none; }
+  .topbar > .icon-btn { display: none; }
+  /* Cap role chip width so long monospace strings don't break msg layout */
+  .msg-role { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .msg-time { flex-shrink: 0; }
   .session-title h1 { font-size: var(--fs-lg); }
 
   .stage-inner { padding-left: 16px; padding-right: 16px; }
