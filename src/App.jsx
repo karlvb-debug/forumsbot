@@ -91,6 +91,25 @@ export default function App() {
   useEffect(() => {
     const onKey = (e) => {
       const mod = e.metaKey || e.ctrlKey;
+      // Escape — dismiss modal overlays
+      if (e.key === 'Escape') {
+        if (confirmModal) {
+          e.preventDefault();
+          import('./modules/session.js').then(m => m.resolveConfirmModal(false));
+          return;
+        }
+        if (stopModal) {
+          e.preventDefault();
+          import('./modules/turns.js').then(m => m.resolveStopOrContinue(false));
+          return;
+        }
+        if (pauseModal) {
+          // Don't destroy the pause, just hide the modal — the reopen strip will persist
+          e.preventDefault();
+          mutateState(s => { s.ui.pauseModal = null; });
+          return;
+        }
+      }
       // Ctrl+K / ⌘K — command palette
       if (mod && !e.shiftKey && !e.altKey && e.key === 'k') { e.preventDefault(); setCmdOpen(v => !v); return; }
       // Alt+N — next turn (Ctrl+Shift+N / ⌘+Shift+N opens incognito window)
