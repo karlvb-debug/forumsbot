@@ -1,4 +1,4 @@
-import { AVAILABLE_TOOLS, MAX_TOOL_ROUNDS } from './constants.js';
+import { MAX_TOOL_ROUNDS } from './constants.js';
 import { state, saveState } from './state.js';
 import { parseAiJson, parseTextToolCalls, stripTextToolCalls, stripCodeFence, estimateTokens } from './utils.js';
 import { setConnectionStatus } from '../hooks/useActions.js';
@@ -100,12 +100,48 @@ function applySamplingParams(payload) {
   return payload;
 }
 
+// ── JSON-schema (grammar) capability cache ───────────────────────────────────
+// response_format: json_schema forces the model's output to match our envelope
+// grammar. Not every OpenAI-compatible server supports it, so we probe lazily and
+// remember the result per model:  undefined = unprobed, true = supported, false =
+// rejected. A grammar-forced schema cannot coexist with native tool_calls, so we
+// rely on text-tag tools ([SEARCH:]/[READ:] inside the thought string) which the
+// grammar permits — the same approach the streaming path already uses.
+const _schemaSupportByModel = {};
+
+/** True only once we've confirmed the current model accepts response_format. */
+export function isJsonSchemaSupported(model = state.settings.model) {
+  return _schemaSupportByModel[model] === true;
+}
+
+function buildSchemaResponseFormat(jsonSchema) {
+  return { type: "json_schema", json_schema: { name: "response", strict: true, schema: jsonSchema } };
+}
+
+function logApiError(status, model, startTime, message, endpoint = "/v1/chat/completions") {
+  if (!state.diagnostics) state.diagnostics = {};
+  if (!Array.isArray(state.diagnostics.apiCallLogs)) state.diagnostics.apiCallLogs = [];
+  state.diagnostics.apiCallLogs.push({
+    timestamp: new Date().toISOString(),
+    endpoint,
+    model: model || "unknown",
+    promptTokens: 0, completionTokens: 0,
+    latencyMs: Date.now() - startTime,
+    tokensPerSecondCompletion: 0,
+    status, error: message
+  });
+  if (state.diagnostics.apiCallLogs.length > 100) state.diagnostics.apiCallLogs.shift();
+}
+
 // Internal (unscheduled) implementation — used by chatJson retry/correction
 // calls to avoid deadlocking the scheduler.
-async function _chatCompletionDirect(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, useTools = false, jsonSchema = null } = {}) {
+async function _chatCompletionDirect(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, jsonSchema = null } = {}) {
   _lastToolCalls = []; // reset per-call log
   const stageDir = state.scenario?.systems?.stageDirections?.enabled ?? (state.scenario?.mode === 'story');
-  const isToolMode = useTools && state.settings.toolsEnabled && !stageDir;
+  // Tools are text-tags only ([SEARCH:]/[READ:]), which are grammar-compatible.
+  const toolsAllowed = state.settings.toolsEnabled && !stageDir;
+  const model = state.settings.model;
+  let useSchema = !!jsonSchema && _schemaSupportByModel[model] !== false;
   const messages = [
     { role: "system", content: system },
     { role: "user", content: user }
@@ -121,22 +157,12 @@ async function _chatCompletionDirect(system, user, { temperature = state.setting
     applySamplingParams(payload);
 
     // JSON schema-constrained decoding (LM Studio / llama.cpp grammar support).
-    // Dramatically improves structured output reliability on small models.
-    if (jsonSchema && !isToolMode) {
-      payload.response_format = {
-        type: "json_schema",
-        json_schema: { name: "response", strict: true, schema: jsonSchema }
-      };
-    }
-
-    if (isToolMode && round < MAX_TOOL_ROUNDS) {
-      payload.tools = AVAILABLE_TOOLS;
-      payload.tool_choice = "auto";
-    }
+    // Always applied when the model supports it — dramatically improves structured
+    // output reliability on small models. (No longer gated behind tool mode.)
+    if (useSchema) payload.response_format = buildSchemaResponseFormat(jsonSchema);
 
     const startTime = Date.now();
     let response;
-    let status = "ok";
     let data;
     try {
       response = await fetch("/api/chat", {
@@ -150,28 +176,31 @@ async function _chatCompletionDirect(system, user, { temperature = state.setting
         signal
       });
       data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "LM Studio request failed.");
-      }
     } catch (err) {
-      status = err.name === "TimeoutError" ? "timeout" : "error";
-      const apiLog = {
-        timestamp: new Date().toISOString(),
-        endpoint: "/v1/chat/completions",
-        model: payload.model || "unknown",
-        promptTokens: 0,
-        completionTokens: 0,
-        latencyMs: Date.now() - startTime,
-        tokensPerSecondCompletion: 0,
-        status,
-        error: err.message
-      };
-      if (!state.diagnostics) state.diagnostics = {};
-      if (!Array.isArray(state.diagnostics.apiCallLogs)) state.diagnostics.apiCallLogs = [];
-      state.diagnostics.apiCallLogs.push(apiLog);
-      if (state.diagnostics.apiCallLogs.length > 100) state.diagnostics.apiCallLogs.shift();
+      // Transport/network error — log and propagate. Never disable schema support
+      // here: a network blip must not permanently turn off grammar for the model.
+      const status = err.name === "TimeoutError" ? "timeout" : "error";
+      logApiError(status, payload.model, startTime, err.message);
       throw err;
     }
+
+    if (!response.ok) {
+      // Server rejected the request. If we sent a schema and haven't confirmed the
+      // model supports response_format, assume that is the cause: disable it for
+      // this model and retry the same round without it (one-time capability probe).
+      if (useSchema && _schemaSupportByModel[model] !== true) {
+        console.warn(`[api] response_format rejected for "${model}" — falling back to prompt-only JSON.`);
+        _schemaSupportByModel[model] = false;
+        useSchema = false;
+        round -= 1; // don't consume a tool round on the probe
+        continue;
+      }
+      logApiError("error", payload.model, startTime, data?.error || "LM Studio request failed.");
+      throw new Error(data?.error || "LM Studio request failed.");
+    }
+
+    // A successful schema-constrained call confirms support for this model.
+    if (useSchema) _schemaSupportByModel[model] = true;
 
     const latencyMs = Date.now() - startTime;
     const promptTokens = data?.usage?.prompt_tokens || 0;
@@ -196,19 +225,6 @@ async function _chatCompletionDirect(system, user, { temperature = state.setting
 
     const choice = data?.choices?.[0];
     const msg = choice?.message;
-
-    // Path A: Native tool calls (OpenAI format)
-    if (msg?.tool_calls?.length) {
-      console.debug(`[tools] Round ${round + 1}: native tool_calls (${msg.tool_calls.length})`);
-      messages.push({ role: "assistant", content: msg.content || null, tool_calls: msg.tool_calls });
-
-      for (const call of msg.tool_calls) {
-        const result = await executeToolCall(call.function?.name, call.function?.arguments, signal);
-        messages.push({ role: "tool", tool_call_id: call.id, content: result });
-      }
-      continue;
-    }
-
     const content = msg?.content || "";
 
     // Capture real token usage from LM Studio response
@@ -219,8 +235,8 @@ async function _chatCompletionDirect(system, user, { temperature = state.setting
       notifyStateChange();
     }
 
-    // Path B: Prompt-based tool calls (fallback for models without native support)
-    if (isToolMode && round < MAX_TOOL_ROUNDS) {
+    // Text-tag tools: parse [SEARCH:]/[READ:] requests embedded in the response.
+    if (toolsAllowed && round < MAX_TOOL_ROUNDS) {
       const textCalls = parseTextToolCalls(content);
       if (textCalls.length) {
         const callTypes = textCalls.map((tc) => tc.tool).join(", ");
@@ -309,8 +325,8 @@ export async function chatCompletionMessages(messages, { temperature = state.set
  * No tool-call handling — use chatCompletion for that. Returns the full accumulated text.
  */
 export async function chatStream(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, jsonSchema = null } = {}, onChunk = null) {
-  const stageDir = state.scenario?.systems?.stageDirections?.enabled ?? (state.scenario?.mode === 'story');
-  const isToolMode = state.settings.toolsEnabled && !stageDir;
+  const model = state.settings.model;
+  let useSchema = !!jsonSchema && _schemaSupportByModel[model] !== false;
   const payload = {
     model: state.settings.model,
     messages: [
@@ -324,27 +340,34 @@ export async function chatStream(system, user, { temperature = state.settings.te
   };
   applySamplingParams(payload);
 
-  // JSON schema-constrained decoding for streaming path.
-  if (jsonSchema && !isToolMode) {
-    payload.response_format = {
-      type: "json_schema",
-      json_schema: { name: "response", strict: true, schema: jsonSchema }
-    };
-  }
-
   const startTime = Date.now();
   try {
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        baseUrl: state.settings.baseUrl,
-        apiKey: state.settings.apiKey,
-        request: payload
-      }),
-      signal
-    });
-    if (!response.ok) {
+    // Attempt with the grammar schema; if the server rejects response_format and
+    // support is unconfirmed, disable it for this model and retry once without it.
+    let response;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (useSchema) payload.response_format = buildSchemaResponseFormat(jsonSchema);
+      else delete payload.response_format;
+      response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          baseUrl: state.settings.baseUrl,
+          apiKey: state.settings.apiKey,
+          request: payload
+        }),
+        signal
+      });
+      if (response.ok) {
+        if (useSchema) _schemaSupportByModel[model] = true;
+        break;
+      }
+      if (useSchema && _schemaSupportByModel[model] !== true) {
+        console.warn(`[api] response_format rejected for "${model}" (stream) — falling back to prompt-only JSON.`);
+        _schemaSupportByModel[model] = false;
+        useSchema = false;
+        continue;
+      }
       const data = await response.json();
       throw new Error(data.error || "LM Studio request failed.");
     }
@@ -455,11 +478,11 @@ async function _getEmbeddingsBatchDirect(texts) {
 }
 
 export async function chatJson(system, user, temperature, signal, onStream = null, maxTokens = null, jsonSchema = null) {
-  // Stream when a callback is provided and streaming is enabled.
-  // Previously !isToolMode blocked streaming for most users (toolsEnabled=true by default).
-  // Tool calls are now detected post-stream; the vast majority of turns have none.
+  // Stream when a callback is provided and streaming is enabled. The grammar
+  // schema is applied inside chatStream/_chatCompletionDirect; text-tag tool
+  // calls are detected post-response (the vast majority of turns have none).
   const stageDir2 = state.scenario?.systems?.stageDirections?.enabled ?? (state.scenario?.mode === 'story');
-  const isToolMode = state.settings.toolsEnabled && !stageDir2;
+  const toolsAllowed = state.settings.toolsEnabled && !stageDir2;
   const canStream = onStream && state.settings.streamingEnabled !== false;
   const resolvedMaxTokens = maxTokens || state.settings.maxTokens;
 
@@ -475,10 +498,9 @@ export async function chatJson(system, user, temperature, signal, onStream = nul
       onStream(extractStreamingDisplay(accumulated));
     });
 
-    // After streaming, check for text-based tool calls in the completed response.
-    // Native tool_calls don't appear in LM Studio streams, so only prompt-based
-    // [SEARCH:] / [READ:] patterns need handling here.
-    if (isToolMode && !signal?.aborted) {
+    // After streaming, check for text-tag tool calls ([SEARCH:]/[READ:]) in the
+    // completed response and run a single follow-up round to fold in the results.
+    if (toolsAllowed && !signal?.aborted) {
       const textCalls = parseTextToolCalls(content);
       if (textCalls.length) {
         let toolResults = "";
@@ -501,8 +523,7 @@ ${result}
         content = await _chatCompletionDirect(system, followUpUser, {
           temperature,
           maxTokens: resolvedMaxTokens,
-          signal,
-          useTools: false
+          signal
         });
       }
     }
@@ -511,7 +532,6 @@ ${result}
       temperature,
       maxTokens: resolvedMaxTokens,
       signal,
-      useTools: true,
       jsonSchema,
     });
   }
@@ -555,8 +575,7 @@ ${result}
         const retryContent = await _chatCompletionDirect(system, resumeUser, {
           temperature: 0.1, // deterministic for repair
           maxTokens: Math.min(resolvedMaxTokens * 2, 4000),
-          signal,
-          useTools: false
+          signal
         });
         // Merge: try the retry content alone first, then as a suffix to the original
         const candidates = [retryContent, content + retryContent];
@@ -576,53 +595,11 @@ ${result}
     }
   }
 
-  let parsed = parseAiJson(finalContent);
-
-  // ── Schema correction ─────────────────────────────────────────────────────
-  // If the actor response is missing required fields (message/action), send one
-  // targeted correction prompt before giving up. Bypasses the scheduler (uses
-  // _chatCompletionDirect) to avoid deadlocking the chat chain.
-  {
-    const hasMessage = typeof parsed.message === "string";
-    const hasAction = parsed.action === "speak" || parsed.action === "skip";
-    const schemaOk = hasMessage && hasAction;
-
-    if (!schemaOk && !signal?.aborted) {
-      const missingFields = [
-        !hasAction && '"action" (must be "speak" or "skip")',
-        !hasMessage && '"message" (must be a string, empty when skipping)'
-      ].filter(Boolean).join(" and ");
-      const correctionUser = [
-        `Your previous response was missing required fields: ${missingFields}.`,
-        `Previous response: ${finalContent.slice(0, 300)}`,
-        `Return ONLY valid JSON with this exact shape: {"thought":"","action":"speak or skip","message":"your message here, empty if skipping"}`
-      ].join("\n");
-      try {
-        const correctionContent = await _chatCompletionDirect(system, correctionUser, {
-          temperature: 0.1,
-          maxTokens: Math.min(resolvedMaxTokens, 1200),
-          signal,
-          useTools: false
-        });
-        const corrected = parseAiJson(correctionContent);
-        const correctedOk = typeof corrected.message === "string" && (corrected.action === "speak" || corrected.action === "skip");
-        if (correctedOk) {
-          parsed = corrected;
-          finalContent = correctionContent;
-          if (!state.diagnostics) state.diagnostics = {};
-          if (!Array.isArray(state.diagnostics.schemaCorrections)) state.diagnostics.schemaCorrections = [];
-          state.diagnostics.schemaCorrections.push({
-            timestamp: new Date().toISOString(),
-            missingFields,
-            succeeded: true
-          });
-          if (state.diagnostics.schemaCorrections.length > 50) state.diagnostics.schemaCorrections.shift();
-        }
-      } catch {
-        // Correction attempt failed — fall through with what we have
-      }
-    }
-  }
+  // parseAiJson always normalizes action ("speak"/"skip") and message (string),
+  // so with the grammar schema now enforcing the envelope shape there is no
+  // separate "missing required field" correction pass — truncation recovery
+  // above plus the regex fallback in parseAiJson cover the remaining cases.
+  const parsed = parseAiJson(finalContent);
 
   if (!isStrictJson) {
     if (!state.diagnostics) state.diagnostics = {};

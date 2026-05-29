@@ -235,10 +235,20 @@ export function buildActorSchema(actor, options = {}) {
  * @returns {string}
  */
 export function buildSchemaPromptLine(actor, options = {}) {
-  const { stageDirections = false } = options;
+  const { stageDirections = false, schemaActive = false } = options;
   const { required: reqFields, optional: optFields } = selectFields(actor, options);
-  const allFields = [...reqFields, ...optFields];
 
+  // When the model's response is grammar-constrained (response_format), the
+  // required envelope shape (thought/action/message) is already enforced and the
+  // verbose "Return only valid JSON: {...}" restatement is wasted tokens. Emit
+  // only the OPTIONAL fields, whose meaning and when-to-use the grammar can't convey.
+  if (schemaActive) {
+    if (!optFields.length) return '';
+    const opts = optFields.map(name => `- "${name}": ${FIELDS[name].prompt}`);
+    return `Optional JSON fields you may add to the response object when relevant:\n${opts.join('\n')}`;
+  }
+
+  const allFields = [...reqFields, ...optFields];
   const pairs = allFields.map(name => {
     let promptValue = FIELDS[name].prompt;
     // Story mode overrides the message description
