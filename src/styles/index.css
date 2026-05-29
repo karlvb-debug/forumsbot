@@ -697,6 +697,24 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 
 .field-hint { font-size: 11px; color: var(--fg-faint); }
 .field-hint.hint-warn { color: var(--warn); }
+.link-btn {
+  appearance: none; background: none; border: 0; padding: 0;
+  color: var(--accent); font: inherit; font-size: inherit;
+  cursor: pointer; text-decoration: none;
+}
+.link-btn:hover { text-decoration: underline; }
+
+/* Keyboard-shortcut legend (Help) */
+.shortcut-legend { width: 100%; border-collapse: collapse; }
+.shortcut-legend td { padding: 5px 0; vertical-align: top; font-size: 12.5px; }
+.shortcut-legend td:first-child { white-space: nowrap; width: 1%; padding-right: 14px; }
+.shortcut-legend tr + tr td { border-top: 1px solid var(--border-soft); }
+kbd {
+  display: inline-block; font-family: var(--font-mono); font-size: 11px;
+  line-height: 1; padding: 3px 6px; border-radius: 5px;
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-bottom-width: 2px; color: var(--fg-dim);
+}
 
 .warn-card {
   padding: 8px 10px;
@@ -2078,6 +2096,14 @@ button:focus-visible { border-radius: 8px; }
 .unanswered-pause-icon {
   font-size: 16px;
   animation: pulse 1.6s infinite;
+}
+/* On mobile the rail is hidden and the bottom nav owns the foot — span full
+   width and sit just above the nav so the banner is never obscured. */
+@media (max-width: 759px) {
+  .unanswered-pause-strip {
+    left: 0;
+    bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 /* ───── Document Editor Stage ───── */

@@ -5,6 +5,7 @@ import { useForumState, mutateState } from '../../hooks/useForumState';
 import { isEmbeddingModel } from '../../modules/api.js';
 import { useActions, getConnectionStatus, getConnectionStatusVersion, subscribeConnectionStatus } from '../../hooks/useActions';
 import { useSyncExternalStore } from 'react';
+import { navigateToPanel } from '../../hooks/navigation.js';
 
 const PROVIDERS = {
   'lm-studio': {
@@ -292,6 +293,12 @@ export function ConnectionPanel() {
           <Field label="Temperature" info="Global default actor creativity. Individual actors can override this in Actors → Behavior.">
             <Range value={temperature} onChange={(v) => updateSetting('temperature', v)} min={0} max={2} step={0.05} />
           </Field>
+          <div className="field-hint" style={{ marginTop: -4 }}>
+            These are global defaults. &nbsp;
+            <button type="button" className="link-btn" onClick={() => navigateToPanel('actors')}>
+              Per-actor overrides →
+            </button>
+          </div>
           <Field label="Max tokens / response">
             <Range value={maxTokens} onChange={(v) => updateSetting('maxTokens', v)} min={200} max={8000} step={100} format={(v) => `${v}`} />
           </Field>

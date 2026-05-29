@@ -19,6 +19,7 @@ import * as Ic from './components/Icons';
 import './modules/state.js';
 import { setModuleRefs, useActions } from './hooks/useActions.js';
 import { mutateState, notifyStateChange, saveState, useForumState } from './hooks/useForumState.js';
+import { NAVIGATE_EVENT } from './hooks/navigation.js';
 
 // Small media-query hook (no dependency) — drives the mobile shell.
 function useMediaQuery(query) {
@@ -208,6 +209,19 @@ export default function App() {
     root.setProperty('--accent-soft', `oklch(${l} ${m.c} ${m.h} / ${light ? 0.14 : 0.16})`);
     root.setProperty('--accent-fg', fg);
   }, [accent, theme]);
+
+  // Cross-panel jump links: a panel dispatches NAVIGATE_EVENT, we switch the
+  // active panel (and surface the sheet on mobile).
+  useEffect(() => {
+    const onNavigate = (e) => {
+      const panel = e.detail?.panel;
+      if (!panel) return;
+      setActivePanel(panel);
+      if (isMobile) setSheet('panel');
+    };
+    window.addEventListener(NAVIGATE_EVENT, onNavigate);
+    return () => window.removeEventListener(NAVIGATE_EVENT, onNavigate);
+  }, [isMobile]);
 
   const inspectorOnLeft = inspectorPos === 'left';
   const meta = NAV_TITLES[activePanel] || { title: '', sub: '' };

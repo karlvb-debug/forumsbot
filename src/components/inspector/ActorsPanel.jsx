@@ -3,6 +3,7 @@ import * as Ic from '../Icons';
 import { Field, Toggle, Range } from '../shared/FormControls';
 import { useForumState, mutateState, saveState } from '../../hooks/useForumState';
 import { putActorMemory } from '../../modules/db.js';
+import { navigateToPanel } from '../../hooks/navigation.js';
 
 const PERM_DEFS = [
   { key: 'canDirect',      label: 'Direct',      icon: '🎬', color: 'var(--gold)'   },
@@ -387,7 +388,10 @@ export function ActorsPanel() {
                     <Range value={a.temperature ?? 0.8} min={0.1} max={1.5} step={0.05} onChange={(v) => updateActor(a.id, 'temperature', v)} />
                   </Field>
                   <div className="field-hint" style={{ marginTop: -4 }}>
-                    Low = focused &nbsp;·&nbsp; High = creative / unpredictable
+                    Low = focused &nbsp;·&nbsp; High = creative / unpredictable &nbsp;·&nbsp;
+                    <button type="button" className="link-btn" onClick={() => navigateToPanel('connection')}>
+                      Global default →
+                    </button>
                   </div>
                   <div>
                     <div className="actor-section-label">Permissions</div>
