@@ -1113,37 +1113,20 @@ input[type="range"]::-webkit-slider-thumb {
   gap: 8px;
 }
 
-/* ── Actor card tabs ── */
-.actor-tabs {
-  display: flex;
-  gap: 2px;
-  background: var(--bg-raised);
-  border-radius: 8px;
-  padding: 3px;
-  margin-bottom: 2px;
+/* ── Actor card sections (progressive disclosure) ── */
+.actor-section-divider {
+  height: 1px;
+  background: var(--border-soft);
+  border: 0;
+  margin: 4px 0;
 }
-.actor-tab {
-  flex: 1;
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--fg-mute);
-  font-size: 11px;
-  font-family: var(--font-ui);
-  padding: 5px 2px;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background .12s, color .12s;
-  text-align: center;
-  letter-spacing: 0.02em;
+.actor-advanced {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-soft);
 }
-.actor-tab:hover { color: var(--fg-dim); background: oklch(from var(--bg-card) l c h / 0.6); }
-.actor-tab.active {
-  background: var(--bg-card);
-  color: var(--fg);
-  font-weight: 600;
-  box-shadow: 0 1px 3px oklch(0 0 0 / 0.25);
-}
+.actor-advanced > summary { padding: 2px 0; }
+.actor-advanced .disclosure-body { gap: 14px; }
 .actor-section-label {
   font-size: 10px;
   font-weight: 700;

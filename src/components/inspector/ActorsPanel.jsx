@@ -144,7 +144,6 @@ export function ActorsPanel() {
   const actors = useForumState(s => s.actors);
   const messages = useForumState(s => s.messages || []);
   const [expanded, setExpanded] = useState(null);
-  const [activeTab, setActiveTab] = useState('profile');
   const [aiDesc, setAiDesc] = useState('');
   const [aiDescGenerating, setAiDescGenerating] = useState(false);
   const [aiDescError, setAiDescError] = useState(null);
@@ -335,7 +334,7 @@ export function ActorsPanel() {
             onDragLeave={() => { if (dropIdx === idx) setDropIdx(null); }}
             onDrop={(e) => { e.preventDefault(); const from = dragIdx ?? parseInt(e.dataTransfer.getData('text/plain'), 10); moveActor(from, idx); setDragIdx(null); setDropIdx(null); }}
           >
-            <div className="actor-card-head" onClick={() => { const opening = !isOpen; setExpanded(opening ? a.id : null); if (opening) setActiveTab('profile'); }}>
+            <div className="actor-card-head" onClick={() => { const opening = !isOpen; setExpanded(opening ? a.id : null); }}>
               <div className="actor-reorder">
                 <button className="reorder-btn" title="Move up" disabled={idx === 0} onClick={(e) => { e.stopPropagation(); moveActor(idx, idx - 1); }}>▲</button>
                 <button className="reorder-btn" title="Move down" disabled={idx === actors.length - 1} onClick={(e) => { e.stopPropagation(); moveActor(idx, idx + 1); }}>▼</button>
@@ -364,53 +363,58 @@ export function ActorsPanel() {
             </div>
             {isOpen ? (
               <div className="actor-card-body">
-                {/* ── Tab bar ── */}
-                <div className="actor-tabs">
-                  {[
-                    { key: 'profile',   label: 'Profile'   },
-                    { key: 'behavior',  label: 'Behavior'  },
-                    { key: 'control',   label: 'Control'   },
-                    { key: 'relations', label: 'Relations' },
-                  ].map(t => (
-                    <button
-                      key={t.key}
-                      className={"actor-tab" + (activeTab === t.key ? " active" : "")}
-                      onClick={e => { e.stopPropagation(); setActiveTab(t.key); }}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
+                {/* ── Identity (always visible) ── */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <Field label="Name"><input value={a.name} onChange={(e) => updateActor(a.id, 'name', e.target.value)} /></Field>
+                    <Field label="Role"><input value={a.role} onChange={(e) => updateActor(a.id, 'role', e.target.value)} /></Field>
+                  </div>
+                  <Field label="Persona"><textarea rows={3} value={a.persona} onChange={(e) => updateActor(a.id, 'persona', e.target.value)} /></Field>
+                  <Field label="Goal"><textarea rows={2} value={a.goal} onChange={(e) => updateActor(a.id, 'goal', e.target.value)} /></Field>
+                  <Field label="Voice"><input value={a.voice || ''} onChange={(e) => updateActor(a.id, 'voice', e.target.value)} /></Field>
                 </div>
 
-                {/* ── Profile tab ── */}
-                {activeTab === 'profile' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                      <Field label="Name"><input value={a.name} onChange={(e) => updateActor(a.id, 'name', e.target.value)} /></Field>
-                      <Field label="Role"><input value={a.role} onChange={(e) => updateActor(a.id, 'role', e.target.value)} /></Field>
-                    </div>
-                    <Field label="Persona"><textarea rows={3} value={a.persona} onChange={(e) => updateActor(a.id, 'persona', e.target.value)} /></Field>
-                    <Field label="Goal"><textarea rows={2} value={a.goal} onChange={(e) => updateActor(a.id, 'goal', e.target.value)} /></Field>
-                    <Field label="Voice"><input value={a.voice || ''} onChange={(e) => updateActor(a.id, 'voice', e.target.value)} /></Field>
+                {/* ── Behavior (always visible) ── */}
+                <div className="actor-section-divider" />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <Field label={`Authority — ${a.authority ?? 50}`} info="How much weight other actors give this actor's claims. Does NOT change speaking order.">
+                    <Range value={a.authority ?? 50} min={0} max={100} step={5} onChange={(v) => updateActor(a.id, 'authority', v)} />
+                  </Field>
+                  <div className="field-hint" style={{ marginTop: -4 }}>
+                    0 = background voice &nbsp;·&nbsp; 50 = peer &nbsp;·&nbsp; 100 = domain authority
                   </div>
-                )}
+                  <Field label={`Temperature — ${(a.temperature ?? 0.8).toFixed(2)}`} info="Per-actor creativity. Overrides the global default set in Connection → Generation.">
+                    <Range value={a.temperature ?? 0.8} min={0.1} max={1.5} step={0.05} onChange={(v) => updateActor(a.id, 'temperature', v)} />
+                  </Field>
+                  <div className="field-hint" style={{ marginTop: -4 }}>
+                    Low = focused &nbsp;·&nbsp; High = creative / unpredictable
+                  </div>
+                  <div>
+                    <div className="actor-section-label">Permissions</div>
+                    <div className="perm-chips" style={{ marginTop: 6 }}>
+                      {PERM_DEFS.map(p => (
+                        <button
+                          key={p.key}
+                          className={"perm-chip" + (a[p.key] ? " active" : "")}
+                          style={a[p.key] ? { '--perm-color': p.color } : {}}
+                          onClick={() => updateActor(a.id, p.key, !a[p.key])}
+                          title={p.label}
+                        >
+                          {p.icon} {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
 
-                {/* ── Behavior tab ── */}
-                {activeTab === 'behavior' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <Field label={`Authority — ${a.authority ?? 50}`} info="How much weight other actors give this actor's claims. Does NOT change speaking order.">
-                      <Range value={a.authority ?? 50} min={0} max={100} step={5} onChange={(v) => updateActor(a.id, 'authority', v)} />
-                    </Field>
-                    <div className="field-hint" style={{ marginTop: -4 }}>
-                      0 = background voice &nbsp;·&nbsp; 50 = peer &nbsp;·&nbsp; 100 = domain authority
-                    </div>
-                    <Field label={`Temperature — ${(a.temperature ?? 0.8).toFixed(2)}`} info="Per-actor creativity. Overrides the global default set in Connection → Generation.">
-                      <Range value={a.temperature ?? 0.8} min={0.1} max={1.5} step={0.05} onChange={(v) => updateActor(a.id, 'temperature', v)} />
-                    </Field>
-                    <div className="field-hint" style={{ marginTop: -4 }}>
-                      Low = focused &nbsp;·&nbsp; High = creative / unpredictable
-                    </div>
-                    <Field label="Max tokens">
+                {/* ── Advanced (collapsed by default) ── */}
+                <details className="actor-advanced card-disclosure">
+                  <summary>
+                    <span className="actor-section-label" style={{ textTransform: 'none', fontSize: 12, letterSpacing: 0 }}>Advanced</span>
+                    <span className="disclosure-sub">scheduling · triggers · relationships · tokens</span>
+                  </summary>
+                  <div className="disclosure-body">
+                    <Field label="Max tokens" info="Cap on this actor's response length. Leave blank to use the global default.">
                       <input
                         type="number"
                         placeholder="default"
@@ -425,28 +429,6 @@ export function ActorsPanel() {
                         style={{ width: 100 }}
                       />
                     </Field>
-                  </div>
-                )}
-
-                {/* ── Control tab ── */}
-                {activeTab === 'control' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <div>
-                      <div className="actor-section-label">Permissions</div>
-                      <div className="perm-chips" style={{ marginTop: 6 }}>
-                        {PERM_DEFS.map(p => (
-                          <button
-                            key={p.key}
-                            className={"perm-chip" + (a[p.key] ? " active" : "")}
-                            style={a[p.key] ? { '--perm-color': p.color } : {}}
-                            onClick={() => updateActor(a.id, p.key, !a[p.key])}
-                            title={p.label}
-                          >
-                            {p.icon} {p.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
 
                     <div>
                       <div className="actor-section-label">Scheduling</div>
@@ -501,34 +483,34 @@ export function ActorsPanel() {
                         Actor fires when any checked event occurs, regardless of turn schedule.
                       </div>
                     </div>
-                  </div>
-                )}
 
-                {/* ── Relations tab ── */}
-                {activeTab === 'relations' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div className="field-hint">How this actor relates to others. Injected into their prompt context.</div>
-                    {Object.entries(a.relationships || {}).map(([name, rel]) => (
-                      <div key={name} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                        <span style={{ minWidth: 70, fontSize: 12, color: 'var(--fg-dim)' }}>{name}</span>
-                        <input
-                          style={{ flex: 1, fontSize: 12 }}
-                          value={rel}
-                          placeholder="e.g. trusts but challenges"
-                          onChange={e => updateActor(a.id, 'relationships', { ...a.relationships, [name]: e.target.value })}
-                        />
-                        <button className="mini-icon-btn" title="Remove" onClick={() => {
-                          const r = { ...(a.relationships || {}) };
-                          delete r[name];
-                          updateActor(a.id, 'relationships', r);
-                        }}><Ic.Trash width={10} height={10} /></button>
+                    <div>
+                      <div className="actor-section-label">Relationships</div>
+                      <div className="field-hint" style={{ marginTop: 4, marginBottom: 6 }}>How this actor relates to others. Injected into their prompt context.</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {Object.entries(a.relationships || {}).map(([name, rel]) => (
+                          <div key={name} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                            <span style={{ minWidth: 70, fontSize: 12, color: 'var(--fg-dim)' }}>{name}</span>
+                            <input
+                              style={{ flex: 1, fontSize: 12 }}
+                              value={rel}
+                              placeholder="e.g. trusts but challenges"
+                              onChange={e => updateActor(a.id, 'relationships', { ...a.relationships, [name]: e.target.value })}
+                            />
+                            <button className="mini-icon-btn" title="Remove" onClick={() => {
+                              const r = { ...(a.relationships || {}) };
+                              delete r[name];
+                              updateActor(a.id, 'relationships', r);
+                            }}><Ic.Trash width={10} height={10} /></button>
+                          </div>
+                        ))}
+                        <RelationshipAdd actors={actors} currentId={a.id} onAdd={(name) => {
+                          updateActor(a.id, 'relationships', { ...a.relationships, [name]: '' });
+                        }} />
                       </div>
-                    ))}
-                    <RelationshipAdd actors={actors} currentId={a.id} onAdd={(name) => {
-                      updateActor(a.id, 'relationships', { ...a.relationships, [name]: '' });
-                    }} />
+                    </div>
                   </div>
-                )}
+                </details>
 
                 {/* ── Always-visible action strip ── */}
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-soft)' }}>
