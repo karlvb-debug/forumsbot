@@ -640,6 +640,20 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
   color: oklch(from var(--accent-fg) l c h / 0.9);
 }
 
+/* Run controls grouped into one segment, set apart from the toggle chips */
+.composer-run {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 2px; border-radius: 9px;
+  background: var(--bg-rail);
+  border: 1px solid var(--border-soft);
+}
+.composer .chip-btn.danger { color: var(--danger); }
+.composer .chip-btn.danger.active {
+  background: oklch(from var(--danger) l c h / 0.15);
+  color: var(--danger);
+  border-color: oklch(from var(--danger) l c h / 0.35);
+}
+
 .token-meter {
   display: flex; align-items: center; gap: 8px;
   font-family: var(--font-mono); font-size: 10.5px;
