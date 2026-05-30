@@ -4,6 +4,7 @@ import { Field, Toggle, Range } from '../shared/FormControls';
 import { useForumState, mutateState, saveState } from '../../hooks/useForumState';
 import { putActorMemory } from '../../modules/db.js';
 import { navigateToPanel } from '../../hooks/navigation.js';
+import { ACTOR_LIBRARY } from '../../modules/blueprints.js';
 
 const PERM_DEFS = [
   { key: 'canDirect',      label: 'Direct',      icon: '🎬', color: 'var(--gold)'   },

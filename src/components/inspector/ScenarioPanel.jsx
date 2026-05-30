@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import * as Ic from '../Icons';
 import { Field, Toggle, Seg } from '../shared/FormControls';
 import { useForumState, mutateState, saveState } from '../../hooks/useForumState';
-import { applyScenarioPreset } from '../../modules/session.js';
+import { applyScenarioPreset, applyBlueprint, requestConfirmPublic } from '../../modules/session.js';
+import { BLUEPRINTS } from '../../modules/blueprints.js';
 
 const PRESET_OPTIONS = [
   { value: '', label: '— Apply a preset —' },

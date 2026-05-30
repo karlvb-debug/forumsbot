@@ -140,3 +140,67 @@ describe('applyAssistantPatch', () => {
   });
 });
 
+describe('blueprints', () => {
+  it('exposes applyBlueprint and the blueprint data/builders', async () => {
+    const session = await import('./session.js');
+    const blueprints = await import('./blueprints.js');
+    // Guards against the class of bug where the UI references functions that
+    // were never actually defined/exported (silent white-screen at runtime).
+    expect(typeof session.applyBlueprint).toBe('function');
+    expect(Array.isArray(blueprints.BLUEPRINTS)).toBe(true);
+    expect(blueprints.BLUEPRINTS.length).toBeGreaterThan(0);
+    expect(Array.isArray(blueprints.ACTOR_LIBRARY)).toBe(true);
+  });
+
+  it('every blueprint cast key resolves to a real library actor', async () => {
+    const { BLUEPRINTS, ACTOR_LIBRARY, blueprintCast } = await import('./blueprints.js');
+    const keys = new Set(ACTOR_LIBRARY.map(a => a.key));
+    for (const bp of BLUEPRINTS) {
+      for (const k of bp.cast) {
+        expect(keys.has(k), `blueprint "${bp.id}" references missing actor "${k}"`).toBe(true);
+      }
+      // blueprintCast must produce one buildable member per cast key
+      expect(blueprintCast(bp.id)).toHaveLength(bp.cast.length);
+    }
+  });
+
+  it('applyBlueprint installs the cast and preserves orchestration fields', async () => {
+    const { applyBlueprint } = await import('./session.js');
+    state.messages = [];
+    await applyBlueprint('code-review');
+    expect(state.actors.length).toBe(4);
+    // The review lead is a background director — scheduling fields must survive
+    // (normalizeQuickStartActor would have dropped these; the blueprint builder must not).
+    const lead = state.actors.find(a => a.canDirect);
+    expect(lead).toBeTruthy();
+    expect(lead.turnSchedule).toBe('every-turn');
+    expect(state.scenario.title).toBe('Code Review');
+    expect(state.autoStop.roundsRun).toBe(0);
+  });
+});
+
+describe('configurations', () => {
+  it('round-trips a saved configuration through localStorage', async () => {
+    // Stateful localStorage so save → list actually persists within the test.
+    const store = new Map();
+    vi.stubGlobal('localStorage', {
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => store.set(k, String(v)),
+      removeItem: (k) => store.delete(k),
+    });
+    const session = await import('./session.js');
+
+    state.scenario = { ...state.scenario, title: 'My Setup' };
+    state.actors = [{ id: 'a1', name: 'A', enabled: true }];
+
+    const saved = session.saveConfiguration('Saved One');
+    expect(saved.name).toBe('Saved One');
+
+    const list = session.listConfigurations();
+    expect(list.some(c => c.id === saved.id)).toBe(true);
+
+    session.deleteConfiguration(saved.id);
+    expect(session.listConfigurations().some(c => c.id === saved.id)).toBe(false);
+  });
+});
+

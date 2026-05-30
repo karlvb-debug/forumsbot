@@ -535,7 +535,8 @@ ${result}
         content = await _chatCompletionDirect(system, followUpUser, {
           temperature,
           maxTokens: resolvedMaxTokens,
-          signal
+          signal,
+          jsonSchema,
         });
       }
     }

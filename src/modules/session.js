@@ -1226,3 +1226,140 @@ export async function copyMarkdownToClipboard() {
     return false;
   }
 }
+
+// ── Blueprints & configurations ──────────────────────────────────────────────
+
+// Build a full actor record from a library/template partial. Unlike
+// normalizeQuickStartActor (which drops scheduling/permission fields), this
+// preserves the orchestration fields a blueprint cast relies on.
+function buildActorFromTemplate(tpl, index) {
+  const palette = ['#2a9d8f', '#7c5cbf', '#4a7fd4', '#c97a40', '#e76f51', '#457b9d', '#c8a830'];
+  const a = {
+    id: crypto.randomUUID(),
+    name: tpl.name || `Actor ${index + 1}`,
+    role: tpl.role || 'Participant',
+    persona: tpl.persona || '',
+    goal: tpl.goal || '',
+    voice: tpl.voice || '',
+    thoughts: '',
+    relationships: {},
+    enabled: true,
+    expanded: false,
+    canDirect: !!tpl.canDirect,
+    canManageCast: !!tpl.canManageCast,
+    canInject: !!tpl.canInject,
+    canResearch: !!tpl.canResearch,
+    canSeeThoughts: !!tpl.canSeeThoughts,
+    authority: tpl.authority ?? 50,
+    turnSchedule: tpl.turnSchedule || 'normal',
+    actorMode: tpl.actorMode || 'participant',
+    triggerOn: Array.isArray(tpl.triggerOn) ? [...tpl.triggerOn] : [],
+    temperature: tpl.temperature ?? 0.8,
+    color: tpl.color || palette[index % palette.length],
+  };
+  if (tpl.maxTokens != null) a.maxTokens = tpl.maxTokens;
+  return a;
+}
+
+function mergeScenario(target, src) {
+  const sys = src.systems || {};
+  const cur = target.systems || {};
+  return {
+    ...target,
+    ...src,
+    systems: {
+      ...cur,
+      ...sys,
+      stageDirections: { ...cur.stageDirections, ...(sys.stageDirections || {}) },
+      alignment:       { ...cur.alignment,       ...(sys.alignment       || {}) },
+      turnRouting:     { ...cur.turnRouting,     ...(sys.turnRouting     || {}) },
+      dmRole:          { ...cur.dmRole,          ...(sys.dmRole          || {}) },
+      document:        { ...cur.document,        ...(sys.document        || {}) },
+    },
+  };
+}
+
+// Apply a blueprint: scenario + systems + a fresh cast. Does not touch the
+// existing transcript — the caller decides whether to clear it first.
+export async function applyBlueprint(id) {
+  const { getBlueprint, blueprintCast } = await import('./blueprints.js');
+  const bp = getBlueprint(id);
+  if (!bp) return;
+
+  const actors = blueprintCast(id).map(buildActorFromTemplate);
+  const normalized = normalizeState({
+    ...state,
+    scenario: mergeScenario(state.scenario, bp.scenario || {}),
+    actors,
+    autoStop: { ...state.autoStop, ...(bp.autoStop || {}), roundsRun: 0 },
+  });
+  setState(normalized);
+  state.turnQueue = [];
+  saveState();
+  setStatus(`Blueprint "${bp.label}" applied.`, 'ok');
+}
+
+// User-saved configurations (setup only — no transcript) live in localStorage.
+const CONFIG_KEY = 'forum_configurations';
+const MAX_CONFIGS = 30;
+
+export function listConfigurations() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CONFIG_KEY) || '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveConfiguration(name) {
+  const configs = listConfigurations();
+  const config = {
+    id: crypto.randomUUID(),
+    name: (name || state.scenario?.title || 'Configuration').trim().slice(0, 80),
+    savedAt: new Date().toISOString(),
+    actorCount: (state.actors || []).filter(a => a.enabled).length,
+    scenario: { ...state.scenario },
+    actors: (state.actors || []).map(a => ({ ...a })),
+    autoStop: { ...state.autoStop },
+    settings: {
+      temperature: state.settings?.temperature,
+      maxTokens: state.settings?.maxTokens,
+      topP: state.settings?.topP,
+      repeatPenalty: state.settings?.repeatPenalty,
+      toolsEnabled: state.settings?.toolsEnabled,
+    },
+  };
+  configs.unshift(config);
+  try {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(configs.slice(0, MAX_CONFIGS)));
+    setStatus(`Configuration "${config.name}" saved.`, 'ok');
+  } catch {
+    setStatus('Could not save configuration (storage full?).', 'error');
+  }
+  return config;
+}
+
+// Apply a saved configuration: scenario + cast + generation settings. Leaves the
+// transcript untouched.
+export function applyConfiguration(config) {
+  if (!config) return;
+  const normalized = normalizeState({
+    ...state,
+    scenario: { ...state.scenario, ...(config.scenario || {}) },
+    actors: Array.isArray(config.actors) && config.actors.length ? config.actors : state.actors,
+    autoStop: { ...state.autoStop, ...(config.autoStop || {}), roundsRun: 0 },
+    settings: { ...state.settings, ...(config.settings || {}) },
+  });
+  setState(normalized);
+  state.turnQueue = [];
+  saveState();
+  setStatus(`Configuration "${config.name || 'Untitled'}" applied.`, 'ok');
+}
+
+export function deleteConfiguration(id) {
+  const configs = listConfigurations().filter(c => c.id !== id);
+  try {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(configs));
+  } catch { /* ignore */ }
+}
