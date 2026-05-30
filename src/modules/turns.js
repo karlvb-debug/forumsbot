@@ -168,9 +168,11 @@ export function nextParticipant() {
     state.ui.mentionTarget = null;
     const target = state.actors.find(a => a.enabled && a.id === mentionTarget);
     if (target) {
+      // Route the mentioned actor to the front. The shift()+push() rotation
+      // below re-queues them once; pushing here too would duplicate them at the
+      // back and let them speak again too soon.
       state.turnQueue = state.turnQueue.filter(id => id !== target.id);
       state.turnQueue.unshift(target.id);
-      state.turnQueue.push(target.id);
     }
   }
 

@@ -964,23 +964,32 @@ export async function saveCurrentSession() {
     state._currentSessionId = crypto.randomUUID();
   }
 
+  // Snapshot messages and actors by VALUE — callers (e.g. forkSessionAtMessage)
+  // mutate state.actors/state.messages immediately after saving, which would
+  // otherwise corrupt the just-saved session through the shared reference.
   const session = {
     id: state._currentSessionId,
     timestamp: new Date().toISOString(),
     scenarioTitle: state.scenario.title || 'Untitled',
     actorCount: state.actors.filter(a => a.enabled).length,
     messageCount: state.messages.length,
-    messages: state.messages,
+    messages: state.messages.map(m => ({ ...m })),
     scenario: { ...state.scenario },
     memory: { ...state.memory },
-    actors: state.actors,
+    actors: state.actors.map(a => ({ ...a })),
   };
 
-  // Keep at most 20 sessions; remove oldest others if over limit
+  // Keep at most 20 sessions; remove oldest others if over limit. Guard each
+  // delete so one failure doesn't abort the whole save (the session itself
+  // still needs to be written below).
   const existing = await getAllSessions();
   const others = existing.filter(s => s.id !== state._currentSessionId);
   for (const old of others.slice(19)) {
-    await deleteSession(old.id);
+    try {
+      await deleteSession(old.id);
+    } catch (err) {
+      console.warn('[sessions] prune failed:', err.message);
+    }
   }
 
   await putSession(session);

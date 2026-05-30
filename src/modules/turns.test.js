@@ -369,3 +369,38 @@ describe('applyAiResult', () => {
     expect(bob.temperature).toBe(0.5);
   });
 });
+
+// ── nextParticipant @mention routing ──────────────────────────────────────────
+import { nextParticipant } from './turns.js';
+
+describe('nextParticipant @mention routing', () => {
+  beforeEach(() => {
+    mockState.actors = [
+      { id: 'a1', name: 'Alice', enabled: true, turnSchedule: 'normal' },
+      { id: 'a2', name: 'Bob', enabled: true, turnSchedule: 'normal' },
+      { id: 'a3', name: 'Carol', enabled: true, turnSchedule: 'normal' },
+    ];
+    mockState.turnQueue = ['a1', 'a2', 'a3'];
+    mockState.currentRound = 0;
+    mockState.ui.mentionTarget = null;
+  });
+
+  it('routes the mentioned actor to speak next without duplicating them in the queue', () => {
+    mockState.ui.mentionTarget = 'a3';
+    const result = nextParticipant();
+
+    // Carol speaks now…
+    expect(result.data.id).toBe('a3');
+    // …and appears exactly once in the rotated queue (the bug pushed her twice,
+    // letting her speak again immediately).
+    const carolCount = mockState.turnQueue.filter(id => id === 'a3').length;
+    expect(carolCount).toBe(1);
+    expect(mockState.ui.mentionTarget).toBeNull();
+  });
+
+  it('rotates normally when no actor is mentioned', () => {
+    const result = nextParticipant();
+    expect(result.data.id).toBe('a1');
+    expect(mockState.turnQueue.filter(id => id === 'a1').length).toBe(1);
+  });
+});
