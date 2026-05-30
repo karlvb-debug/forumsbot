@@ -50,6 +50,7 @@ const NAV = [
   { id: 'telemetry',     label: 'Telemetry',    icon: 'Gauge',         tier: 'advanced' },
   { id: 'goal',          label: 'Goal',         icon: 'Sliders',       tier: 'advanced' },
   { id: 'documents',     label: 'Documents',    icon: 'Doc',           tier: 'advanced' },
+  { id: 'library',       label: 'Library',      icon: 'Stage',         tier: 'advanced' },
   { id: 'sessions',      label: 'Sessions',     icon: 'Sessions',      tier: 'advanced' },
   { id: 'help',          label: 'Help',         icon: 'Info',          tier: 'bottom'   },
 ];
@@ -62,6 +63,7 @@ const NAV_TITLES = {
   telemetry:     { title: 'Telemetry',     sub: 'alignment · drift · influence' },
   documents:     { title: 'Documents',     sub: 'working docs · references · links' },
   goal:          { title: 'Goal',          sub: 'auto-stop & judges' },
+  library:       { title: 'Library',       sub: 'blueprints · saved setups' },
   sessions:      { title: 'Sessions',      sub: 'save · load · export' },
   connection:    { title: 'Connection',    sub: 'LM Studio · model · generation' },
   help:          { title: 'Help',          sub: 'documentation · reference' },

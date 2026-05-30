@@ -7,6 +7,7 @@ import { MemoryPanel } from './MemoryPanel';
 import { TelemetryPanel } from './TelemetryPanel';
 import { GoalPanel } from './GoalPanel';
 import { SessionsPanel } from './SessionsPanel';
+import { LibraryPanel } from './LibraryPanel';
 import { DocumentsPanel } from './DocumentsPanel';
 import { PromptViewerPanel } from './PromptViewerPanel';
 import { HelpPanel } from './HelpPanel';
@@ -20,6 +21,7 @@ const PANELS = {
   memory: MemoryPanel,
   telemetry: TelemetryPanel,
   goal: GoalPanel,
+  library: LibraryPanel,
   sessions: SessionsPanel,
   documents: DocumentsPanel,
   help: HelpPanel,

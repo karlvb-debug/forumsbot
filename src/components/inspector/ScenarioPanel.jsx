@@ -2,20 +2,7 @@ import React, { useMemo } from 'react';
 import * as Ic from '../Icons';
 import { Field, Toggle, Seg } from '../shared/FormControls';
 import { useForumState, mutateState } from '../../hooks/useForumState';
-import { applyScenarioPreset, applyBlueprint, requestConfirmPublic } from '../../modules/session.js';
-import { BLUEPRINTS } from '../../modules/blueprints.js';
-
-const PRESET_OPTIONS = [
-  { value: '', label: '— Apply a preset —' },
-  { value: 'brainstorm', label: 'Brainstorm Session' },
-  { value: 'risk', label: 'Risk Assessment' },
-  { value: 'debate', label: 'Structured Debate' },
-  { value: 'retrospective', label: 'Project Retrospective' },
-  { value: 'story', label: 'Collaborative Story' },
-  { value: 'interview', label: 'Expert Panel Interview' },
-  { value: 'improv', label: 'Collaborative Improv' },
-  { value: 'problemsolving', label: 'Problem Solving' },
-];
+import { navigateToPanel } from '../../hooks/navigation.js';
 
 export function ScenarioPanel() {
   const mode = useForumState(s => s.scenario?.mode || 'problem');
@@ -35,26 +22,6 @@ export function ScenarioPanel() {
     });
   };
 
-  const messageCount = useForumState(s => (s.messages || []).length);
-
-  const handlePreset = (e) => {
-    const key = e.target.value;
-    if (!key) return;
-    applyScenarioPreset(key);
-    e.target.value = '';
-  };
-
-  const handleBlueprint = async (bp) => {
-    if (messageCount > 0 || actors.length > 0) {
-      const ok = await requestConfirmPublic(
-        `Apply the "${bp.label}" blueprint? This replaces the current scenario and cast (${bp.cast.length} actors). Your transcript is kept.`,
-        'Apply blueprint'
-      );
-      if (!ok) return;
-    }
-    await applyBlueprint(bp.id);
-  };
-
   // Warn if DM narrates but an actor is named "Narrator" or "Environment"
   const dmNarrates = systems.dmRole?.narrates ?? (mode === 'story');
   const collisionActors = useMemo(() => {
@@ -71,40 +38,11 @@ export function ScenarioPanel() {
 
   return (
     <div>
-      <div className="card">
-        <div className="card-title"><h3>Start from a blueprint</h3></div>
-        <div className="field-hint" style={{ marginBottom: 10 }}>
-          One click sets up a ready-to-run forum — scenario, systems, and a recommended cast. Everything stays editable.
-        </div>
-        <div className="blueprint-grid">
-          {BLUEPRINTS.map(bp => (
-            <button key={bp.id} className="blueprint-card" onClick={() => handleBlueprint(bp)} title={bp.description}>
-              <span className="blueprint-icon">{bp.icon}</span>
-              <span className="blueprint-label">{bp.label}</span>
-              <span className="blueprint-cast">{bp.cast.length} actors</span>
-            </button>
-          ))}
-        </div>
+      <div className="field-hint" style={{ marginBottom: 12 }}>
+        Configure this forum's premise, objective, and systems below. For a ready-made
+        setup with a recommended cast, start from a{' '}
+        <button className="link-btn" onClick={() => navigateToPanel('library')}>blueprint in the Library</button>.
       </div>
-
-      <details className="card card-disclosure">
-        <summary className="card-title">
-          <h3>Scenario only</h3>
-          <span className="disclosure-sub">keep current cast</span>
-        </summary>
-        <div className="disclosure-body">
-          <select
-            style={{ width: '100%', marginBottom: 4 }}
-            defaultValue=""
-            onChange={handlePreset}
-          >
-            {PRESET_OPTIONS.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-          <div className="field-hint">Fills in Mode, Title, Premise, Objective, and Systems — without changing your actors.</div>
-        </div>
-      </details>
 
       <div className="card">
         <div className="card-title"><h3><Ic.Target /> Mode</h3></div>
