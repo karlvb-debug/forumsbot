@@ -48,24 +48,17 @@ function extractStreamingMessage(accumulated) {
   return extractJsonField(accumulated, "message");
 }
 
-// Show the best available streaming text:
-// - If "message" has started → show that (the final visible response)
-// - Else if "thought" has started → show a stable indicator (not the thought
-//   text itself — showing it caused a jarring collapse when message field began)
-// - Else → return empty string so the cursor stays alive
+// Returns { thought, message } from the accumulated partial JSON so the
+// streaming bubble can show both fields simultaneously. Both are empty strings
+// during the initial preamble (JSON envelope tokens before any field begins).
 function extractStreamingDisplay(accumulated) {
-  if (/"message"\s*:\s*"/.test(accumulated)) {
-    return extractJsonField(accumulated, "message") ?? "Writing…";
-  }
-  if (/"thought"\s*:\s*"/.test(accumulated)) {
-    const thought = extractJsonField(accumulated, "thought") ?? "";
-    if (state.settings.showThoughts) {
-      return thought || "Reasoning…";
-    }
-    const wordCount = thought.split(/\s+/).filter(Boolean).length;
-    return wordCount > 5 ? `Reasoning… (${wordCount}w)` : "Reasoning…";
-  }
-  return "Generating…"; // preamble — JSON structure tokens before first field
+  const thought = /"thought"\s*:\s*"/.test(accumulated)
+    ? (extractJsonField(accumulated, "thought") ?? "")
+    : "";
+  const message = /"message"\s*:\s*"/.test(accumulated)
+    ? (extractJsonField(accumulated, "message") ?? "")
+    : "";
+  return { thought, message };
 }
 
 // ── Request scheduler ────────────────────────────────────────────────────────
@@ -500,7 +493,7 @@ export async function chatJson(system, user, temperature, signal, onStream = nul
 
   let content;
   if (canStream) {
-    onStream("Sending to model…");
+    onStream({ thought: '', message: '' }); // show bubble immediately
     content = await chatStream(system, user, {
       temperature,
       maxTokens: resolvedMaxTokens,

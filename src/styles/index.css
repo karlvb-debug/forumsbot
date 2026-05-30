@@ -1449,9 +1449,57 @@ input[type="range"]::-webkit-slider-thumb {
 .hidden { display: none !important; }
 
 /* ───── Streaming bubble ───── */
-.msg.streaming { opacity: 0.7; }
-.msg.streaming .msg-body { animation: streamFade 1.4s ease-in-out infinite; }
-@keyframes streamFade { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+.msg.streaming { opacity: 0.85; }
+
+/* Thought phase — dimmed italic text while the model is still reasoning */
+.streaming-thought-live {
+  color: var(--fg-mute);
+  font-style: italic;
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+/* Stable "thinking" pill shown when showThoughts is off */
+.streaming-thinking-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--fg-mute);
+  font-style: italic;
+  padding: 4px 0;
+}
+.streaming-thinking-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent);
+  animation: thinkPulse 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes thinkPulse { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1); } }
+
+/* Collapsed thought summary once message begins */
+.streaming-thought-summary {
+  margin-bottom: 6px;
+  font-size: var(--fs-sm);
+}
+.streaming-thought-summary > summary {
+  color: var(--fg-mute);
+  font-style: italic;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.streaming-thought-summary > summary::-webkit-details-marker { display: none; }
+.streaming-thought-summary-body {
+  color: var(--fg-mute);
+  font-style: italic;
+  margin-top: 4px;
+  padding-left: 4px;
+  white-space: pre-wrap;
+  font-size: var(--fs-sm);
+}
+
 .cursor-blink {
   display: inline-block;
   animation: blink 0.8s step-end infinite;
@@ -1459,6 +1507,13 @@ input[type="range"]::-webkit-slider-thumb {
   font-family: var(--font-mono);
 }
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* ── New message fade-in — runs once when the element is first inserted ── */
+@keyframes msgFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+.msg:not(.streaming) { animation: msgFadeIn 0.14s ease forwards; }
 
 /* ───── Empty transcript ───── */
 .empty-transcript {

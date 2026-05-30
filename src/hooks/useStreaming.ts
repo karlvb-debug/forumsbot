@@ -9,7 +9,8 @@ export interface StreamingState {
   speaker: string;
   color: string;
   type: MessageType;
-  text: string;
+  thought: string;
+  message: string;
 }
 
 let _streaming: StreamingState | null = null;
@@ -27,13 +28,13 @@ function subscribe(cb: () => void): () => void {
 }
 
 export function showStreamingBubble(speaker: string, color: string, type: MessageType): void {
-  _streaming = { speaker, color, type, text: '' };
+  _streaming = { speaker, color, type, thought: '', message: '' };
   notify();
 }
 
-export function updateStreamingBubble(text: string): void {
+export function updateStreamingBubble(data: { thought: string; message: string }): void {
   if (_streaming) {
-    _streaming = { ..._streaming, text };
+    _streaming = { ..._streaming, thought: data.thought, message: data.message };
     notify();
   }
 }

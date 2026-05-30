@@ -394,7 +394,7 @@ export async function runNextTurn(options = {}) {
       // updateStreamingBubble() fills in message text as tokens arrive.
       const streamingColor = participant.data.color || "var(--accent)";
       showStreamingBubble(participant.data.name, streamingColor, "actor");
-      const onStream = (messageText) => updateStreamingBubble(messageText);
+      const onStream = (data) => updateStreamingBubble(data);
 
       const result = await askActor(participant.data, abortController.signal, onStream, twoPhase);
 
@@ -1338,7 +1338,7 @@ export async function runDirectorBrief() {
     abortController = new AbortController();
     const streamingColor = director.color || "var(--gold)";
     showStreamingBubble(director.name, streamingColor, "dm");
-    const onStream = (t) => updateStreamingBubble(t);
+    const onStream = (data) => updateStreamingBubble(data);
 
     const showThoughts = !state.settings.turboMode;
     const briefSchema = buildActorSchema(director, { showThoughts, hasEditable: false, stageDirections: false });

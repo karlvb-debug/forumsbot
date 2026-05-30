@@ -167,8 +167,14 @@ const MessageCard = React.memo(function MessageCard({ msg, actor, showThoughts, 
   );
 });
 
-function StreamingBubble({ streaming }) {
+function StreamingBubble({ streaming, showThoughts }) {
   if (!streaming) return null;
+  const hasThought = !!streaming.thought;
+  const hasMessage = !!streaming.message;
+
+  // Status label in the header changes with phase
+  const statusLabel = hasMessage ? 'writing…' : hasThought ? 'thinking…' : 'sending…';
+
   return (
     <article className="msg streaming">
       <span className="swatch" style={{ background: streaming.color || 'var(--fg-mute)' }}>
@@ -177,12 +183,34 @@ function StreamingBubble({ streaming }) {
       <div className="msg-body">
         <div className="msg-head">
           <span className="msg-name">{streaming.speaker}</span>
-          <span className="msg-role">generating…</span>
+          <span className="msg-role streaming-status-label">{statusLabel}</span>
         </div>
-        {streaming.text
-          ? <div className="msg-text md-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(streaming.text) }} />
-          : <div className="msg-text"><span className="cursor-blink">▊</span></div>
-        }
+
+        {/* ── Thought phase ── visible until message begins */}
+        {hasThought && !hasMessage && (
+          showThoughts
+            ? <div className="msg-text streaming-thought-live">{streaming.thought}<span className="cursor-blink">▊</span></div>
+            : <div className="streaming-thinking-pill"><span className="streaming-thinking-dot" />Thinking…</div>
+        )}
+
+        {/* ── Message phase ── thought collapses to a summary pill */}
+        {hasMessage && (
+          <>
+            {showThoughts && hasThought && (
+              <details className="streaming-thought-summary">
+                <summary>💭 {streaming.thought.trim().split(/\s+/).filter(Boolean).length}w of reasoning</summary>
+                <div className="streaming-thought-summary-body">{streaming.thought}</div>
+              </details>
+            )}
+            <div className="msg-text md-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(streaming.message) }} />
+            <span className="cursor-blink">▊</span>
+          </>
+        )}
+
+        {/* ── Preamble: nothing received yet ── */}
+        {!hasThought && !hasMessage && (
+          <div className="msg-text"><span className="cursor-blink">▊</span></div>
+        )}
       </div>
     </article>
   );
@@ -419,7 +447,7 @@ export function Transcript({ showThoughts }) {
         );
       })}
 
-      <StreamingBubble streaming={streaming} />
+      <StreamingBubble streaming={streaming} showThoughts={showThoughts} />
 
       {!messages.length && !streaming && (
         <div className="empty-transcript">
