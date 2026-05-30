@@ -8,9 +8,16 @@ echo "  Forum Bot Launcher"
 echo "=============================="
 echo ""
 
-# Pull latest from GitHub
-echo "Pulling latest from GitHub..."
-git pull origin main
+# Refresh main from GitHub (hard-reset so a server-side merge / diverged
+# history never stalls the launch the way a plain `git pull` would).
+echo "Refreshing main from GitHub..."
+if git fetch origin main; then
+  git checkout main 2>/dev/null
+  git reset --hard origin/main
+  echo "main is up to date with origin."
+else
+  echo "WARNING: could not reach GitHub — launching with the local copy."
+fi
 echo ""
 
 # Install any new dependencies
