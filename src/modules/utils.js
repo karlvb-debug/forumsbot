@@ -277,6 +277,7 @@ export function normalizeAiResult(result, fallback) {
 export function stringifyMessage(value) {
   if (value == null) return "";
   if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map(stringifyMessage).join("\n\n");
   if (typeof value === "object") {
     return String(value.message || value.content || value.response || value.text || JSON.stringify(value));
   }
