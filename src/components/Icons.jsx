@@ -281,3 +281,10 @@ export const MessageSquare = (props) => (
     <path d="M3 4h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-4l-3 3-3-3H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
   </svg>
 );
+
+export const FastForward = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="currentColor" {...props}>
+    <path d="M3 5l7 5-7 5V5z" />
+    <path d="M10 5l7 5-7 5V5z" />
+  </svg>
+);

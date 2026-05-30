@@ -310,19 +310,26 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
   background: var(--bg-card);
 }
 .run-controls button {
-  appearance: none; background: transparent; border: 0; color: var(--fg-dim);
-  padding: 6px 12px;
+  appearance: none; background: transparent; border: 0; color: var(--fg-mute);
+  padding: 6px 11px;
   cursor: pointer;
   font-family: var(--font-sans);
   font-size: var(--fs-sm);
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; gap: 5px;
   border-right: 1px solid var(--border-soft);
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
 }
 .run-controls button:last-child { border-right: 0; }
 .run-controls button:hover { background: var(--bg-elev); color: var(--fg); }
-.run-controls button.primary { background: var(--accent); color: var(--accent-fg); font-weight: 600; }
-.run-controls button.primary:hover { background: oklch(from var(--accent) calc(l + 0.04) c h); }
-.run-controls button.danger { color: var(--danger); }
+.run-controls button.active {
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+.run-controls button.active:hover {
+  background: oklch(from var(--accent) calc(l + 0.04) c h);
+}
 
 .icon-btn {
   appearance: none; background: transparent; border: 1px solid transparent; color: var(--fg-mute);

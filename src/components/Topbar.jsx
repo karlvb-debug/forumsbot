@@ -76,26 +76,49 @@ export function Topbar() {
         <span className="status-pill status-round" title="Round status">R{roundNum} · {turnCount}t</span>
       </div>
 
-      <div className="run-controls" role="group" aria-label="Run">
-        <button onClick={directorBrief} title="Ask the Director for a progress brief">
-          Brief
+      <div className="run-controls" role="group" aria-label="Run controls">
+        <button
+          className={!autoRunning ? 'active' : ''}
+          onClick={stopGeneration}
+          title="Stop (Esc)"
+          aria-pressed={!autoRunning}
+          aria-label="Stop"
+        >
+          <Ic.Stop width={12} height={12} /><span>Stop</span>
         </button>
-        <button onClick={nextTurn} title="Next AI turn (Alt+N)">
-          <Ic.Step width={13} height={13} />Next
+        <button
+          onClick={nextTurn}
+          title="Next actor turn (Alt+N)"
+          aria-label="Next turn"
+        >
+          <Ic.Step width={13} height={13} /><span>Next</span>
         </button>
-        <button onClick={runRound} title="Run a full round (Alt+R)">
-          <Ic.Round width={13} height={13} />Round
+        <button
+          onClick={runRound}
+          title="Run a full round (Alt+R)"
+          aria-label="Run round"
+        >
+          <Ic.FastForward width={13} height={13} /><span>Round</span>
         </button>
-        {autoRunning ? (
-          <button className="danger" onClick={stopGeneration} title="Stop (Esc)">
-            <Ic.Stop width={11} height={11} />Stop
-          </button>
-        ) : (
-          <button className="primary" onClick={startAuto} title="Start auto-run (Alt+A)">
-            <Ic.Play width={11} height={11} />Auto
-          </button>
-        )}
+        <button
+          className={autoRunning ? 'active' : ''}
+          onClick={startAuto}
+          title="Auto-run continuously (Alt+A)"
+          aria-pressed={autoRunning}
+          aria-label="Auto-run"
+        >
+          <Ic.Play width={12} height={12} /><span>Auto</span>
+        </button>
       </div>
+      <button
+        className="icon-btn"
+        onClick={directorBrief}
+        title="Director brief — ask the Director for a progress summary"
+        aria-label="Director brief"
+        style={{ fontSize: 13 }}
+      >
+        📋
+      </button>
 
       <button
         className={`icon-btn${turboMode ? ' active warn' : ''}`}
