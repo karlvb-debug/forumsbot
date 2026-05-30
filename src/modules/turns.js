@@ -219,10 +219,11 @@ function buildEventContextBlock(eventName, data = {}) {
  * Fire all actors whose triggerOn array includes eventName.
  * Runs them silently (background-style prompt context injected automatically).
  */
-async function fireTriggerActors(eventName, eventData = {}, signal = null) {
+async function fireTriggerActors(eventName, eventData = {}, signal = null, excludeId = null) {
   const effectiveSignal = signal || abortController?.signal || null;
   const triggered = state.actors.filter(a =>
     a.enabled &&
+    a.id !== excludeId &&
     Array.isArray(a.triggerOn) &&
     a.triggerOn.includes(eventName)
   );
@@ -254,13 +255,17 @@ export async function fireUserMessageTriggers(message) {
   await fireTriggerActors('on_user_message', { message });
 }
 
-async function runBetweenTurnActors(signal) {
-  // New event-based: actors with triggerOn including 'on_every_turn'
-  await fireTriggerActors('on_every_turn', {}, signal);
+async function runBetweenTurnActors(signal, justSpokeId = null) {
+  // New event-based: actors with triggerOn including 'on_every_turn'.
+  // Exclude the actor that just took its visible turn this cycle — otherwise a
+  // director (canDirect + on_every_turn) double-fires every turn and can re-route
+  // the conversation back to itself, churning indefinitely.
+  await fireTriggerActors('on_every_turn', {}, signal, justSpokeId);
 
   // Legacy: actors with turnSchedule: 'every-turn' but no triggerOn set
   const legacyActors = state.actors.filter(a =>
     a.enabled &&
+    a.id !== justSpokeId &&
     (a.turnSchedule || 'normal') === 'every-turn' &&
     !(Array.isArray(a.triggerOn) && a.triggerOn.length > 0)
   );
@@ -501,8 +506,9 @@ export async function runNextTurn(options = {}) {
       }
 
       await applyAiResult(participant, result);
-      // Fire every-turn background actors between turns
-      await runBetweenTurnActors(abortController.signal);
+      // Fire every-turn background actors between turns (excluding the actor that
+      // just spoke, so a director doesn't immediately re-fire on itself).
+      await runBetweenTurnActors(abortController.signal, participant.data.id);
       removeStreamingBubble();
 
       // Sprint 6: Tool Usefulness Score — computed after applyAiResult so we have the final message
@@ -622,14 +628,17 @@ export async function runRound(options = {}) {
       if (!lastMsg) break;
 
       if (lastMsg.actorId === director.id) {
-        // Director just spoke — check if they named a nextSpeaker
-        if (lastMsg.nextSpeaker && lastMsg.nextSpeaker.trim()) {
+        // Director just spoke — check if they named a *different* actor to go next.
+        // A blank name, or the director naming itself, ends the round (otherwise the
+        // director would keep handing the floor back to itself indefinitely).
+        const named = (lastMsg.nextSpeaker || '').trim().toLowerCase();
+        const namedSelf = named && named === director.name.trim().toLowerCase();
+        if (named && !namedSelf) {
           // nextSpeaker routing already moved the target to front of turnQueue
           // (done in applyAiResult), so just continue the loop
           console.log(`[dm-directed] Director named next speaker: ${lastMsg.nextSpeaker}`);
         } else {
-          // Director didn't name anyone — round over
-          console.log('[dm-directed] Director did not name a next speaker, ending round');
+          console.log(`[dm-directed] Director ${namedSelf ? 'named itself' : 'did not name anyone'} — ending round`);
           break;
         }
       } else {
@@ -1878,15 +1887,19 @@ export async function applyAiResult(participant, result) {
     applyActorManagement(result.manageActors, actor.name, actor.color);
   }
 
-  // Next-speaker routing (any actor can route if the result includes it)
+  // Next-speaker routing (any actor can route if the result includes it).
+  // An actor naming itself is ignored — re-queuing the current speaker makes it
+  // speak again immediately, which loops the conversation onto one actor.
   if (result.nextSpeaker) {
     const targetName = String(result.nextSpeaker).trim().toLowerCase();
     const targetActor = state.actors.find(a => a.enabled && a.name.toLowerCase() === targetName);
-    if (targetActor) {
+    if (targetActor && targetActor.id !== actor.id) {
       console.debug(`[turns] ${actor.name} routed next turn to: ${targetActor.name}`);
       state.turnQueue = state.turnQueue.filter(id => id !== targetActor.id);
       state.turnQueue.unshift(targetActor.id);
       saveState();
+    } else if (targetActor && targetActor.id === actor.id) {
+      console.debug(`[turns] ${actor.name} tried to route to itself — ignored`);
     }
   }
 
