@@ -1296,6 +1296,16 @@ export async function applyBlueprint(id) {
   if (!bp) return;
 
   const actors = blueprintCast(id).map(buildActorFromTemplate);
+
+  // Blueprints declare their director's behavioral mode via systems.dmRole.role.
+  // Map that onto the director actor's directorMode field so turns.js reads it
+  // from the actor (the new source of truth) rather than the scenario systems.
+  const bpDirectorMode = bp.scenario?.systems?.dmRole?.role;
+  if (bpDirectorMode) {
+    const director = actors.find(a => a.canDirect);
+    if (director) director.directorMode = bpDirectorMode;
+  }
+
   const normalized = normalizeState({
     ...state,
     scenario: mergeScenario(state.scenario, bp.scenario || {}),

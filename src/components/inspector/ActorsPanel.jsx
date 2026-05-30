@@ -101,6 +101,7 @@ export function ActorsPanel() {
         canInject: false,
         canResearch: false,
         canSeeThoughts: false,
+        directorMode: 'facilitator',
         authority: 50,
         turnSchedule: 'normal',
         actorMode: 'participant',
@@ -186,6 +187,7 @@ export function ActorsPanel() {
                 canManageCast: !!tpl.canManageCast,
                 canInject: !!tpl.canInject,
                 canResearch: !!tpl.canResearch,
+                directorMode: tpl.directorMode || 'facilitator',
                 canSeeThoughts: !!tpl.canSeeThoughts,
                 authority: tpl.authority ?? 50,
                 turnSchedule: tpl.turnSchedule || 'normal',
@@ -316,6 +318,26 @@ export function ActorsPanel() {
                     </div>
                   </div>
                 </div>
+
+                {/* ── Director Mode (only for canDirect actors) ── */}
+                {a.canDirect && (
+                  <>
+                    <div className="actor-section-divider" />
+                    <Field label="Director Mode" info="How the Director runs the conversation. Narrator describes the scene; Facilitator guides discussion; Arbiter enforces rules; Observer stays silent unless addressed.">
+                      <select value={a.directorMode || 'facilitator'} onChange={e => updateActor(a.id, 'directorMode', e.target.value)}>
+                        <option value="narrator">Narrator — describes scene, drives story</option>
+                        <option value="facilitator">Facilitator — guides discussion, summarizes</option>
+                        <option value="arbiter">Arbiter — enforces rules, delivers verdicts</option>
+                        <option value="observer">Observer — silent unless directly addressed</option>
+                      </select>
+                    </Field>
+                    {(a.directorMode || 'facilitator') === 'narrator' && (
+                      <div className="field-hint" style={{ marginTop: -4 }}>
+                        Narrator mode — the Director describes scene context and consequences. Stage Directions (in Scenario → Systems) should also be enabled.
+                      </div>
+                    )}
+                  </>
+                )}
 
                 {/* ── Advanced (collapsed by default) ── */}
                 <details className="actor-advanced card-disclosure">

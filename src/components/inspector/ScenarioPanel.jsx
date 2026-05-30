@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import * as Ic from '../Icons';
-import { Field, Toggle, Seg } from '../shared/FormControls';
+import { Field, Seg } from '../shared/FormControls';
 import { useForumState, mutateState } from '../../hooks/useForumState';
 import { navigateToPanel } from '../../hooks/navigation.js';
 
@@ -22,18 +22,17 @@ export function ScenarioPanel() {
     });
   };
 
-  // Warn if DM narrates but an actor is named "Narrator" or "Environment"
-  const dmNarrates = systems.dmRole?.narrates ?? (mode === 'story');
+  // Warn if the director is in Narrator mode but a non-director actor has a narrator-like name
+  const directorMode = actors.find(a => a.canDirect && a.enabled)?.directorMode || 'facilitator';
   const collisionActors = useMemo(() => {
-    if (!dmNarrates) return [];
-    return actors.filter(a => a.enabled && /narrator|environment/i.test(`${a.name} ${a.role}`));
-  }, [actors, dmNarrates]);
+    if (directorMode !== 'narrator') return [];
+    return actors.filter(a => a.enabled && !a.canDirect && /narrator|environment/i.test(`${a.name} ${a.role}`));
+  }, [actors, directorMode]);
 
   const stageEnabled = systems.stageDirections?.enabled ?? (mode === 'story');
   const stageIntensity = systems.stageDirections?.intensity ?? 'moderate';
   const stageMaxShare = systems.stageDirections?.maxTokenShare ?? 0.2;
   const alignStrictness = systems.alignment?.strictness ?? (mode === 'problem' ? 'strict' : 'moderate');
-  const dmRoleVal = systems.dmRole?.role ?? (mode === 'story' ? 'narrator' : 'facilitator');
   const docSchema = systems.document?.schema ?? (mode === 'story' ? 'story-bible' : mode === 'problem' ? 'findings' : 'freeform');
 
   return (
@@ -66,7 +65,8 @@ export function ScenarioPanel() {
 
         {collisionActors.length > 0 && (
           <div className="warn-card" style={{ marginBottom: 10 }}>
-            ⚠ DM is set to narrate, but {collisionActors.map(a => a.name).join(', ')} has a narrator-like role. Consider disabling or renaming them to avoid narration conflicts.
+            ⚠ Director is in Narrator mode, but {collisionActors.map(a => a.name).join(', ')} has a narrator-like role. Consider disabling or renaming to avoid conflicts. Director mode is set on the director actor card in{' '}
+            <button className="link-btn" onClick={() => navigateToPanel('actors')}>Actors</button>.
           </div>
         )}
 
@@ -95,23 +95,6 @@ export function ScenarioPanel() {
             </Field>
           </>
         )}
-
-        <Field label="DM Role" info="The director/host actor's job: narrate the scene, facilitate the discussion, settle disputes, or stay out of the way.">
-          <select value={dmRoleVal} onChange={e => updateSystem('dmRole', 'role', e.target.value)}>
-            <option value="narrator">Narrator — describes scene, drives story</option>
-            <option value="facilitator">Facilitator — guides discussion, summarizes</option>
-            <option value="arbiter">Arbiter — enforces rules, delivers verdicts</option>
-            <option value="observer">Observer — silent unless directly addressed</option>
-          </select>
-        </Field>
-
-        <Field label="DM Narrates">
-          <Toggle
-            checked={systems.dmRole?.narrates ?? (mode === 'story')}
-            onChange={v => updateSystem('dmRole', 'narrates', v)}
-            label={systems.dmRole?.narrates ?? (mode === 'story') ? 'On — DM describes scene' : 'Off — DM facilitates only'}
-          />
-        </Field>
 
         <Field label="Alignment Strictness" info="How firmly actors are kept on the scenario's Objective. Stricter settings inject 'get back on topic' nudges when the discussion drifts.">
           <select value={alignStrictness} onChange={e => updateSystem('alignment', 'strictness', e.target.value)}>

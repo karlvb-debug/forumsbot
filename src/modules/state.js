@@ -238,6 +238,7 @@ function normalizeState(value) {
     canResearch: !!(actor.canResearch || actor.isResearcher),
     canSeeThoughts: !!(actor.canSeeThoughts),
     canInject: !!(actor.canInject),
+    directorMode: actor.directorMode || 'facilitator',
     authority: typeof actor.authority === "number" ? Math.max(0, Math.min(100, actor.authority)) : 50,
     turnSchedule: actor.turnSchedule || 'normal',
     actorMode: actor.actorMode || 'participant',

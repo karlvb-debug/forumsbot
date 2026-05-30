@@ -28,8 +28,16 @@ export function resolveSystemSettings() {
     alignmentAnchorInPrompt:  sys.alignment?.anchorInPrompt            ?? false,
     alignmentNudgeStyle:      sys.alignment?.nudgeStyle                ?? 'gentle-nudge',
     turnStrategy:             sys.turnRouting?.strategy               ?? 'round-robin',
-    dmNarrates:               sys.dmRole?.narrates                    ?? isLegacyStory,
-    dmRole:                   sys.dmRole?.role                        ?? (isLegacyStory ? 'narrator' : 'facilitator'),
+    // Director mode comes from the director actor's directorMode field.
+    // Fall back to legacy sys.dmRole for sessions saved before this change.
+    dmRole: (() => {
+      const director = state.actors?.find(a => a.canDirect && a.enabled);
+      return director?.directorMode
+        || sys.dmRole?.role
+        || (isLegacyStory ? 'narrator' : 'facilitator');
+    })(),
+    // dmNarrates is derived — no longer a separate toggle.
+    get dmNarrates() { return this.dmRole === 'narrator'; },
     dmCanIntroduceElements:   sys.dmRole?.canIntroduceElements         ?? isLegacyStory,
     documentSchema:           sys.document?.schema                    ?? (mode === 'story' ? 'story-bible' : mode === 'problem' ? 'findings' : 'freeform'),
   };
