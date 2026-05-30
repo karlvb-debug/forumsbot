@@ -3,7 +3,11 @@ import * as Ic from '../Icons';
 
 export const Field = ({ label, hint, children, info }) => {
   const autoId = React.useId();
-  const single = React.isValidElement(children) && React.Children.count(children) === 1;
+  // A Fragment is a valid element but only accepts `key`/`children`, so it can't
+  // receive an injected id/aria-describedby — treat it like a multi-child group.
+  const single = React.isValidElement(children)
+    && React.Children.count(children) === 1
+    && children.type !== React.Fragment;
   const controlId = single ? (children.props.id || autoId) : undefined;
   const hintId = hint ? `${autoId}-hint` : undefined;
 
