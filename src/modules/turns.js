@@ -242,7 +242,7 @@ async function fireTriggerActors(eventName, eventData = {}, signal = null, exclu
         nextActor,
       });
       if (result && result.action !== 'skip') {
-        await applyAiResult({ kind: 'actor', data: actor }, result);
+        await applyAiResult({ kind: 'actor', data: actor }, result, { justSpokeId: excludeId });
       }
     } catch (err) {
       console.warn(`[turns] trigger "${eventName}" actor "${actor.name}" error:`, err.message);
@@ -280,7 +280,7 @@ async function runBetweenTurnActors(signal, justSpokeId = null) {
     try {
       const result = await askActor(actor, signal, null, false, { nextActor });
       if (result && result.action !== 'skip') {
-        await applyAiResult({ kind: 'actor', data: actor }, result);
+        await applyAiResult({ kind: 'actor', data: actor }, result, { justSpokeId });
       }
     } catch (err) {
       console.warn(`[turns] between-turn actor "${actor.name}" error:`, err.message);
@@ -1847,7 +1847,7 @@ function applyActorManagement(spec, managerName, managerColor) {
   }
 }
 
-export async function applyAiResult(participant, result) {
+export async function applyAiResult(participant, result, { justSpokeId = null } = {}) {
   console.debug(`[applyAiResult] ${participant.data.name}:`, {
     action: result.action,
     thoughtLen: result.thought?.length || 0,
@@ -1888,16 +1888,23 @@ export async function applyAiResult(participant, result) {
   }
 
   // Next-speaker routing (any actor can route if the result includes it).
-  // An actor naming itself is ignored — re-queuing the current speaker makes it
-  // speak again immediately, which loops the conversation onto one actor.
+  // Two self-routing guards:
+  //   1. An actor naming itself is ignored — would speak again immediately.
+  //   2. A background actor naming the actor who just spoke is ignored — prevents
+  //      the common loop where an on_every_turn director keeps re-routing to the
+  //      most-recent speaker (e.g. Showrunner → CD → Showrunner → CD …).
   if (result.nextSpeaker) {
     const targetName = String(result.nextSpeaker).trim().toLowerCase();
     const targetActor = state.actors.find(a => a.enabled && a.name.toLowerCase() === targetName);
     if (targetActor && targetActor.id !== actor.id) {
-      console.debug(`[turns] ${actor.name} routed next turn to: ${targetActor.name}`);
-      state.turnQueue = state.turnQueue.filter(id => id !== targetActor.id);
-      state.turnQueue.unshift(targetActor.id);
-      saveState();
+      if (justSpokeId && targetActor.id === justSpokeId) {
+        console.debug(`[turns] ${actor.name} tried to route to just-spoke actor ${targetActor.name} — ignored (loop prevention)`);
+      } else {
+        console.debug(`[turns] ${actor.name} routed next turn to: ${targetActor.name}`);
+        state.turnQueue = state.turnQueue.filter(id => id !== targetActor.id);
+        state.turnQueue.unshift(targetActor.id);
+        saveState();
+      }
     } else if (targetActor && targetActor.id === actor.id) {
       console.debug(`[turns] ${actor.name} tried to route to itself — ignored`);
     }
