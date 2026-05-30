@@ -8,14 +8,19 @@ import { normalizeDocumentEntry } from './state.js';
 // Sync KB_STORE → state.documents on load. Called once from DocumentsPanel on mount.
 export async function syncIdbToDocuments() {
   if (!storageAvailable || !db) return;
-  const tx = db.transaction(KB_STORE, "readonly");
-  const idbEntries = await idbRequest(tx.objectStore(KB_STORE).getAll());
-  for (const idbEntry of idbEntries) {
-    const exists = (state.documents || []).some(d => d.id === idbEntry.id);
-    if (!exists) {
-      if (!state.documents) state.documents = [];
-      state.documents.push(normalizeDocumentEntry(idbEntry));
+  try {
+    const tx = db.transaction(KB_STORE, "readonly");
+    const idbEntries = await idbRequest(tx.objectStore(KB_STORE).getAll());
+    if (!state.documents) state.documents = [];
+    const existingIds = new Set(state.documents.map(d => d.id));
+    for (const idbEntry of idbEntries) {
+      if (!existingIds.has(idbEntry.id)) {
+        state.documents.push(normalizeDocumentEntry(idbEntry));
+        existingIds.add(idbEntry.id);
+      }
     }
+  } catch (err) {
+    console.warn('[knowledge] syncIdbToDocuments failed:', err.message);
   }
 }
 
@@ -25,25 +30,36 @@ export async function getAllKbEntries() {
 
 export async function putKbEntry(entry) {
   if (!state.documents) state.documents = [];
-  const idx = state.documents.findIndex(e => e.id === entry.id);
+  // Persist the SAME normalized shape we hold in memory, so a reload via
+  // syncIdbToDocuments doesn't surface a different shape than was just saved.
+  const normalized = normalizeDocumentEntry(entry);
+  const idx = state.documents.findIndex(e => e.id === normalized.id);
   if (idx >= 0) {
-    state.documents[idx] = normalizeDocumentEntry(entry);
+    state.documents[idx] = normalized;
   } else {
-    state.documents.push(normalizeDocumentEntry(entry));
+    state.documents.push(normalized);
   }
   if (storageAvailable && db) {
-    const tx = db.transaction(KB_STORE, "readwrite");
-    tx.objectStore(KB_STORE).put(entry);
-    await idbDone(tx);
+    try {
+      const tx = db.transaction(KB_STORE, "readwrite");
+      tx.objectStore(KB_STORE).put(normalized);
+      await idbDone(tx);
+    } catch (err) {
+      console.warn('[knowledge] putKbEntry failed:', err.message);
+    }
   }
 }
 
 export async function deleteKbEntry(id) {
   state.documents = (state.documents || []).filter(e => e.id !== id);
   if (storageAvailable && db) {
-    const tx = db.transaction(KB_STORE, "readwrite");
-    tx.objectStore(KB_STORE).delete(id);
-    await idbDone(tx);
+    try {
+      const tx = db.transaction(KB_STORE, "readwrite");
+      tx.objectStore(KB_STORE).delete(id);
+      await idbDone(tx);
+    } catch (err) {
+      console.warn('[knowledge] deleteKbEntry failed:', err.message);
+    }
   }
 }
 

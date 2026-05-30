@@ -274,7 +274,23 @@ export function registerSaveCallback(fn) {
 
 export function saveState() {
   const { messages, autoRunning, ...persisted } = state;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...persisted, messages: [] }));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...persisted, messages: [] }));
+  } catch (err) {
+    // Most likely QuotaExceededError — large diagnostics logs and/or imported
+    // PR diffs in documents can blow the localStorage budget. Shed the heaviest
+    // disposable arrays and retry once before giving up.
+    try {
+      const trimmed = {
+        ...persisted,
+        messages: [],
+        diagnostics: { ...(persisted.diagnostics || {}), apiCallLogs: [], transitions: [] },
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    } catch (err2) {
+      console.warn('[state] saveState failed (storage quota?):', err2.message);
+    }
+  }
   if (_onSaveCallback) _onSaveCallback();
 }
 

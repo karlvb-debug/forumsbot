@@ -1,15 +1,33 @@
 import { colors } from './constants.js';
 import { newDocument } from './knowledge.js';
 
+// Diff status → display marker. Single source of truth (was duplicated inline).
+const DIFF_STATUS_MARK = { added: "+", removed: "−", modified: "~", renamed: "↷" };
+const diffMark = (status) => DIFF_STATUS_MARK[status] || "·";
+
 // ── GitHub PR import ─────────────────────────────────────────────────────────
 
-export async function importGithubPr(url, token = "") {
-  const res = await fetch("/api/github-pr", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url, token: token.trim() || undefined })
-  });
-  const data = await res.json();
+export async function importGithubPr(url, token = "", { timeoutMs = 20000 } = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res;
+  try {
+    res = await fetch("/api/github-pr", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, token: token.trim() || undefined }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    throw new Error(err.name === "AbortError"
+      ? `GitHub fetch timed out after ${Math.round(timeoutMs / 1000)}s`
+      : `GitHub fetch failed: ${err.message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+  // Guard .json() — a proxy/error path may return a non-JSON body, which would
+  // otherwise throw and mask the real HTTP status.
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `GitHub fetch failed (${res.status})`);
   return data;
 }
@@ -50,8 +68,7 @@ export function buildCodeReviewDocuments(prData) {
   if ((prData.files || []).length <= LARGE_PR_FILE_THRESHOLD) {
     // Small PR: one combined diff document
     const diffLines = (prData.files || []).map(f => {
-      const statusEmoji = { added: "+", removed: "−", modified: "~", renamed: "↷" }[f.status] || "·";
-      return `### ${statusEmoji} ${f.filename} (+${f.additions} −${f.deletions})\n\`\`\`diff\n${f.patch}\n\`\`\``;
+      return `### ${diffMark(f.status)} ${f.filename} (+${f.additions} −${f.deletions})\n\`\`\`diff\n${f.patch}\n\`\`\``;
     });
     const diffContent = diffLines.join("\n\n");
     docs.push(newDocument({
@@ -67,8 +84,7 @@ export function buildCodeReviewDocuments(prData) {
   } else {
     // Large PR: one document per file
     for (const f of (prData.files || [])) {
-      const statusEmoji = { added: "+", removed: "−", modified: "~", renamed: "↷" }[f.status] || "·";
-      const content = `${statusEmoji} ${f.filename} (+${f.additions} −${f.deletions})\n\`\`\`diff\n${f.patch}\n\`\`\``;
+      const content = `${diffMark(f.status)} ${f.filename} (+${f.additions} −${f.deletions})\n\`\`\`diff\n${f.patch}\n\`\`\``;
       docs.push(newDocument({
         title: f.filename,
         type: "document",

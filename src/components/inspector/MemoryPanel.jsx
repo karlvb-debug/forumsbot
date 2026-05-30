@@ -153,11 +153,14 @@ export function MemoryPanel() {
                     <div>{a.text}</div>
                   </div>
                   <button className="btn sm primary" style={{ marginLeft: 6, flexShrink: 0 }} onClick={() => mutateState(s => {
-                    const p = s.memory.pendingAnchors[i];
-                    if (p) { s.anchors.push(p); s.memory.pendingAnchors.splice(i, 1); }
+                    // Locate by identity, not the render-time index — the pending
+                    // list can change between render and click.
+                    const idx = s.memory.pendingAnchors.findIndex(p => p === a || (a.id && p.id === a.id));
+                    if (idx >= 0) { s.anchors.push(s.memory.pendingAnchors[idx]); s.memory.pendingAnchors.splice(idx, 1); }
                   })}>⚓ Approve</button>
                   <button className="btn sm ghost" style={{ marginLeft: 4, flexShrink: 0 }} onClick={() => mutateState(s => {
-                    s.memory.pendingAnchors.splice(i, 1);
+                    const idx = s.memory.pendingAnchors.findIndex(p => p === a || (a.id && p.id === a.id));
+                    if (idx >= 0) s.memory.pendingAnchors.splice(idx, 1);
                   })}>Dismiss</button>
                 </div>
               ))}

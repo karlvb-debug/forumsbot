@@ -183,7 +183,9 @@ export function unwrapParsedEnvelope(value) {
  * We try appending ",  "}, "}  to recover a parseable object.
  */
 function tryRepairTruncatedJson(content) {
-  const suffixes = ['"}\n', '"}', '"\n}', '" }', '"}}\n', '"}}"'];
+  // Note: '"}}"' (the old last entry) appended a stray quote after the closing
+  // brace, producing invalid JSON that could never parse — dropped.
+  const suffixes = ['"}\n', '"}', '"\n}', '" }', '"}}\n', '"}}'];
   for (const suffix of suffixes) {
     try {
       const envelope = unwrapParsedEnvelope(JSON.parse(content + suffix));
@@ -377,26 +379,27 @@ export function trimWords(text, limit) {
   return `${words.slice(0, limit).join(" ")}...`;
 }
 
+// Stop words for keyword extraction. Hoisted to module scope (was rebuilt on
+// every call) and de-duplicated (the literal previously listed many words twice).
+const STOP_WORDS = new Set([
+  "about", "above", "after", "again", "against", "all", "also", "am", "an", "and", "any",
+  "are", "aren", "as", "at", "be", "because", "been", "before", "being", "below", "between",
+  "both", "but", "by", "can", "cannot", "could", "did", "didn", "do", "does", "doesn",
+  "doing", "don", "down", "during", "each", "every", "few", "for", "from", "further", "had",
+  "hadn", "has", "hasn", "have", "haven", "having", "he", "her", "here", "hers",
+  "herself", "him", "himself", "his", "how", "if", "in", "into", "is", "isn", "it",
+  "its", "itself", "just", "let", "like", "me", "more", "most", "mustn", "my", "myself",
+  "need", "no", "nor", "not", "of", "off", "on", "once", "only", "or", "other", "ought",
+  "our", "ours", "ourselves", "out", "over", "own", "same", "shan", "she", "should",
+  "shouldn", "so", "some", "such", "than", "that", "the", "their", "theirs", "them",
+  "themselves", "then", "there", "these", "they", "this", "those", "through", "to", "too",
+  "under", "until", "up", "very", "was", "wasn", "we", "were", "weren", "what", "when",
+  "where", "which", "while", "who", "whom", "why", "will", "with", "would", "wouldn",
+  "you", "your", "yours", "yourself", "yourselves"
+]);
+
 export function extractKeywords(text) {
-  const stop = new Set([
-    "about", "after", "again", "also", "because", "before", "being", "could", "every", 
-    "from", "have", "into", "just", "like", "more", "need", "only", "other", "should", 
-    "that", "their", "there", "these", "they", "this", "through", "with", "would", "your",
-    "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", 
-    "aren", "as", "at", "be", "because", "been", "before", "being", "below", "between", 
-    "both", "but", "by", "can", "cannot", "could", "did", "didn", "do", "does", "doesn", 
-    "doing", "don", "down", "during", "each", "few", "for", "from", "further", "had", 
-    "hadn", "has", "hasn", "have", "haven", "having", "he", "her", "here", "hers", 
-    "herself", "him", "himself", "his", "how", "if", "in", "into", "is", "isn", "it", 
-    "its", "itself", "let", "me", "more", "most", "mustn", "my", "myself", "no", "nor", 
-    "not", "of", "off", "on", "once", "only", "or", "other", "ought", "our", "ours", 
-    "ourselves", "out", "over", "own", "same", "shan", "she", "should", "shouldn", "so", 
-    "some", "such", "than", "that", "the", "their", "theirs", "them", "themselves", 
-    "then", "there", "these", "they", "this", "those", "through", "to", "too", "under", 
-    "until", "up", "very", "was", "wasn", "we", "were", "weren", "what", "when", "where", 
-    "which", "while", "who", "whom", "why", "will", "with", "would", "wouldn", "you", 
-    "your", "yours", "yourself", "yourselves"
-  ]);
+  const stop = STOP_WORDS;
   const words = String(text || "").toLowerCase().match(/[a-z0-9][a-z0-9-]{2,}/g) || [];
   const counts = new Map();
   words.forEach((word) => {

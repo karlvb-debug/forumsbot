@@ -142,10 +142,21 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
     return;
   }
   if (state.memory.isSummarizing) return;
+  // Claim the lock synchronously, BEFORE the first await — otherwise two
+  // background cycles firing in the same tick both read `false` here, both
+  // proceed, and we double-summarize / double-increment cycleCount.
+  state.memory.isSummarizing = true;
 
-  const messages = sourceMessages?.length ? sourceMessages : await messagesSinceLastSummary();
-  const usableMessages = messages.length ? messages : state.messages.slice(-PROMPT_MESSAGE_LIMIT);
+  let messages, usableMessages;
+  try {
+    messages = sourceMessages?.length ? sourceMessages : await messagesSinceLastSummary();
+    usableMessages = messages.length ? messages : state.messages.slice(-PROMPT_MESSAGE_LIMIT);
+  } catch (err) {
+    state.memory.isSummarizing = false;
+    throw err;
+  }
   if (!usableMessages.length) {
+    state.memory.isSummarizing = false;
     if (reason === "manual") setStatus("No conversation to summarize yet.", "warn");
     return;
   }
@@ -160,7 +171,6 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
   }
 
   const isBackground = reason === "cycle" || reason === "round";
-  state.memory.isSummarizing = true;
 
   if (isBackground) {
     state.memory.status = "Updating memory in background..."; saveState();

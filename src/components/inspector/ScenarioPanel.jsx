@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import * as Ic from '../Icons';
 import { Field, Toggle, Seg } from '../shared/FormControls';
-import { useForumState, mutateState, saveState } from '../../hooks/useForumState';
+import { useForumState, mutateState } from '../../hooks/useForumState';
 import { applyScenarioPreset, applyBlueprint, requestConfirmPublic } from '../../modules/session.js';
 import { BLUEPRINTS } from '../../modules/blueprints.js';
 
@@ -27,12 +27,12 @@ export function ScenarioPanel() {
 
   const updateScenario = (key, val) => mutateState(s => { s.scenario[key] = val; });
   const updateSystem = (group, key, val) => {
+    // mutateState already persists via saveState — no extra call needed.
     mutateState(s => {
       if (!s.scenario.systems) s.scenario.systems = {};
       if (!s.scenario.systems[group]) s.scenario.systems[group] = {};
       s.scenario.systems[group][key] = val;
     });
-    saveState();
   };
 
   const messageCount = useForumState(s => (s.messages || []).length);

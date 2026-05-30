@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo, useState } from 'react';
+import React, { useRef, useEffect, useMemo, useState, useCallback } from 'react';
 import * as Ic from './Icons';
 import { useForumState, mutateState } from '../hooks/useForumState';
 import { useStreaming } from '../hooks/useStreaming';
@@ -32,7 +32,7 @@ function cleanMessageText(raw) {
   return t.replace(/[ \t]{2,}/g, ' ').trim();
 }
 
-function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork }) {
+const MessageCard = React.memo(function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork }) {
   const [thoughtExpanded, setThoughtExpanded] = useState(false);
   const [msgExpanded, setMsgExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -165,7 +165,7 @@ function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork })
       </div>
     </article>
   );
-}
+});
 
 function StreamingBubble({ streaming }) {
   if (!streaming) return null;
@@ -266,8 +266,9 @@ export function Transcript({ showThoughts }) {
     }
   }, [messages.length, streaming?.text]);
 
-  const turnCount = messages.filter(m => m.type !== 'skip' && m.type !== 'system').length;
-  const anchoredCount = messages.filter(m => m.anchored).length;
+  // Memoized so high-frequency streaming re-renders don't re-scan all messages.
+  const turnCount = useMemo(() => messages.filter(m => m.type !== 'skip' && m.type !== 'system').length, [messages]);
+  const anchoredCount = useMemo(() => messages.filter(m => m.anchored).length, [messages]);
 
   // Search: IDs of messages matching the query
   const searchLower = searchQuery.toLowerCase().trim();
@@ -302,7 +303,9 @@ export function Transcript({ showThoughts }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [searchOpen]);
 
-  const onAnchor = (msgId) => {
+  // Stable handler identities so the memoized MessageCard list does not
+  // re-render on every streaming token. None close over render-scope values.
+  const onAnchor = useCallback((msgId) => {
     mutateState(s => {
       const msg = s.messages.find(m => m.id === msgId);
       if (msg) {
@@ -323,19 +326,19 @@ export function Transcript({ showThoughts }) {
         }
       }
     });
-  };
+  }, []);
 
-  const onFeedback = (msgId, value) => {
+  const onFeedback = useCallback((msgId, value) => {
     mutateState(s => {
       const msg = s.messages.find(m => m.id === msgId);
       if (msg) msg.feedback = msg.feedback === value ? "" : value;
     });
-  };
+  }, []);
 
-  const onFork = async (msgId) => {
+  const onFork = useCallback(async (msgId) => {
     const session = await import('../modules/session.js');
     await session.forkSessionAtMessage(msgId);
-  };
+  }, []);
 
   return (
     <div className="transcript" ref={scrollRef}>
@@ -401,7 +404,7 @@ export function Transcript({ showThoughts }) {
         return (
           <div
             key={item.id}
-            ref={el => { if (el) matchRefs.current[msg.id] = el; }}
+            ref={el => { if (el) matchRefs.current[msg.id] = el; else delete matchRefs.current[msg.id]; }}
             className={isActiveMatch ? 'search-match-active' : isSearchMatch ? 'search-match' : undefined}
           >
             <MessageCard

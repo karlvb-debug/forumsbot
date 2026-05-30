@@ -164,8 +164,9 @@ function selectFields(actor, options = {}) {
   const required = [];
   const optional = [];
 
-  if (showThoughts) required.push('thought');
-  else required.push('thought'); // always include; value is "" when thoughts off
+  // `thought` is always required in the schema; when thoughts are off the model
+  // simply returns "". (The showThoughts param is kept for the callers' intent.)
+  required.push('thought');
 
   // Director
   if (actor.canDirect) {

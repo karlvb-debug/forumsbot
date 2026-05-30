@@ -1,6 +1,6 @@
 import React from 'react';
 import { Field, Toggle } from '../shared/FormControls';
-import { useForumState, mutateState, saveState } from '../../hooks/useForumState';
+import { useForumState, mutateState } from '../../hooks/useForumState';
 
 export function GoalPanel() {
   const autoStop = useForumState(s => s.autoStop || {});
@@ -17,8 +17,8 @@ export function GoalPanel() {
 
   const handleCopyObjective = () => {
     if (!objective) return;
+    // mutateState already persists — no extra saveState needed.
     mutateState(s => { s.autoStop.goal = objective; });
-    saveState();
   };
 
   const canCheck = !!model && !!autoStop.goal?.trim() && messages.length > 0;
