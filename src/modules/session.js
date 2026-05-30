@@ -1304,6 +1304,25 @@ export async function applyBlueprint(id) {
   });
   setState(normalized);
   state.turnQueue = [];
+
+  // Seed any working documents the blueprint declares (e.g. the Writers' Room's
+  // Outline + Draft) so the cast has something to write into via documentEdits.
+  // Always AI-editable and visible to all, since that is the point of seeding.
+  if (Array.isArray(bp.documents) && bp.documents.length) {
+    const { newDocument, putKbEntry, countWords } = await import('./knowledge.js');
+    for (const spec of bp.documents) {
+      const doc = newDocument({
+        title: spec.title || 'Working Document',
+        content: spec.content || '',
+        aiEditable: true,
+        target: 'all',
+        enabled: true,
+        wordCount: countWords(spec.content || ''),
+      });
+      await putKbEntry(doc);
+    }
+  }
+
   saveState();
   setStatus(`Blueprint "${bp.label}" applied.`, 'ok');
 }

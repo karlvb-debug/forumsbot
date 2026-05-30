@@ -177,6 +177,41 @@ describe('blueprints', () => {
     expect(state.scenario.title).toBe('Code Review');
     expect(state.autoStop.roundsRun).toBe(0);
   });
+
+  it("writers' room blueprint exists and is distinct from the role-play one", async () => {
+    const { getBlueprint } = await import('./blueprints.js');
+    const room = getBlueprint('writers-room');
+    const roleplay = getBlueprint('story-writing');
+    expect(room).toBeTruthy();
+    expect(roleplay).toBeTruthy();
+    // The writing room is NOT role-play: stage directions off, facilitator DM.
+    expect(room.scenario.systems.stageDirections.enabled).toBe(false);
+    expect(room.scenario.systems.dmRole.role).toBe('facilitator');
+    // Role-play keeps its in-character narrator.
+    expect(roleplay.scenario.systems.dmRole.narrates).toBe(true);
+    // Seeds the two working documents the team writes into.
+    expect(room.documents.map(d => d.title)).toEqual(['Story Outline', 'Story Draft']);
+  });
+
+  it("applying the writers' room seeds AI-editable working documents", async () => {
+    const { applyBlueprint } = await import('./session.js');
+    state.messages = [];
+    state.documents = [];
+    await applyBlueprint('writers-room');
+    expect(state.actors.length).toBe(5);
+    const titles = state.documents.map(d => d.title);
+    expect(titles).toContain('Story Outline');
+    expect(titles).toContain('Story Draft');
+    // Must be writable by the cast and visible to all, or they can't draft into them.
+    for (const d of state.documents) {
+      expect(d.aiEditable).toBe(true);
+      expect(d.target).toBe('all');
+    }
+    // The Prose Writer carries its raised drafting budget.
+    const writer = state.actors.find(a => a.role === 'Drafting Lead');
+    expect(writer).toBeTruthy();
+    expect(writer.maxTokens).toBe(1400);
+  });
 });
 
 describe('configurations', () => {

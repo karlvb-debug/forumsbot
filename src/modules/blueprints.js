@@ -197,6 +197,50 @@ export const ACTOR_LIBRARY = [
     voice: 'Distinct and in-character.',
     temperature: 0.95, color: C.rust,
   },
+  // Writers' room — a team that composes a story FROM the user's concept and
+  // writes it into a working document (not in-character role-play).
+  {
+    key: 'showrunner', group: 'Writers Room', label: '🎬 Showrunner',
+    name: 'Showrunner', role: 'Lead Editor & Facilitator',
+    persona: 'Runs the writers\' room: turns the user\'s concept into a working plan, keeps the team moving from brainstorm → outline → draft → revision, and makes the final call when the room disagrees. Decides when the outline is solid enough to start drafting prose.',
+    goal: 'Ship a finished story draft that honors the user\'s concept.',
+    voice: 'Decisive, organized, encouraging.',
+    canDirect: true, canInject: true, turnSchedule: 'every-turn', actorMode: 'background',
+    triggerOn: ['on_every_turn', 'on_user_message'],
+    temperature: 0.6, maxTokens: 700, color: C.gold,
+  },
+  {
+    key: 'concept-developer', group: 'Writers Room', label: '💡 Concept Developer',
+    name: 'Concept Developer', role: 'Premise & Ideas',
+    persona: 'Generates and sharpens story concepts from the user\'s seed idea: premise, hook, themes, genre, "what if" turns. Offers concrete options rather than vague directions, and records the chosen direction in the Story Outline.',
+    goal: 'Land on a premise worth writing.',
+    voice: 'Imaginative, generative, offers concrete alternatives.',
+    temperature: 0.95, color: C.purple,
+  },
+  {
+    key: 'world-character-builder', group: 'Writers Room', label: '🌍 Character & World Builder',
+    name: 'Character & World Builder', role: 'Cast & Setting',
+    persona: 'Develops the cast and the world: protagonist and antagonist wants/flaws, key relationships, setting rules, and tone. Keeps the Story Outline\'s character and world sections current and consistent.',
+    goal: 'Give the story a believable cast and a coherent world.',
+    voice: 'Concrete, sensory, consistency-minded.',
+    temperature: 0.85, color: C.teal,
+  },
+  {
+    key: 'prose-writer', group: 'Writers Room', label: '✍️ Prose Writer',
+    name: 'Prose Writer', role: 'Drafting Lead',
+    persona: 'Does the actual writing. Once the outline is agreed, drafts the manuscript scene by scene into the Story Draft document using documentEdits (append/replace), following the agreed outline, characters, and tone. Writes real prose, not summaries.',
+    goal: 'Produce polished, readable manuscript prose in the draft document.',
+    voice: 'Literary, controlled, matches the story\'s tone.',
+    temperature: 0.9, maxTokens: 1400, color: C.blue,
+  },
+  {
+    key: 'story-critic', group: 'Writers Room', label: '🔍 Story Editor',
+    name: 'Story Editor', role: 'Critic & Reviser',
+    persona: 'Reads the draft critically: flags plot holes, pacing dips, inconsistent characterization, and weak prose, pointing at the specific passage. Proposes concrete revisions and applies tightening edits to the Story Draft when asked.',
+    goal: 'Make the draft tighter, clearer, and more compelling.',
+    voice: 'Sharp, specific, constructive.',
+    temperature: 0.7, color: C.rust,
+  },
 ];
 
 const lib = (key) => ACTOR_LIBRARY.find(a => a.key === key);
@@ -289,8 +333,8 @@ export const BLUEPRINTS = [
     },
   },
   {
-    id: 'story-writing', icon: '📖', label: 'Story Writing',
-    description: 'A narrator, a plot architect, and characters build a story collaboratively.',
+    id: 'story-writing', icon: '📖', label: 'Story Role-Play',
+    description: 'A narrator and characters act out a story live, in-character — interactive role-play.',
     cast: ['narrator', 'plot-architect', 'character-lead'],
     scenario: {
       mode: 'story',
@@ -305,6 +349,35 @@ export const BLUEPRINTS = [
         document: { schema: 'story-bible' },
       },
     },
+  },
+  {
+    id: 'writers-room', icon: '✍️', label: "Story Writers' Room",
+    description: "A writers' room develops your story concept, then composes the manuscript into the document editor.",
+    cast: ['showrunner', 'concept-developer', 'world-character-builder', 'prose-writer', 'story-critic'],
+    scenario: {
+      mode: 'freeform',
+      title: "Story Writers' Room",
+      premise: 'The team is developing and writing a story from the user\'s concept. Brainstorm the premise, characters, and arc into the Story Outline, then draft the manuscript into the Story Draft document. This is a writing session about the story — the team does not act it out in character.',
+      objective: 'Produce a finished, well-structured story draft in the Story Draft document that realizes the user\'s concept.',
+      systems: {
+        stageDirections: { enabled: false },
+        alignment: { strictness: 'moderate', nudgeStyle: 'gentle-nudge' },
+        turnRouting: { strategy: 'dm-directed', allowDirectAddress: true },
+        dmRole: { role: 'facilitator', narrates: false, canIntroduceElements: false },
+        document: { schema: 'freeform' },
+      },
+    },
+    // Seed working documents the room writes into via documentEdits.
+    documents: [
+      {
+        title: 'Story Outline',
+        content: '# Story Outline\n\n## Premise\n_(one or two sentences: what is this story about?)_\n\n## Themes\n\n## Characters\n\n## Setting & World\n\n## Arc / Beat Sheet\n1. \n2. \n3. \n',
+      },
+      {
+        title: 'Story Draft',
+        content: '# Story Draft\n\n_(The manuscript goes here. The Prose Writer drafts scenes into this document once the outline is agreed.)_\n',
+      },
+    ],
   },
   {
     id: 'debate', icon: '⚖️', label: 'Structured Debate',
