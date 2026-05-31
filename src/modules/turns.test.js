@@ -23,7 +23,7 @@ const { mockState } = vi.hoisted(() => {
     pendingPrivateMessages: [],
     pendingPauses: [],
     autoStop: { enabled: false, goal: '', goalCheckEnabled: false, stopOnAllSkip: false, maxRoundsEnabled: false, maxRounds: 5, roundsRun: 0 },
-    settings: { temperature: 0.8, maxTokens: 2000, topP: 1.0, repeatPenalty: 1.1, toolsEnabled: false, turboMode: false, enablePreflightRouter: false, enableHypothesisSampling: false, streamingEnabled: false, enableCrossSessionMemory: false, enableAdaptiveCompression: false },
+    settings: { temperature: 0.8, maxTokens: 2000, topP: 1.0, repeatPenalty: 1.1, toolsEnabled: false, turboMode: false, enablePreflightRouter: false, streamingEnabled: false, enableCrossSessionMemory: false, enableAdaptiveCompression: false },
     ui: { stopModal: null, pauseModal: null, awaitingUserInput: false, currentSpeaker: '' },
     diagnostics: { qualitySignals: [] },
     documents: [],
@@ -98,10 +98,7 @@ vi.mock('./memory.js', () => ({
 }));
 
 vi.mock('./telemetry.js', () => ({
-  calculateTurnMetrics: vi.fn(() => ({})),
   updateSemanticAlignment: vi.fn(),
-  calculateToolUsefulness: vi.fn(() => 0),
-  calculateInfluenceBudget: vi.fn(() => ({})),
   alignLineAttributions: vi.fn(() => []),
 }));
 

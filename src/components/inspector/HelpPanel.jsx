@@ -309,13 +309,8 @@ export function HelpPanel() {
         </ul>
         <ul style={{ margin: '4px 0 8px 0', paddingLeft: 16, lineHeight: 1.6 }}>
           <li>
-            <strong>Influence Budget</strong> — % of total words spoken per actor, showing
-            speaking-time balance across the cast.
-          </li>
-          <li>
             <strong>Optimization toggles</strong>: preflight skip router, round snapshot (KV cache
-            reuse), hypothesis sampling (parallel candidates), influence bars on messages, and
-            prompt traces in diagnostics.
+            reuse), and prompt traces in diagnostics.
           </li>
           <li>
             <strong>Gravity Sensitivity slider</strong> — at 100 = constant drift warnings; at 0 =

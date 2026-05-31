@@ -8,7 +8,7 @@ import { showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forc
 import { putMessage, getAllChunks, getActorMemory, putActorMemory } from './db.js';
 import { summarizeMemory, recallRelevantChunks, formatCurrentOutcomes, parseOutcomeJson, extractOutcomes } from './memory.js';
 import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, checkDrift } from './utils.js';
-import { calculateTurnMetrics, updateSemanticAlignment, calculateToolUsefulness, calculateInfluenceBudget, alignLineAttributions } from './telemetry.js';
+import { updateSemanticAlignment, alignLineAttributions } from './telemetry.js';
 import { preflightSkipCheck } from './preflight.js';
 import { getKbEntriesForDirector, splitDocuments, buildEditableDocSection, buildReferenceSection, buildKbSection } from './knowledge.js';
 
@@ -478,15 +478,6 @@ async function _runTurn(options = {}) {
       // just spoke, so a director doesn't immediately re-fire on itself).
       await runBetweenTurnActors(abortController.signal, participant.data.id);
       removeStreamingBubble();
-
-      // Sprint 6: Tool Usefulness Score — computed after applyAiResult so we have the final message
-      if (result.toolCalls?.length && result.message) {
-        const usefulnessScore = calculateToolUsefulness(
-          result.toolCalls.map(tc => tc.result || tc.content || ''),
-          result.message
-        );
-        if (result.trace) result.trace.toolUsefulnessScore = usefulnessScore;
-      }
 
       // Sprint 6: Distill cross-session actor memory (fire-and-forget)
       if (result.thought && state.settings.enableCrossSessionMemory !== false && !state.settings.turboMode) {

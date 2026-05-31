@@ -72,11 +72,7 @@ export interface Settings {
   gravitySensitivity: number;
   enablePreflightRouter: boolean;
   preflightThreshold: number;
-  enableHypothesisSampling: boolean;
-  hypothesisSampleCount: number;
-  hypothesisAutoSelect: boolean;
   enableCrossSessionMemory: boolean;
-  showInfluenceBars: boolean;
   streamingEnabled: boolean;
   turboMode: boolean;
   enableAdaptiveCompression: boolean;
