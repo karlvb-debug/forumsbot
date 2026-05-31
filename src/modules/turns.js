@@ -473,13 +473,6 @@ async function _runTurn(options = {}) {
         rawCompletion: result._rawCompletion || ""
       };
 
-      // Compute turn metrics for primary result
-      const previousMessages = [...state.messages];
-      const objective = state.scenario.objective || "";
-      const premise = state.scenario.premise || "";
-      const messageContent = result.message || "";
-      result.metrics = calculateTurnMetrics(messageContent, previousMessages, objective, premise);
-
       await applyAiResult(participant, result);
       // Fire every-turn background actors between turns (excluding the actor that
       // just spoke, so a director doesn't immediately re-fire on itself).
@@ -1379,8 +1372,7 @@ export async function runDirectorBrief() {
       thought: result.thought,
       color: director.color || "var(--gold)",
       toolCalls: [],
-      docEdited: false,
-      metrics: result.metrics
+      docEdited: false
     });
     setStatus("Director brief complete.", "ok");
   } catch (err) {
@@ -2098,7 +2090,7 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
     actor.skipCount = (actor.skipCount || 0) + 1;
     saveState();
     if (isBackground) return; // silent skip — no transcript entry for background actors
-    return addMessage({ type: "skip", actorId: actor.id, speaker: actor.name, content: "Skipped.", thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, metrics: result.metrics, nextSpeaker: result.nextSpeaker || "" });
+    return addMessage({ type: "skip", actorId: actor.id, speaker: actor.name, content: "Skipped.", thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, nextSpeaker: result.nextSpeaker || "" });
   }
 
   // Track cumulative words for speaking-time balance
@@ -2110,7 +2102,7 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
   actor.turnCount = (actor.turnCount || 0) + 1;
   saveState();
   if (isBackground) return; // side effects applied; background actors don't produce transcript entries
-  return addMessage({ type: msgType, actorId: actor.id, speaker: actor.name, content: result.message, thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, metrics: result.metrics, nextSpeaker: result.nextSpeaker || "" });
+  return addMessage({ type: msgType, actorId: actor.id, speaker: actor.name, content: result.message, thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, nextSpeaker: result.nextSpeaker || "" });
 }
 
 function applyDocumentEdits(edits, authorName) {

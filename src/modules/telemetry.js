@@ -160,93 +160,6 @@ function dispatchTelemetryUpdate() {
   notifyStateChange();
 }
 
-// Metrics Engine calculations per turn
-export function calculateTurnMetrics(messageContent, previousMessages, objective, premise) {
-  const content = messageContent || "";
-  const lastN = previousMessages.slice(-5).filter(m => m.content);
-
-  // 1. Novelty Score (vs last 5 messages)
-  let novelty = 1.0;
-  if (lastN.length > 0) {
-    const historicalText = lastN.map(m => m.content).join("\n");
-    // Scaled similarity fallback: novelty is 1 - similarity
-    const sim = scaledJaccardSimilarity(content, historicalText);
-    novelty = Math.max(0, 1 - (sim - 0.3) / 0.7); // rescale to [0, 1]
-  }
-
-  // 2. Premise Alignment
-  let premiseAlignment = 1.0;
-  if (premise) {
-    premiseAlignment = scaledJaccardSimilarity(content, premise);
-  }
-
-  // 3. Specificity Score
-  // Ratio of concrete nouns (capitalized word inside sentence), numbers, and code patterns, vs total words
-  const words = content.split(/\s+/).filter(Boolean);
-  let concreteCount = 0;
-  words.forEach((word, idx) => {
-    // Number patterns or code-like items (containing ., _, :, /)
-    if (/[\d\.\_\:\/]/.test(word)) {
-      concreteCount++;
-      return;
-    }
-    // Capitalized terms not at the beginning of sentence
-    if (idx > 0 && /^[A-Z][a-z]+/.test(word)) {
-      // Check if previous word ended with a sentence terminator
-      const prev = words[idx - 1];
-      if (prev && !/[\.\?\!\:]$/.test(prev)) {
-        concreteCount++;
-      }
-    }
-  });
-  const specificity = words.length ? Math.min(1.0, concreteCount / Math.max(5, words.length * 0.3)) : 0.0;
-
-  // 4. Stage Direction Percentage
-  const totalChars = content.length;
-  let stageChars = 0;
-  const matches = content.match(/\*[^*]+\*/g) || [];
-  matches.forEach(match => {
-    stageChars += match.length;
-  });
-  const stageDirectionPct = totalChars ? stageChars / totalChars : 0.0;
-
-  // 5. Repetition vs Last N (word level overlap counts)
-  let repetitionVsLastN = 0.0;
-  if (lastN.length > 0) {
-    const wordsCurrent = getWordSet(content);
-    const wordsHistory = getWordSet(lastN.map(m => m.content).join(" "));
-    if (wordsCurrent.size > 0) {
-      let overlap = 0;
-      for (const w of wordsCurrent) {
-        if (wordsHistory.has(w)) overlap++;
-      }
-      repetitionVsLastN = overlap / wordsCurrent.size;
-    }
-  }
-
-  // 6. Sprint 7: Anchor Citation Score
-  // How much of the message references settled group agreements (anchors).
-  let anchorCitationScore = 0.0;
-  const anchors = (typeof state !== 'undefined' && state?.anchors) ? state.anchors : [];
-  if (anchors.length > 0) {
-    const anchorText = anchors.map(a => a.text).join(' ');
-    anchorCitationScore = calculateAnchorCitation(content, anchorText);
-    // Boost premise alignment when the actor is building on settled ground
-    if (anchorCitationScore > 0.3) {
-      premiseAlignment = Math.min(1.0, premiseAlignment + anchorCitationScore * 0.15);
-    }
-  }
-
-  return {
-    noveltyScore: Number(novelty.toFixed(2)),
-    premiseAlignmentScore: Number(premiseAlignment.toFixed(2)),
-    specificityScore: Number(specificity.toFixed(2)),
-    stageDirectionPct: Number(stageDirectionPct.toFixed(2)),
-    repetitionVsLastN: Number(repetitionVsLastN.toFixed(2)),
-    anchorCitationScore: Number(anchorCitationScore.toFixed(2))
-  };
-}
-
 // Calculate session level metrics
 export function calculateSessionMetrics(messages, lineAttribution) {
   const completedMessages = messages.filter(m => m.type === "actor" || m.type === "dm");
@@ -312,55 +225,6 @@ export function calculateSessionMetrics(messages, lineAttribution) {
 }
 
 // ──────────────────────────────────────────────────────────────
-// Sprint 6 — Tool Usefulness Score
-//
-// Definition (from original reviewer §13.1):
-//   "Heuristic on whether the result was cited in a subsequent message."
-//
-// We measure the word-overlap ratio between the tool's returned
-// text and the actor's final message, with stop-word filtering
-// so common words don't inflate the score.
-//
-// Returns 0.0–1.0:
-//   ≥0.5  → "cited"    (tool content well-referenced)
-//   0.1–0.49 → "partial" (some overlap)
-//   <0.1  → "unused"  (tool result not referenced)
-// ──────────────────────────────────────────────────────────────
-
-const STOP_WORDS = new Set([
-  'the','a','an','and','or','but','in','on','at','to','for','of','with',
-  'is','are','was','were','be','been','being','have','has','had','do',
-  'does','did','will','would','could','should','may','might','that','this',
-  'it','its','they','their','there','then','than','so','if','as','by',
-  'not','from','into','about','also','just','more','can','all','when',
-]);
-
-// ──────────────────────────────────────────────────────────────
-// Sprint 7 — Conceptual Anchor Citation Score
-//
-// Measures how much a message references settled group anchors.
-// Uses the same word-overlap + stop-word filter as tool usefulness.
-// ──────────────────────────────────────────────────────────────
-
-export function calculateAnchorCitation(messageText, anchorText) {
-  if (!messageText || !anchorText) return 0;
-  const tokenize = (text) => new Set(
-    text.toLowerCase()
-      .replace(/[^\w\s]/g, ' ')
-      .split(/\s+/)
-      .filter(w => w.length > 3 && !STOP_WORDS.has(w))
-  );
-  const anchorWords = tokenize(anchorText);
-  const msgWords = tokenize(messageText);
-  if (anchorWords.size === 0) return 0;
-  let cited = 0;
-  for (const word of anchorWords) {
-    if (msgWords.has(word)) cited++;
-  }
-  return Number(Math.min(1, cited / anchorWords.size).toFixed(3));
-}
-
-// ──────────────────────────────────────────────────────────────
 // Sprint 7 — Influence Budget
 //
 // Per-message attribution: what fraction of a message's content
@@ -369,4 +233,3 @@ export function calculateAnchorCitation(messageText, anchorText) {
 // Returns sorted array: [{ speakerName, color, fraction }]
 // Fractions sum to ≤1.0. Speakers below 5% threshold are omitted.
 // ──────────────────────────────────────────────────────────────
-
