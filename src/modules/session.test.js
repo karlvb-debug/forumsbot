@@ -169,11 +169,13 @@ describe('blueprints', () => {
     state.messages = [];
     await applyBlueprint('code-review');
     expect(state.actors.length).toBe(4);
-    // The review lead is a background director — scheduling fields must survive
-    // (normalizeQuickStartActor would have dropped these; the blueprint builder must not).
+    // The review lead is a background director — scheduling must survive
+    // (normalizeQuickStartActor would have dropped it; the blueprint builder must
+    // not). normalizeState migrates the legacy turnSchedule:'every-turn' to a
+    // per-turn cadence.
     const lead = state.actors.find(a => a.canDirect);
     expect(lead).toBeTruthy();
-    expect(lead.turnSchedule).toBe('every-turn');
+    expect(lead.cadence).toEqual({ unit: 'turn', n: 1 });
     expect(state.scenario.title).toBe('Code Review');
     expect(state.autoStop.roundsRun).toBe(0);
   });

@@ -9,6 +9,73 @@ export function estimateTokens(text) {
   return Math.ceil((text || "").length / 4);
 }
 
+// ── Actor scheduling (cadence model) ─────────────────────────────────────────
+// A single source of truth replacing the legacy four-way `turnSchedule` enum
+// ('normal' | 'every-turn' | 'alternate' | 'on-call'). An actor is either a
+// queue participant (speaks in round-robin order) or a background actor that
+// fires on a cadence: { unit: 'turn' | 'round', n: >=1 }.
+//
+//   queue participant     → cadence: null
+//   every-turn background  → { unit: 'turn',  n: 1 }
+//   every-other-turn       → { unit: 'turn',  n: 2 }
+//   per-round background   → { unit: 'round', n: 1 }
+//   every-N-rounds         → { unit: 'round', n: N }
+
+/**
+ * Migrate any actor's legacy scheduling fields to a normalized cadence.
+ * Returns null for queue participants, or { unit, n } for background actors.
+ * Pure — does not mutate the actor.
+ */
+export function normalizeCadence(actor) {
+  if (!actor) return null;
+  // Already migrated.
+  if (actor.cadence && (actor.cadence.unit === 'turn' || actor.cadence.unit === 'round')) {
+    const n = Math.max(1, Math.floor(Number(actor.cadence.n) || 1));
+    return { unit: actor.cadence.unit, n };
+  }
+  // Legacy turnSchedule migration.
+  switch (actor.turnSchedule) {
+    case 'every-turn': return { unit: 'turn', n: 1 };
+    case 'alternate':  return { unit: 'round', n: 2 };
+    // 'on-call' actors never auto-fired; they only entered the queue when routed
+    // to. Model that as a background actor that never fires on a cadence — it
+    // still responds to triggers / direct routing. n: Infinity is not JSON-safe,
+    // so we mark it on-call explicitly.
+    case 'on-call':    return { unit: 'turn', n: 0 }; // n=0 → never auto-fires
+    case 'normal':
+    case undefined:
+    case null:
+    default:           return null; // queue participant
+  }
+}
+
+/**
+ * True when the actor takes ordinary round-robin turns (is in the queue).
+ * Background/cadence actors are excluded.
+ */
+export function isQueueActor(actor) {
+  if (!actor) return false;
+  if ((actor.actorMode || 'participant') === 'background') return false;
+  return normalizeCadence(actor) === null;
+}
+
+/**
+ * Decide whether a cadence (background) actor should fire on this tick.
+ *
+ * @param {object} cadence  - { unit: 'turn'|'round', n } from normalizeCadence
+ * @param {object} counters - { turnIndex, roundIndex } 1-based counters of
+ *                            completed turns / current round
+ * @returns {boolean}
+ */
+export function shouldFireCadence(cadence, { turnIndex = 0, roundIndex = 0 } = {}) {
+  if (!cadence) return false;
+  const n = Math.floor(Number(cadence.n) || 0);
+  if (n <= 0) return false; // on-call / disabled cadence never auto-fires
+  if (cadence.unit === 'turn')  return turnIndex > 0 && turnIndex % n === 0;
+  if (cadence.unit === 'round') return roundIndex > 0 && roundIndex % n === 0;
+  return false;
+}
+
 /**
  * Cosine similarity between two equal-length numeric vectors. Returns 0 for
  * missing/mismatched/zero vectors. Shared by memory recall and telemetry drift.

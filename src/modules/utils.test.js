@@ -8,7 +8,72 @@ import {
   normalizeAiResult,
   normalizeQuickStartConfig,
   cosineSimilarity,
+  normalizeCadence,
+  isQueueActor,
+  shouldFireCadence,
 } from './utils.js';
+
+describe('normalizeCadence — legacy migration', () => {
+  it('maps normal / missing to null (queue participant)', () => {
+    expect(normalizeCadence({ turnSchedule: 'normal' })).toBeNull();
+    expect(normalizeCadence({})).toBeNull();
+    expect(normalizeCadence(null)).toBeNull();
+  });
+  it('maps every-turn to { turn, 1 }', () => {
+    expect(normalizeCadence({ turnSchedule: 'every-turn' })).toEqual({ unit: 'turn', n: 1 });
+  });
+  it('maps alternate to { round, 2 }', () => {
+    expect(normalizeCadence({ turnSchedule: 'alternate' })).toEqual({ unit: 'round', n: 2 });
+  });
+  it('maps on-call to a never-firing cadence (n=0)', () => {
+    expect(normalizeCadence({ turnSchedule: 'on-call' })).toEqual({ unit: 'turn', n: 0 });
+  });
+  it('passes through an explicit cadence and clamps n to >=1', () => {
+    expect(normalizeCadence({ cadence: { unit: 'round', n: 3 } })).toEqual({ unit: 'round', n: 3 });
+    expect(normalizeCadence({ cadence: { unit: 'turn', n: 0.4 } })).toEqual({ unit: 'turn', n: 1 });
+  });
+  it('prefers explicit cadence over legacy turnSchedule', () => {
+    expect(normalizeCadence({ cadence: { unit: 'turn', n: 2 }, turnSchedule: 'every-turn' }))
+      .toEqual({ unit: 'turn', n: 2 });
+  });
+});
+
+describe('isQueueActor', () => {
+  it('true for a plain participant', () => {
+    expect(isQueueActor({ actorMode: 'participant' })).toBe(true);
+    expect(isQueueActor({})).toBe(true);
+  });
+  it('false for background actors', () => {
+    expect(isQueueActor({ actorMode: 'background' })).toBe(false);
+  });
+  it('false for cadence (every-turn) actors even if participant', () => {
+    expect(isQueueActor({ turnSchedule: 'every-turn' })).toBe(false);
+    expect(isQueueActor({ cadence: { unit: 'round', n: 1 } })).toBe(false);
+  });
+});
+
+describe('shouldFireCadence', () => {
+  it('never fires a null cadence or n<=0', () => {
+    expect(shouldFireCadence(null, { turnIndex: 5 })).toBe(false);
+    expect(shouldFireCadence({ unit: 'turn', n: 0 }, { turnIndex: 5 })).toBe(false);
+  });
+  it('fires every turn for { turn, 1 }', () => {
+    expect(shouldFireCadence({ unit: 'turn', n: 1 }, { turnIndex: 1 })).toBe(true);
+    expect(shouldFireCadence({ unit: 'turn', n: 1 }, { turnIndex: 7 })).toBe(true);
+  });
+  it('fires every Nth turn', () => {
+    const c = { unit: 'turn', n: 2 };
+    expect(shouldFireCadence(c, { turnIndex: 1 })).toBe(false);
+    expect(shouldFireCadence(c, { turnIndex: 2 })).toBe(true);
+    expect(shouldFireCadence(c, { turnIndex: 4 })).toBe(true);
+  });
+  it('fires on round cadence by roundIndex', () => {
+    const c = { unit: 'round', n: 2 };
+    expect(shouldFireCadence(c, { roundIndex: 1 })).toBe(false);
+    expect(shouldFireCadence(c, { roundIndex: 2 })).toBe(true);
+    expect(shouldFireCadence(c, { turnIndex: 99, roundIndex: 3 })).toBe(false);
+  });
+});
 
 describe('cosineSimilarity', () => {
   it('returns 1 for identical vectors', () => {

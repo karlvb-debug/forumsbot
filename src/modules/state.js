@@ -1,5 +1,5 @@
 import { STORAGE_KEY, VALID_TABS, defaultState, colors } from './constants.js';
-import { normalizeQuickStartConfig, cleanStoredMessage, normalizeStringArray } from './utils.js';
+import { normalizeQuickStartConfig, cleanStoredMessage, normalizeStringArray, normalizeCadence } from './utils.js';
 
 function normalizeDocumentEntry(e) {
   return {
@@ -240,7 +240,10 @@ function normalizeState(value) {
     canInject: !!(actor.canInject),
     directorMode: actor.directorMode || 'facilitator',
     authority: typeof actor.authority === "number" ? Math.max(0, Math.min(100, actor.authority)) : 50,
-    turnSchedule: actor.turnSchedule || 'normal',
+    // Scheduling: migrate the legacy four-way turnSchedule enum to the cadence
+    // model. Queue participants have cadence: null; background/periodic actors
+    // have { unit: 'turn'|'round', n }. See utils.normalizeCadence.
+    cadence: normalizeCadence(actor),
     actorMode: actor.actorMode || 'participant',
   }));
   return merged;
