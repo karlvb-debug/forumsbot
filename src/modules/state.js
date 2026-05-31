@@ -28,12 +28,19 @@ function normalizeDocumentEntry(e) {
  * cadence/turnSchedule wins; otherwise an on_every_turn trigger implies { turn, 1 }.
  */
 function migrateEveryTurnTrigger(actor) {
-  const cadence = normalizeCadence(actor);
-  if (cadence) return cadence;
-  if (Array.isArray(actor?.triggerOn) && actor.triggerOn.includes('on_every_turn')) {
-    return { unit: 'turn', n: 1 };
+  let cadence = normalizeCadence(actor);
+  if (!cadence && Array.isArray(actor?.triggerOn) && actor.triggerOn.includes('on_every_turn')) {
+    cadence = { unit: 'turn', n: 1 };
   }
-  return null;
+  // Pathology guard: a BACKGROUND actor (director/manager/orchestrator) on a
+  // per-turn cadence re-fires after every single actor turn, spamming management
+  // messages and looking like an infinite loop. Background orchestrators belong
+  // on a round cadence; demote per-turn → per-round on load. Visible participants
+  // on a turn cadence are left alone (that is a legitimate config).
+  if (cadence && cadence.unit === 'turn' && cadence.n === 1 && (actor?.actorMode === 'background')) {
+    cadence = { unit: 'round', n: 1 };
+  }
+  return cadence;
 }
 
 function normalizeState(value) {
@@ -68,7 +75,10 @@ function normalizeState(value) {
         actorMode: 'participant',
         triggerOn: [],
         ...a,
-        triggerOn: Array.isArray(a.triggerOn) ? a.triggerOn.filter(t => t !== 'on_every_turn') : [],
+        // NOTE: on_every_turn is intentionally NOT stripped here — the second
+        // pass (migrateEveryTurnTrigger) folds it into a cadence first, then
+        // strips it from triggerOn. Stripping here would defeat that migration.
+        triggerOn: Array.isArray(a.triggerOn) ? a.triggerOn : [],
       })),
     messages: Array.isArray(value.messages) ? value.messages.map(cleanStoredMessage) : [],
     turnQueue: Array.isArray(value.turnQueue) ? value.turnQueue : [],

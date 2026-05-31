@@ -73,6 +73,44 @@ describe('normalizeState — userContext', () => {
 });
 
 // ── pendingPauses normalization ───────────────────────────────────────────────
+describe('normalizeState — cadence migration & loop guard', () => {
+  it('migrates legacy every-turn director to a per-round cadence (loop guard)', () => {
+    const result = normalizeState({
+      actors: [{ name: 'Director', canDirect: true, actorMode: 'background', turnSchedule: 'every-turn' }],
+    });
+    expect(result.actors[0].cadence).toEqual({ unit: 'round', n: 1 });
+  });
+
+  it('demotes a background actor saved with per-turn cadence to per-round', () => {
+    const result = normalizeState({
+      actors: [{ name: 'Mgr', canManageCast: true, actorMode: 'background', cadence: { unit: 'turn', n: 1 } }],
+    });
+    expect(result.actors[0].cadence).toEqual({ unit: 'round', n: 1 });
+  });
+
+  it('leaves a visible participant on a per-turn cadence alone', () => {
+    const result = normalizeState({
+      actors: [{ name: 'Chatty', actorMode: 'participant', cadence: { unit: 'turn', n: 1 } }],
+    });
+    expect(result.actors[0].cadence).toEqual({ unit: 'turn', n: 1 });
+  });
+
+  it('keeps an explicit every-N-turns background cadence (n>1) as-is', () => {
+    const result = normalizeState({
+      actors: [{ name: 'Periodic', actorMode: 'background', cadence: { unit: 'turn', n: 3 } }],
+    });
+    expect(result.actors[0].cadence).toEqual({ unit: 'turn', n: 3 });
+  });
+
+  it('drops on_every_turn from triggerOn (folded into cadence)', () => {
+    const result = normalizeState({
+      actors: [{ name: 'D', canDirect: true, actorMode: 'background', triggerOn: ['on_every_turn', 'on_conflict'] }],
+    });
+    expect(result.actors[0].triggerOn).toEqual(['on_conflict']);
+    expect(result.actors[0].cadence).toEqual({ unit: 'round', n: 1 });
+  });
+});
+
 describe('normalizeState — pendingPauses', () => {
   it('initializes pendingPauses as empty array when absent', () => {
     const result = normalizeState({});

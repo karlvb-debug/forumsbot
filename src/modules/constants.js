@@ -220,7 +220,10 @@ export const defaultState = {
       canSeeThoughts: false,
       canInject: true,
       authority: 50,
-      cadence: { unit: 'turn', n: 1 },
+      // Fire once per round, not per turn. A per-turn background director/manager
+      // re-runs after every actor turn — which spams management messages and
+      // looks like an infinite "responds again and again" loop.
+      cadence: { unit: 'round', n: 1 },
       actorMode: 'background',
       triggerOn: ['on_user_message', 'on_conflict'],
     },

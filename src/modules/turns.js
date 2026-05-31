@@ -1980,7 +1980,7 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
 
     // Fire conflict trigger so orchestrators can react (awaited — no concurrent pipeline calls)
     if (record.reason === 'conflict') {
-      await fireTriggerActors('on_conflict', { actorId: actor.id, actorName: speakerName, context: record.context });
+      await fireTriggerActors('on_conflict', { actorId: actor.id, actorName: speakerName, context: record.context }, null, actor.id);
     }
 
     if (allowed) {

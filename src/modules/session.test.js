@@ -171,11 +171,11 @@ describe('blueprints', () => {
     expect(state.actors.length).toBe(4);
     // The review lead is a background director — scheduling must survive
     // (normalizeQuickStartActor would have dropped it; the blueprint builder must
-    // not). normalizeState migrates the legacy turnSchedule:'every-turn' to a
-    // per-turn cadence.
+    // not). Background directors fire once per round (a per-turn background
+    // director re-fires every turn and looks like an infinite loop).
     const lead = state.actors.find(a => a.canDirect);
     expect(lead).toBeTruthy();
-    expect(lead.cadence).toEqual({ unit: 'turn', n: 1 });
+    expect(lead.cadence).toEqual({ unit: 'round', n: 1 });
     expect(state.scenario.title).toBe('Code Review');
     expect(state.autoStop.roundsRun).toBe(0);
   });
