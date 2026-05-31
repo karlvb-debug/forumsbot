@@ -77,11 +77,13 @@ export const defaultState = {
     theme: "dark",
     includeTraces: true,
     gravitySensitivity: 50,
-    // Sprint 5: Preflight Skip Router
-    enablePreflightRouter: true,
+    // Sprint 5: Preflight Skip Router. Default OFF: it adds a classifier LLM call
+    // before every actor turn, and the main actor prompt already enforces skipping.
+    enablePreflightRouter: false,
     preflightThreshold: 0.35,
-    // Sprint 6: Cross-Session Actor Memory
-    enableCrossSessionMemory: true,
+    // Sprint 6: Cross-Session Actor Memory. Default OFF: when on, it distills the
+    // actor's thought via a separate LLM call every turn (per actor).
+    enableCrossSessionMemory: false,
     // Streaming: show tokens as they arrive for actor/DM turns
     streamingEnabled: true,
     // Turbo Mode: skip memory cycles, thoughts, alignment, and cross-session memory
