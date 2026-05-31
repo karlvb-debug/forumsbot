@@ -80,14 +80,8 @@ export const defaultState = {
     // Sprint 5: Preflight Skip Router
     enablePreflightRouter: true,
     preflightThreshold: 0.35,
-    // Sprint 5: Parallel Hypothesis Sampling
-    enableHypothesisSampling: false,
-    hypothesisSampleCount: 2,
-    hypothesisAutoSelect: true,
     // Sprint 6: Cross-Session Actor Memory
     enableCrossSessionMemory: true,
-    // Sprint 7: Influence Budget
-    showInfluenceBars: false,
     // Streaming: show tokens as they arrive for actor/DM turns
     streamingEnabled: true,
     // Turbo Mode: skip memory cycles, thoughts, alignment, and cross-session memory

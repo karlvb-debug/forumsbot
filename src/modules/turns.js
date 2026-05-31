@@ -436,7 +436,6 @@ async function _runTurn(options = {}) {
 
       const result = await askActor(participant.data, abortController.signal, onStream, twoPhase);
 
-
       const latencyMs = Date.now() - startTime;
 
       result.toolCalls = getLastToolCalls();
@@ -480,68 +479,6 @@ async function _runTurn(options = {}) {
       const premise = state.scenario.premise || "";
       const messageContent = result.message || "";
       result.metrics = calculateTurnMetrics(messageContent, previousMessages, objective, premise);
-
-      // ── Parallel Hypothesis Sampling ────────────────────────────────
-      // Generate N-1 more candidates and select the best by composite score.
-      // Only triggers for actor turns where sampling is enabled and the turn
-      // is meaningful (action === 'speak', not a skip/document edit).
-      if (
-        state.settings.enableHypothesisSampling &&
-        result.action === 'speak' &&
-        result.message
-      ) {
-        const n = Math.min(3, Math.max(2, state.settings.hypothesisSampleCount ?? 2)) - 1;
-        try {
-          // Generate N-1 additional candidates in parallel
-          const extras = await Promise.all(
-            Array.from({ length: n }, () =>
-              askActor(participant.data, abortController?.signal, null, true).catch(() => null)
-            )
-          );
-
-          const candidates = [result, ...extras.filter(Boolean)];
-
-          // Score each candidate
-          const scored = candidates.map(c => {
-            const m = calculateTurnMetrics(c.message || '', previousMessages, objective, premise);
-            c.metrics = m;
-            // Composite: novelty + premiseAlignment + specificity, weighted
-            c._compositeScore = (m.noveltyScore * 0.4) + (m.premiseAlignmentScore * 0.4) + (m.specificityScore * 0.2);
-            return c;
-          });
-
-          scored.sort((a, b) => b._compositeScore - a._compositeScore);
-
-          if (state.settings.hypothesisAutoSelect) {
-            // Auto-pick: use best, store the rest as alternatives
-            const best = scored[0];
-            best.alternativeCandidates = scored.slice(1).map(c => ({
-              message: c.message,
-              thought: c.thought,
-              metrics: c.metrics,
-              compositeScore: c._compositeScore
-            }));
-            Object.assign(result, best);
-          } else {
-            // Manual-select: store all as alternatives for user to choose
-            result.alternativeCandidates = scored.slice(1).map(c => ({
-              message: c.message,
-              thought: c.thought,
-              metrics: c.metrics,
-              compositeScore: c._compositeScore
-            }));
-            result.hypothesisPendingSelection = true;
-          }
-
-          logTransition('hypothesis_sampled', null, null, {
-            actor: participant.data.name,
-            candidateCount: candidates.length,
-            selectedScore: scored[0]._compositeScore
-          });
-        } catch (err) {
-          console.warn('[hypothesis] Sampling failed, using primary result:', err.message);
-        }
-      }
 
       await applyAiResult(participant, result);
       // Fire every-turn background actors between turns (excluding the actor that
@@ -1393,8 +1330,6 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
   result._promptParts = promptParts;
   return result;
 }
-
-
 
 /**
  * Director Brief — asks the active Director actor for a structured progress summary:

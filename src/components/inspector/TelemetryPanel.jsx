@@ -109,16 +109,6 @@ export function TelemetryPanel() {
         <div className="disclosure-body">
           <Toggle checked={settings.enablePreflightRouter !== false} onChange={(v) => mutateState(s => { s.settings.enablePreflightRouter = v; })} label="Preflight skip router" />
           <Toggle checked={settings.roundSnapshotEnabled !== false} onChange={(v) => mutateState(s => { s.settings.roundSnapshotEnabled = v; })} label="Round snapshot · KV cache reuse" />
-          <Toggle checked={!!settings.enableHypothesisSampling} onChange={(v) => mutateState(s => { s.settings.enableHypothesisSampling = v; })} label="Hypothesis sampling" />
-          {settings.enableHypothesisSampling && (
-            <div style={{ paddingLeft: 12, display: "flex", flexDirection: "column", gap: 6 }}>
-              <Field label={`Candidates: ${settings.hypothesisSampleCount ?? 2}`}>
-                <Range value={settings.hypothesisSampleCount ?? 2} min={2} max={5} step={1} onChange={(v) => mutateState(s => { s.settings.hypothesisSampleCount = v; })} />
-              </Field>
-              <Toggle checked={settings.hypothesisAutoSelect !== false} onChange={(v) => mutateState(s => { s.settings.hypothesisAutoSelect = v; })} label="Auto-select best candidate" />
-            </div>
-          )}
-          <Toggle checked={!!settings.showInfluenceBars} onChange={(v) => mutateState(s => { s.settings.showInfluenceBars = v; })} label="Show influence bars on messages" />
           <Toggle checked={settings.includeTraces !== false} onChange={(v) => mutateState(s => { s.settings.includeTraces = v; })} label="Include prompt traces in diagnostics" />
           <div>
             <Field label={`Gravity sensitivity: ${settings.gravitySensitivity ?? 50}`}>
