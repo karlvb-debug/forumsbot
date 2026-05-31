@@ -117,6 +117,12 @@ const _speakingTimeMap = {};
 // Rolling window of recent tok/s samples for the speed display.
 const _tokSpeedWindow = [];
 
+// Alignment embedding is throttled: the dial reads the last 5 messages, so
+// recomputing it every single turn spends an embedding call per turn for a
+// number that barely moves. Run it every Nth visible turn instead.
+const ALIGNMENT_EVERY_N_TURNS = 3;
+let _turnsSinceAlignment = 0;
+
 export async function addMessage(message) {
   const storedMessage = cleanStoredMessage({
     id: crypto.randomUUID(),
@@ -486,7 +492,10 @@ async function _runTurn(options = {}) {
         );
       }
 
-      if (!state.settings.turboMode) await updateSemanticAlignment();
+      if (!state.settings.turboMode && ++_turnsSinceAlignment >= ALIGNMENT_EVERY_N_TURNS) {
+        _turnsSinceAlignment = 0;
+        await updateSemanticAlignment();
+      }
       if (state.memory.enabled && options.summarizeCycle !== false && !state.settings.turboMode) {
         state.memory.turnsSinceSummary += 1;
         const cycleSize = participantCycleCount();

@@ -188,6 +188,17 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
     ? `Only update actorMemoryUpdates for actors who spoke: ${activeActorNames.join(", ")}. Set others to null.`
     : "No actors spoke; set actorMemoryUpdates to {}";
 
+  // Relationship tracking is an N² output the summariser must emit for every
+  // pair of actors. It is only meaningful for roleplay/story sessions; for a
+  // problem-solving council it bloats the JSON (a top cause of truncation on
+  // small models) for no value. Gate it behind story mode. Relationships remain
+  // user-editable in the Actors panel regardless.
+  const storyMode = state.scenario?.systems?.stageDirections?.enabled
+    ?? (state.scenario?.mode === "story");
+  const relShapeDelta = storyMode
+    ? ',"actorRelationshipUpdates":{"Actor A":{"Actor B":"how A now sees B, max 25 words, or null if unchanged"}}'
+    : "";
+
   // ── Append-then-compress strategy ────────────────────────────────────────────
   // Background cycles: generate a short delta bullet summary and append it.
   // Every DELTA_REWRITE_EVERY cycles (or on manual/rebuild), do a full rewrite
@@ -204,7 +215,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
         "You write a SHORT bullet-point update (3-5 bullets, max 120 words) summarising ONLY what just happened in these turns.",
         "Do NOT rewrite or repeat the existing summary. Only capture NEW information.",
         silentActorNote,
-        "Return only valid JSON: {\"delta\":\"bullet summary of new events\",\"actorMemoryUpdates\":{\"Actor Name\":\"short update or null\"},\"actorRelationshipUpdates\":{\"Actor A\":{\"Actor B\":\"how A now sees B, max 25 words, or null if unchanged\"}},\"pinnedFactSuggestions\":[\"any critical new facts\"],\"keywords\":[\"lowercase\",\"keywords\"]}"
+        `Return only valid JSON: {"delta":"bullet summary of new events","actorMemoryUpdates":{"Actor Name":"short update or null"}${relShapeDelta},"pinnedFactSuggestions":["any critical new facts"],"keywords":["lowercase","keywords"]}`
       ].join("\n");
       const deltaUser = [
         scenarioBlock(),
@@ -235,7 +246,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
         keywords
       };
       applyActorMemoryUpdates(deltaUpdate.actorMemoryUpdates);
-      applyActorRelationshipUpdates(deltaUpdate.actorRelationshipUpdates);
+      if (storyMode) applyActorRelationshipUpdates(deltaUpdate.actorRelationshipUpdates);
       await applyPinnedFactSuggestions(deltaUpdate.pinnedFactSuggestions);
       await archiveMemoryChunk(deltaUpdate, usableMessages);
 
@@ -246,17 +257,23 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
         ? `Recent cycle updates (newest last):\n${state.memory.recentDeltas.join("\n")}`
         : "";
 
+      const relShapeFull = storyMode
+        ? ',"actorRelationshipUpdates":{"Actor A":{"Actor B":"how A now sees B, max 25 words, or null if unchanged"}}'
+        : "";
+      const relObjNote = storyMode ? " and actorRelationshipUpdates" : "";
       const system = [
         "You update compact long-term memory for a local multi-actor AI forum.",
         "Be ruthless about compression — the next model may have a small context window.",
         "IMPORTANT: The pinned facts below are ground truth. Build your summary around them, never contradict them.",
         "For 'actorMemoryUpdates', summarize what each actor learned, their relationship changes, trust, and perspective of other actors.",
-        "For 'actorRelationshipUpdates', update each actor's opinion of every OTHER actor they interacted with this session. Each entry is max 25 words. Only include actors who showed meaningful relationship change.",
+        storyMode
+          ? "For 'actorRelationshipUpdates', update each actor's opinion of every OTHER actor they interacted with this session. Each entry is max 25 words. Only include actors who showed meaningful relationship change."
+          : "",
         silentActorNote,
-        "Return only valid JSON with this exact shape (ALL values must be strings, not arrays or objects, EXCEPT actorMemoryUpdates and actorRelationshipUpdates which are objects):",
-        "{\"sharedSummary\":\"300-500 word durable summary\",\"openQuestions\":\"unresolved questions, one per line\",\"dmState\":\"scenario state, empty string if none\",\"chunkSummary\":\"100-150 word summary of the source turns\",\"actorMemoryUpdates\":{\"Actor Name\":\"short private memory update\"},\"actorRelationshipUpdates\":{\"Actor A\":{\"Actor B\":\"how A now sees B, max 25 words, or null if unchanged\"}},\"pinnedFactSuggestions\":[\"facts to pin\"],\"keywords\":[\"lowercase keywords\"]}",
-        "CRITICAL: openQuestions, dmState, sharedSummary, and chunkSummary MUST be plain strings, never arrays or objects. actorRelationshipUpdates and actorMemoryUpdates MUST be objects."
-      ].join("\n");
+        `Return only valid JSON with this exact shape (ALL values must be strings, not arrays or objects, EXCEPT actorMemoryUpdates${relObjNote} which are objects):`,
+        `{"sharedSummary":"300-500 word durable summary","openQuestions":"unresolved questions, one per line","dmState":"scenario state, empty string if none","chunkSummary":"100-150 word summary of the source turns","actorMemoryUpdates":{"Actor Name":"short private memory update"}${relShapeFull},"pinnedFactSuggestions":["facts to pin"],"keywords":["lowercase keywords"]}`,
+        `CRITICAL: openQuestions, dmState, sharedSummary, and chunkSummary MUST be plain strings, never arrays or objects. actorMemoryUpdates${relObjNote} MUST be objects.`
+      ].filter(Boolean).join("\n");
       const user = [
         `Reason: ${reason}`,
         scenarioBlock(),
@@ -273,7 +290,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
       console.debug('[memory] Parsed keys:', Object.keys(parsed), 'sharedSummary type:', typeof parsed.sharedSummary, 'openQ type:', typeof parsed.openQuestions);
       const memoryUpdate = normalizeMemoryUpdate(parsed, usableMessages);
       await applyMemoryUpdate(memoryUpdate);
-      applyActorRelationshipUpdates(memoryUpdate.actorRelationshipUpdates || {});
+      if (storyMode) applyActorRelationshipUpdates(memoryUpdate.actorRelationshipUpdates || {});
       await archiveMemoryChunk(memoryUpdate, usableMessages);
       // Clear accumulated deltas after full rewrite
       state.memory.recentDeltas = [];
