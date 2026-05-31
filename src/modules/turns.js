@@ -642,7 +642,14 @@ export async function runRound(options = {}) {
 async function _runRound(options = {}) {
   abortController = null; // Reset abort state for the new round
   _stopFlag = false;       // Clear stop flag for this round
-  const count = state.actors.filter((actor) => actor.enabled).length;
+  // Count only actors that actually take queue turns — every-turn and on-call actors
+  // fire as background hooks and are never in the turn queue. Counting them inflates
+  // the round loop, causing normal actors to speak extra times (looks like a loop).
+  const count = state.actors.filter(a => {
+    if (!a.enabled) return false;
+    const sched = a.turnSchedule || 'normal';
+    return sched !== 'every-turn' && sched !== 'on-call';
+  }).length;
   if (!count) {
     setStatus("Add at least one enabled actor or turn on the DM.", "warn");
     return false;
@@ -742,7 +749,11 @@ async function _runRound(options = {}) {
 }
 
 export function participantCycleCount() {
-  return Math.max(1, state.actors.filter((actor) => actor.enabled).length);
+  return Math.max(1, state.actors.filter(a => {
+    if (!a.enabled) return false;
+    const sched = a.turnSchedule || 'normal';
+    return sched !== 'every-turn' && sched !== 'on-call';
+  }).length);
 }
 
 export async function runAutoLoop() {
@@ -2017,7 +2028,8 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
           scope: "next_turn_only", insertedAt: new Date().toISOString()
         });
         const repeaterActor = state.actors.find(a => a.id === prevActorId);
-        fireTriggerActors('on_agent_repetition', { actorId: prevActorId, actorName: repeaterActor?.name || '' });
+        // Awaited — must not fire concurrently with the main pipeline
+        await fireTriggerActors('on_agent_repetition', { actorId: prevActorId, actorName: repeaterActor?.name || '' });
       }
     }
   }
@@ -2100,9 +2112,9 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
     state.pendingPauses = [...state.pendingPauses, record];
     await addMessage({ type: "pause", actorId: actor.id, speaker: speakerName, color: actor.color, pauseRecord: record, content: record.question || record.context });
 
-    // Fire conflict trigger so orchestrators can react
+    // Fire conflict trigger so orchestrators can react (awaited — no concurrent pipeline calls)
     if (record.reason === 'conflict') {
-      fireTriggerActors('on_conflict', { actorId: actor.id, actorName: speakerName, context: record.context });
+      await fireTriggerActors('on_conflict', { actorId: actor.id, actorName: speakerName, context: record.context });
     }
 
     if (allowed) {
