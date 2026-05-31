@@ -11,6 +11,7 @@ import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent
 import { updateSemanticAlignment, alignLineAttributions } from './telemetry.js';
 import { preflightSkipCheck } from './preflight.js';
 import { getKbEntriesForDirector, splitDocuments, buildEditableDocSection, buildReferenceSection, buildKbSection } from './knowledge.js';
+import { buildNarrativeDmInstruction, buildRoleplayContextLine, buildRoleplayStyleBlock } from './storyMode.js';
 
 function labelForMode(mode) {
   return { problem: 'Problem', story: 'Story', freeform: 'Freeform' }[mode] || mode;
@@ -997,26 +998,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     // This actor is a Director — build director-style prompt
     const privateThoughts = actor.canSeeThoughts ? privateThoughtDigest() : "";
     const modeInstruction = sysCfg.dmNarrates
-      ? [
-          "You are the narrative DM. Your job is to describe the ENVIRONMENT ONLY: weather, lighting, ambient sounds, smells, the feel of a room, the passage of time, and world events that are NOT character actions.",
-          "",
-          "=== HARD RULE: NEVER NARRATE CHARACTER ACTIONS ===",
-          "You must NEVER describe what a character does, says, thinks, feels, or how they physically move. Characters control their own bodies and words. This includes:",
-          "- Physical actions: 'Grolak stops wiping the bar' ← FORBIDDEN",
-          "- Facial expressions: 'her eyes narrow with suspicion' ← FORBIDDEN",
-          "- Gestures: 'he reaches for his sword' ← FORBIDDEN",
-          "- Speech/dialogue: 'Grolak says \"Welcome\"' ← FORBIDDEN",
-          "- Emotional reactions: 'she flinches at the news' ← FORBIDDEN",
-          "- Internal states: 'Grolak notices the tension' ← FORBIDDEN",
-          "",
-          "WRONG: '*Grolak stops wiping the bar, his stare lifting to fix upon the stranger.*'",
-          "RIGHT: '*The tavern falls into an uneasy quiet. The hearth crackles. All eyes in the room drift toward the stranger in the doorway.*'",
-          "",
-          "WRONG: '*Mira draws her blade and steps forward.*'",
-          "RIGHT: Use a promptInjection → {\"promptInjections\":[{\"targetName\":\"Mira\",\"content\":\"You feel threatened — draw your blade and confront the intruder.\",\"scope\":\"next_turn_only\"}]}",
-          "",
-          "You describe the WORLD. Characters describe THEMSELVES. If you want a character to act, inject a prompt into their next turn."
-        ].join("\n")
+      ? buildNarrativeDmInstruction()
       : "Help move the exchange forward. Surface decisions, conflicts, and next questions. Summarize when useful and invite quieter actors in without taking over. NEVER describe what another actor does, says, or feels — they control their own actions. If you want an actor to take a specific direction, use a promptInjection to guide them privately.";
 
     const dmRoleModifier = sysCfg.dmRole === 'observer'
@@ -1214,18 +1196,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
   }
 
   const contextLine = sysCfg.stageDirectionsEnabled
-    ? [
-        "You are a character in an interactive roleplay/story.",
-        "Stay in character at all times.",
-        showThoughts
-          ? "IMPORTANT: The \"thought\" field is your PRIVATE out-of-character reasoning (strategy, analysis, what you notice). The \"message\" field is ONLY what you say and do IN CHARACTER. Never put analysis or meta-commentary in message."
-          : "IMPORTANT: Private thoughts display is disabled. Keep the JSON \"thought\" field empty. The \"message\" field is ONLY what you say and do IN CHARACTER. Never put analysis or meta-commentary in message.",
-        "In your message, you MUST include physical actions wrapped in asterisks alongside your spoken dialogue. Show what your character physically does—gestures, expressions, movements, interactions with objects and the environment.",
-        "Example of a good message: *peers through the undergrowth, gripping the strap of his pack* \"I don't like the look of that ravine.\" *takes a cautious step back, scanning the treeline*",
-        state.actors.some(a => a.canDirect && a.enabled)
-          ? "The Director (prefixed with [DIRECTOR] in the transcript) narrates the scene, settings, and consequences. Read the Director's narration carefully and react to it. Do not confuse the Director's words with other characters' speech."
-          : ""
-      ].filter(Boolean).join("\n")
+    ? buildRoleplayContextLine(showThoughts, state.actors.some(a => a.canDirect && a.enabled))
     : "You are one participant in a local AI forum. You can read the public transcript, but not other actors' private thoughts.";
 
   const relationships = relationshipBlock(actor);
@@ -1253,15 +1224,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
           : "CRITICAL SKIP RULE: If your public message does not add new arguments, data, questions, or proposals (e.g. you are just agreeing, repeating what someone else said, summarizing, or saying you have nothing to add), you MUST set action to \"skip\" and leave message empty. Yielding the floor is a positive, productive contribution that keeps the discussion efficient.")
       : "",
     sysCfg.stageDirectionsEnabled
-      ? [
-          "ROLEPLAY RULE: Stay in character. Let your character's emotions, reactions, and actions breathe naturally — quality over brevity. Avoid meta-commentary or breaking the fourth wall. Actions go in *asterisks*, speech in dialogue. Never summarise the scene; live in it.",
-          `STAGE DIRECTIONS LIMIT: Physical *actions* should be at most ${Math.round(sysCfg.stageDirectionsMaxShare * 100)}% of your response by word count.`,
-          sysCfg.stageDirectionsIntensity === 'minimal'
-            ? "INTENSITY: Minimal — use physical actions only when they meaningfully convey emotion or advance the scene. One brief action beat per response at most; skip them entirely if the dialogue speaks for itself."
-            : sysCfg.stageDirectionsIntensity === 'immersive'
-            ? "INTENSITY: Immersive — paint the scene with rich sensory detail. Describe what your character sees, hears, smells, and feels. Let the environment breathe. Your physical presence should be as expressive as your dialogue."
-            : "INTENSITY: Moderate — balance spoken dialogue with regular action beats. Show what your character physically does alongside what they say."
-        ].join("\n")
+      ? buildRoleplayStyleBlock(sysCfg.stageDirectionsMaxShare, sysCfg.stageDirectionsIntensity)
       : "CONCISENESS RULE: Keep your public message brief, direct, and high-density. Avoid conversational filler (e.g. 'I agree with Anya', 'That's a good point', 'As an expert in...'). Speak ONLY to introduce new arguments, data, or questions. If a simple 'Yes' or single-sentence response is sufficient, keep it to exactly that. Do not generate words for the sake of it.",
     (!showThoughts)
       ? "IMPORTANT: Private thoughts display is disabled. You MUST keep your JSON \"thought\" field empty (\"\") to save tokens and minimize latency."
