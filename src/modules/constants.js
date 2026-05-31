@@ -143,8 +143,7 @@ export const defaultState = {
     sessionsIndex: [],
     apiCallLogs: [],
     parseFailures: [],
-    outcomeExtractionLog: [], // Sprint 6: { at, attempt, success, error? }
-    qualitySignals: []        // CAP-14: per-turn quality ratings from actors
+    outcomeExtractionLog: [] // Sprint 6: { at, attempt, success, error? }
   },
   outcomes: {
     finalRecommendation: "",
@@ -223,7 +222,7 @@ export const defaultState = {
       authority: 50,
       cadence: { unit: 'turn', n: 1 },
       actorMode: 'background',
-      triggerOn: ['on_user_message', 'on_conflict', 'on_agent_repetition'],
+      triggerOn: ['on_user_message', 'on_conflict'],
     },
     {
       id: crypto.randomUUID(),
@@ -303,7 +302,6 @@ export const defaultState = {
     pausePolicy: {
       allowedReasons: ["decision", "conflict", "question", "clarification", "information"],
       maxPausesPerRound: 2,
-      honoredWindow: 0,
     }
   },
   pendingPauses: [],  // PauseRecord[]

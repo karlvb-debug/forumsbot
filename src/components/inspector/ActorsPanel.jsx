@@ -23,7 +23,6 @@ const TRIGGER_DEFS = [
   { key: 'on_round_start',      label: 'Round start',  icon: '▶️'  },
   { key: 'on_round_end',        label: 'Round end',    icon: '⏹️'  },
   { key: 'on_conflict',         label: 'Conflict',     icon: '⚡' },
-  { key: 'on_agent_repetition', label: 'Repetition',   icon: '🔁' },
 ];
 
 const ACTOR_TEMPLATES = ACTOR_LIBRARY;

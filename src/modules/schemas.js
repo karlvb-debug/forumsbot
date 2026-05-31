@@ -38,19 +38,6 @@ const FIELDS = {
     json: { type: 'string' },
     prompt: 'an undisputed fact just established, one sentence (optional)',
   },
-  rateSignal: {
-    json: {
-      type: 'object',
-      properties: {
-        novel:      { type: 'boolean' },
-        advancing:  { type: 'boolean' },
-        flag:       { type: 'string', enum: ['repeat', 'loop', 'ok'] },
-      },
-      required: ['novel', 'advancing'],
-      additionalProperties: false,
-    },
-    prompt: '{"novel":bool,"advancing":bool,"flag":"repeat|loop|ok"} quality signal for prior message (optional)',
-  },
   pauseRequest: {
     json: {
       type: 'object',
@@ -171,7 +158,7 @@ function selectFields(actor, options = {}) {
   // Director
   if (actor.canDirect) {
     required.push('action', 'message');
-    optional.push('nextSpeaker', 'anchor', 'pinFact', 'rateSignal', 'pauseRequest');
+    optional.push('nextSpeaker', 'anchor', 'pinFact', 'pauseRequest');
     optional.push('manageActors', 'promptInjections', 'privateMessages');
     if (hasEditable) optional.push('documentEdits');
     return { required, optional };
@@ -196,7 +183,7 @@ function selectFields(actor, options = {}) {
 
   // Regular actor
   required.push('action', 'message');
-  optional.push('nextSpeaker', 'anchor', 'pinFact', 'rateSignal', 'pauseRequest');
+  optional.push('nextSpeaker', 'anchor', 'pinFact', 'pauseRequest');
   if (hasEditable) optional.push('documentEdits');
   if (actor.canInject) {
     optional.push('promptInjections', 'privateMessages');

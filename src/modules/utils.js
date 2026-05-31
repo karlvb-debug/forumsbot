@@ -319,10 +319,6 @@ export function normalizeAiResult(result, fallback) {
   if (result.pinFact && String(result.pinFact).trim()) {
     normalized.pinFact = String(result.pinFact).slice(0, 200).trim();
   }
-  // CAP-14: Quality signal
-  if (result.rateSignal && typeof result.rateSignal === "object") {
-    normalized.rateSignal = result.rateSignal;
-  }
   // CAP-1: Prompt injections (director-initiated)
   if (Array.isArray(result.promptInjections) && result.promptInjections.length) {
     normalized.promptInjections = result.promptInjections;

@@ -277,7 +277,7 @@ describe('normalizeAiResult — pauseRequest passthrough', () => {
   });
 });
 
-describe('normalizeAiResult — pinFact and rateSignal passthrough', () => {
+describe('normalizeAiResult — pinFact passthrough', () => {
   const fallback = 'fallback';
   const base = { action: 'speak', message: 'Hi' };
 
@@ -296,14 +296,8 @@ describe('normalizeAiResult — pinFact and rateSignal passthrough', () => {
     expect(result.pinFact.length).toBe(200);
   });
 
-  it('passes through rateSignal when it is an object', () => {
-    const sig = { novel: false, advancing: false, flag: 'repeat' };
-    const result = normalizeAiResult({ ...base, rateSignal: sig }, fallback);
-    expect(result.rateSignal).toEqual(sig);
-  });
-
-  it('drops rateSignal when it is a string', () => {
-    const result = normalizeAiResult({ ...base, rateSignal: 'bad' }, fallback);
+  it('does not carry a rateSignal field (CAP-14 removed)', () => {
+    const result = normalizeAiResult({ ...base, rateSignal: { flag: 'repeat' } }, fallback);
     expect(result.rateSignal).toBeUndefined();
   });
 });

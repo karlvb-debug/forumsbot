@@ -120,7 +120,7 @@ describe('applyAssistantPatch', () => {
       interactionMode: 'collaborator',
       pausePolicy: {
         maxPausesPerRound: 2,
-        honoredWindow: 0
+        allowedReasons: ['decision', 'conflict']
       }
     };
 
@@ -136,7 +136,7 @@ describe('applyAssistantPatch', () => {
     expect(state.userContext.displayName).toBe('Bob');
     expect(state.userContext.interactionMode).toBe('collaborator');
     expect(state.userContext.pausePolicy.maxPausesPerRound).toBe(5);
-    expect(state.userContext.pausePolicy.honoredWindow).toBe(0);
+    expect(state.userContext.pausePolicy.allowedReasons).toEqual(['decision', 'conflict']);
   });
 });
 

@@ -25,7 +25,7 @@ const { mockState } = vi.hoisted(() => {
     autoStop: { enabled: false, goal: '', goalCheckEnabled: false, stopOnAllSkip: false, maxRoundsEnabled: false, maxRounds: 5, roundsRun: 0 },
     settings: { temperature: 0.8, maxTokens: 2000, topP: 1.0, repeatPenalty: 1.1, toolsEnabled: false, turboMode: false, enablePreflightRouter: false, streamingEnabled: false, enableCrossSessionMemory: false, enableAdaptiveCompression: false },
     ui: { stopModal: null, pauseModal: null, awaitingUserInput: false, currentSpeaker: '' },
-    diagnostics: { qualitySignals: [] },
+    diagnostics: {},
     documents: [],
   };
   return { mockState };
@@ -124,7 +124,6 @@ describe('resolvePolicy', () => {
     expect(policy.allowedReasons).toContain('question');
     expect(policy.allowedReasons).toContain('decision');
     expect(policy.maxPausesPerRound).toBe(2);
-    expect(policy.honoredWindow).toBe(0);
   });
 
   it('returns collaborator defaults when interactionMode is omitted', () => {
@@ -137,7 +136,6 @@ describe('resolvePolicy', () => {
     const policy = resolvePolicy({ interactionMode: 'observer' });
     expect(policy.allowedReasons).toEqual([]);
     expect(policy.maxPausesPerRound).toBe(0);
-    expect(policy.honoredWindow).toBe(Infinity);
   });
 
   it('sponsor mode — only decision + conflict', () => {
@@ -145,14 +143,12 @@ describe('resolvePolicy', () => {
     expect(policy.allowedReasons).toEqual(['decision', 'conflict']);
     expect(policy.allowedReasons).not.toContain('question');
     expect(policy.maxPausesPerRound).toBe(1);
-    expect(policy.honoredWindow).toBe(60000);
   });
 
   it('collaborator mode — all 5 reasons', () => {
     const policy = resolvePolicy({ interactionMode: 'collaborator' });
     expect(policy.allowedReasons).toEqual(['decision', 'conflict', 'question', 'clarification', 'information']);
     expect(policy.maxPausesPerRound).toBe(2);
-    expect(policy.honoredWindow).toBe(0);
   });
 
   it('unknown mode falls back to collaborator', () => {
@@ -164,10 +160,9 @@ describe('resolvePolicy', () => {
   it('custom pausePolicy overrides base defaults', () => {
     const policy = resolvePolicy({
       interactionMode: 'collaborator',
-      pausePolicy: { maxPausesPerRound: 5, honoredWindow: 3000 },
+      pausePolicy: { maxPausesPerRound: 5 },
     });
     expect(policy.maxPausesPerRound).toBe(5);
-    expect(policy.honoredWindow).toBe(3000);
     expect(policy.allowedReasons).toHaveLength(5);
   });
 

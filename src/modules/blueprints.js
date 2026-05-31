@@ -41,7 +41,7 @@ export const ACTOR_LIBRARY = [
     voice: 'Calm, concise, neutral.',
     canDirect: true, canManageCast: true, canInject: true, directorMode: 'facilitator',
     cadence: { unit: 'turn', n: 1 }, actorMode: 'background',
-    triggerOn: ['on_user_message', 'on_conflict', 'on_agent_repetition'],
+    triggerOn: ['on_user_message', 'on_conflict'],
     temperature: 0.6, maxTokens: 600, color: C.gold,
   },
   {

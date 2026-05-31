@@ -469,11 +469,6 @@ export function HelpPanel() {
             <strong>CAP-8 Fact Pin</strong> — actors in analytical mode can add a freshly-settled
             undisputed fact directly to Pinned Facts via their <code>pinFact</code> JSON field.
           </li>
-          <li>
-            <strong>CAP-14 Quality Signal</strong> — actors can flag the prior turn as repetitive
-            (<code>rateSignal: {'{'}flag: "repeat"{'}'}</code>). Two repeat flags in 20 turns
-            auto-injects a loop-breaking hint to the flagged actor.
-          </li>
         </ul>
       </HelpSection>
     </div>

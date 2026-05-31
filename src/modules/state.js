@@ -125,7 +125,6 @@ function normalizeState(value) {
   if (!Array.isArray(merged.diagnostics.apiCallLogs)) merged.diagnostics.apiCallLogs = [];
   if (!Array.isArray(merged.diagnostics.parseFailures)) merged.diagnostics.parseFailures = [];
   if (!Array.isArray(merged.diagnostics.outcomeExtractionLog)) merged.diagnostics.outcomeExtractionLog = [];
-  if (!Array.isArray(merged.diagnostics.qualitySignals)) merged.diagnostics.qualitySignals = [];
   if (!Array.isArray(merged.anchors)) merged.anchors = [];
   if (!Array.isArray(merged.pendingInjections)) merged.pendingInjections = [];
   if (!Array.isArray(merged.pendingPrivateMessages)) merged.pendingPrivateMessages = [];
