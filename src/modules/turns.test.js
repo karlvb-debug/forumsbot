@@ -310,7 +310,8 @@ describe('scenarioBlock', () => {
 });
 
 // ── applyAiResult ─────────────────────────────────────────────────────────────
-import { applyAiResult } from './turns.js';
+import { applyAiResult, fireUserMessageTriggers, runRound } from './turns.js';
+import { chatJson } from './api.js';
 
 describe('applyAiResult', () => {
   beforeEach(() => {
@@ -320,6 +321,7 @@ describe('applyAiResult', () => {
         name: 'Manager',
         role: 'Roster Orchestrator',
         canManageCast: true,
+        enabled: true,
         color: '#1a7a6e',
       }
     ];
@@ -359,6 +361,60 @@ describe('applyAiResult', () => {
     expect(bob.canDirect).toBe(true);
     expect(bob.authority).toBe(80);
     expect(bob.temperature).toBe(0.5);
+  });
+
+  it('preserves queue rotation when a manager changes the cast during its turn', async () => {
+    mockState.actors = [
+      { id: 'manager-id', name: 'Manager', role: 'Roster Orchestrator', canManageCast: true, enabled: true, color: '#1a7a6e' },
+      { id: 'a1', name: 'Alice', role: 'Participant', enabled: true, color: '#18726d' },
+      { id: 'a2', name: 'Bob', role: 'Participant', enabled: true, color: '#b84738' },
+    ];
+    mockState.turnQueue = ['manager-id', 'a1', 'a2'];
+
+    const participant = nextParticipant();
+    expect(participant.data.id).toBe('manager-id');
+    expect(mockState.turnQueue).toEqual(['a1', 'a2', 'manager-id']);
+
+    await applyAiResult(participant, {
+      action: 'speak',
+      message: 'Adding a specialist.',
+      manageActors: {
+        create: [{ name: 'Carol', role: 'Specialist' }]
+      }
+    });
+
+    expect(mockState.turnQueue[0]).toBe('a1');
+    expect(nextParticipant().data.id).toBe('a1');
+  });
+
+  it('does not fire the same director for both user-message trigger and immediate round cadence', async () => {
+    chatJson.mockReset();
+    chatJson.mockResolvedValue({ action: 'speak', thought: '', message: 'ok' });
+    mockState.settings.model = 'test-model';
+    mockState.actors = [
+      {
+        id: 'director-id',
+        name: 'Showrunner',
+        role: 'Lead Editor',
+        enabled: true,
+        canDirect: true,
+        canInject: true,
+        actorMode: 'background',
+        cadence: { unit: 'round', n: 1 },
+        triggerOn: ['on_user_message'],
+        color: '#c8a830',
+      },
+      { id: 'a1', name: 'Concept Developer', role: 'Premise', enabled: true, cadence: null, color: '#18726d' },
+    ];
+    mockState.messages = [{ type: 'user', speaker: 'You', content: 'Brainstorm ideas.' }];
+    mockState.turnQueue = [];
+    mockState.currentRound = 0;
+
+    await fireUserMessageTriggers('Brainstorm ideas.');
+    await runRound();
+
+    expect(chatJson).toHaveBeenCalledTimes(2);
+    expect(mockState.messages.some(m => m.speaker === 'Concept Developer')).toBe(true);
   });
 });
 

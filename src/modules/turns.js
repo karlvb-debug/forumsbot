@@ -132,6 +132,16 @@ let _turnsSinceAlignment = 0;
 let _globalTurnIndex = 0;
 export function resetTurnIndex() { _globalTurnIndex = 0; }
 
+// Actors that just ran as on_user_message triggers. If a user message
+// immediately kicks off a round, don't run the same director/manager again at
+// round start before ordinary actors have had a chance to speak.
+let _recentUserTriggerActorIds = new Set();
+function consumeRecentUserTriggerActorIds() {
+  const fired = _recentUserTriggerActorIds;
+  _recentUserTriggerActorIds = new Set();
+  return fired;
+}
+
 export async function addMessage(message) {
   const storedMessage = cleanStoredMessage({
     id: crypto.randomUUID(),
@@ -226,12 +236,13 @@ function buildEventContextBlock(eventName, data = {}) {
  * Fire all actors whose triggerOn array includes eventName.
  * Runs them silently (background-style prompt context injected automatically).
  */
-async function fireTriggerActors(eventName, eventData = {}, signal = null, excludeId = null) {
+async function fireTriggerActors(eventName, eventData = {}, signal = null, excludeId = null, excludeIds = null) {
   const effectiveSignal = signal || abortController?.signal || null;
   const fired = new Set();
   const triggered = state.actors.filter(a =>
     a.enabled &&
     a.id !== excludeId &&
+    !(excludeIds && excludeIds.has(a.id)) &&
     Array.isArray(a.triggerOn) &&
     a.triggerOn.includes(eventName)
   );
@@ -273,9 +284,12 @@ export async function fireUserMessageTriggers(message) {
     return;
   }
   _pipelineActive = true;
+  const alreadyBusy = getIsGenerating();
+  if (!alreadyBusy) setBusy(true);
   try {
-    await fireTriggerActors('on_user_message', { message });
+    _recentUserTriggerActorIds = await fireTriggerActors('on_user_message', { message });
   } finally {
+    if (!alreadyBusy) setBusy(false);
     _pipelineActive = false;
   }
 }
@@ -611,8 +625,9 @@ async function _runRound(options = {}) {
 
   // Fire round-start triggers (background orchestrators can set up injections/routing),
   // then any round-cadence background actors that are due this round.
-  const rsFired = await fireTriggerActors('on_round_start', { round: state.currentRound }, abortController?.signal);
-  await runRoundCadenceActors(abortController?.signal, rsFired);
+  const userTriggerFired = consumeRecentUserTriggerActorIds();
+  const rsFired = await fireTriggerActors('on_round_start', { round: state.currentRound }, abortController?.signal, null, userTriggerFired);
+  await runRoundCadenceActors(abortController?.signal, new Set([...userTriggerFired, ...rsFired]));
 
   const strategy = state.scenario?.systems?.turnRouting?.strategy ?? 'round-robin';
 
@@ -1813,7 +1828,12 @@ function applyActorManagement(spec, managerName, managerColor) {
   }
 
   if (log.length) {
-    buildTurnQueue();
+    // Preserve the current rotation. Rebuilding from state.actors here can put
+    // the manager/director that just spoke back at the front of the queue.
+    state.turnQueue = state.turnQueue.filter(id => {
+      const actor = state.actors.find(a => a.id === id);
+      return actor?.enabled && isQueueActor(actor);
+    });
     saveState();
     addMessage({
       type: "management",

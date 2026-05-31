@@ -169,13 +169,14 @@ describe('blueprints', () => {
     state.messages = [];
     await applyBlueprint('code-review');
     expect(state.actors.length).toBe(4);
-    // The review lead is a background director — scheduling must survive
+    // The review lead is a visible director — scheduling must survive
     // (normalizeQuickStartActor would have dropped it; the blueprint builder must
-    // not). Background directors fire once per round (a per-turn background
-    // director re-fires every turn and looks like an infinite loop).
+    // not). Directors fire once per round (a per-turn director re-fires every
+    // turn and looks like an infinite loop).
     const lead = state.actors.find(a => a.canDirect);
     expect(lead).toBeTruthy();
     expect(lead.cadence).toEqual({ unit: 'round', n: 1 });
+    expect(lead.actorMode).toBe('participant');
     expect(state.scenario.title).toBe('Code Review');
     expect(state.autoStop.roundsRun).toBe(0);
   });
@@ -240,4 +241,3 @@ describe('configurations', () => {
     expect(session.listConfigurations().some(c => c.id === saved.id)).toBe(false);
   });
 });
-

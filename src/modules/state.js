@@ -268,7 +268,9 @@ function normalizeState(value) {
     // The legacy 'on_every_turn' trigger is redundant with a turn cadence — fold
     // it in so periodic firing has exactly one source of truth (the cadence).
     cadence: migrateEveryTurnTrigger(actor),
-    actorMode: actor.actorMode || 'participant',
+    // Built-in/template directors were briefly saved as background actors, which
+    // made them run hidden orchestration hooks instead of visible Director turns.
+    actorMode: (actor.canDirect || actor.isDirector) && actor.actorMode === 'background' ? 'participant' : (actor.actorMode || 'participant'),
     // Event triggers (genuine events only — periodic firing is the cadence's job,
     // so 'on_every_turn' is filtered out here as part of the Phase 6 unification).
     triggerOn: Array.isArray(actor.triggerOn) ? actor.triggerOn.filter(t => t !== 'on_every_turn') : [],
