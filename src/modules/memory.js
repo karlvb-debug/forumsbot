@@ -782,8 +782,3 @@ export async function extractOutcomes() {
     if (!alreadyBusy) setBusy(false);
   }
 }
-
-function renderOutcomesLocal() {
-  // React handles outcome rendering via state — just save.
-  saveState();
-}

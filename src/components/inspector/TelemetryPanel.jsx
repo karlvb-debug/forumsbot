@@ -3,7 +3,6 @@ import { Toggle, Range, Field } from '../shared/FormControls';
 import { useForumState, mutateState } from '../../hooks/useForumState';
 
 export function TelemetryPanel() {
-  const actors = useForumState(s => s.actors);
   const telemetry = useForumState(s => s.telemetry || {});
   const settings = useForumState(s => s.settings || {});
   const messages = useForumState(s => s.messages || []);
@@ -32,9 +31,6 @@ export function TelemetryPanel() {
   const sparkData = history.slice(-10).map(h =>
     typeof h === 'number' ? h : Math.round(h.score ?? 0)
   );
-
-  const enabledActors = actors.filter(a => a.enabled);
-  const hasRealInfluence = enabledActors.some(a => typeof a.influence === 'number');
 
   return (
     <div>
@@ -77,21 +73,6 @@ export function TelemetryPanel() {
             )}
           </div>
         </div>
-      </div>
-
-      <div className="card">
-        <div className="card-title"><h3>Influence Budget</h3></div>
-        {hasRealInfluence ? (
-          enabledActors.map(a => (
-            <div className="influence-row" key={a.id}>
-              <span style={{ minWidth: 50, color: "var(--fg-dim)" }}>{a.name}</span>
-              <div className="influence-bar"><div style={{ width: `${a.influence}%`, background: a.color }} /></div>
-              <span className="influence-pct">{a.influence}%</span>
-            </div>
-          ))
-        ) : (
-          <div className="field-hint">Influence is measured by word-share per round. Run a session to see results.</div>
-        )}
       </div>
 
       <div className="card">
