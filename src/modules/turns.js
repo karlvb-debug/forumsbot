@@ -7,7 +7,7 @@ import { setBusy, getBusy as getIsGenerating } from '../hooks/useActions.js';
 import { showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble } from '../hooks/useStreaming.js';
 import { putMessage, getAllChunks, getActorMemory, putActorMemory } from './db.js';
 import { summarizeMemory, recallRelevantChunks, formatCurrentOutcomes, parseOutcomeJson, extractOutcomes } from './memory.js';
-import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, checkDrift, normalizeCadence, isQueueActor, shouldFireCadence } from './utils.js';
+import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, checkDrift, normalizeCadence, isQueueActor, shouldFireCadence, appendMemory } from './utils.js';
 import { updateSemanticAlignment, alignLineAttributions } from './telemetry.js';
 import { preflightSkipCheck } from './preflight.js';
 import { getKbEntriesForDirector, splitDocuments, buildEditableDocSection, buildReferenceSection, buildKbSection } from './knowledge.js';
@@ -475,7 +475,6 @@ async function _runTurn(options = {}) {
       const completionTokens = result._completionTokens || 0;
       const promptTokens = result._promptTokens || 0;
       const tokenSpeed = latencyMs > 0 ? Number((completionTokens / (latencyMs / 1000)).toFixed(2)) : 0;
-      const cost = Number(((promptTokens * 0.00015 + completionTokens * 0.0006) / 1000).toFixed(4));
 
       if (tokenSpeed > 0) {
         _tokSpeedWindow.push(tokenSpeed);
@@ -499,7 +498,6 @@ async function _runTurn(options = {}) {
         model: state.settings.model,
         promptTokens,
         completionTokens,
-        cost,
         parseFailure: !!result._parseFailure,
         rawCompletion: result._rawCompletion || ""
       };
@@ -2087,14 +2085,6 @@ function applyDocumentEdits(edits, authorName) {
   }
   if (anyChanged) { saveState(); }
   return anyChanged;
-}
-
-export function appendMemory(existing, thought) {
-  if (!thought) return existing || "";
-  const entries = [existing, `[${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}] ${thought}`]
-    .filter(Boolean)
-    .join("\n");
-  return entries.split("\n").slice(-14).join("\n");
 }
 
 export function scenarioBlock() {

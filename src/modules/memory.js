@@ -4,7 +4,7 @@ import { chatCompletion, getEmbedding, getEmbeddingsBatch, setStatus } from './a
 import { saveState as _hookSaveState } from '../hooks/useForumState.js';
 import { setBusy, getBusy as getIsGenerating } from '../hooks/useActions.js';
 import { getAllChunks, putChunk, clearChunks, countChunks, getAllMessages } from './db.js';
-import { trimWords, stringifyList, normalizeStringArray, extractKeywords, stringifyBullets, stripCodeFence, extractBalancedObjects, sanitizeJsonString, cosineSimilarity } from './utils.js';
+import { trimWords, stringifyList, normalizeStringArray, extractKeywords, stringifyBullets, stripCodeFence, extractBalancedObjects, sanitizeJsonString, cosineSimilarity, appendMemory } from './utils.js';
 
 // Minimum cosine similarity for a chunk to be injected into a prompt.
 // Chunks scoring below this are noise, not signal. Only applies when
@@ -511,14 +511,6 @@ export function applyActorRelationshipUpdates(updates) {
       actor.relationships[otherName] = trimWords(stringifyList(note), WORD_LIMITS.relationship);
     });
   });
-}
-
-function appendMemory(existing, thought) {
-  if (!thought) return existing || "";
-  const entries = [existing, `[${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}] ${thought}`]
-    .filter(Boolean)
-    .join("\n");
-  return entries.split("\n").slice(-14).join("\n");
 }
 
 export async function archiveMemoryChunk(update, sourceMessages) {

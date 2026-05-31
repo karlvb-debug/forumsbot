@@ -9,6 +9,18 @@ export function estimateTokens(text) {
   return Math.ceil((text || "").length / 4);
 }
 
+/**
+ * Append a timestamped thought to an actor's rolling memory, keeping the last
+ * 14 lines. Shared by turns.js and memory.js (previously duplicated in both).
+ */
+export function appendMemory(existing, thought) {
+  if (!thought) return existing || "";
+  const entries = [existing, `[${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}] ${thought}`]
+    .filter(Boolean)
+    .join("\n");
+  return entries.split("\n").slice(-14).join("\n");
+}
+
 // ── Actor scheduling (cadence model) ─────────────────────────────────────────
 // A single source of truth replacing the legacy four-way `turnSchedule` enum
 // ('normal' | 'every-turn' | 'alternate' | 'on-call'). An actor is either a
