@@ -7,7 +7,7 @@ import { setBusy, getBusy as getIsGenerating } from '../hooks/useActions.js';
 import { showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble } from '../hooks/useStreaming.js';
 import { putMessage, getAllChunks, getActorMemory, putActorMemory } from './db.js';
 import { summarizeMemory, recallRelevantChunks, formatCurrentOutcomes, parseOutcomeJson, extractOutcomes } from './memory.js';
-import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, checkDrift } from './utils.js';
+import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, checkDrift, normalizeCadence, isQueueActor, shouldFireCadence } from './utils.js';
 import { updateSemanticAlignment, alignLineAttributions } from './telemetry.js';
 import { preflightSkipCheck } from './preflight.js';
 import { getKbEntriesForDirector, splitDocuments, buildEditableDocSection, buildReferenceSection, buildKbSection } from './knowledge.js';
@@ -123,6 +123,11 @@ const _tokSpeedWindow = [];
 const ALIGNMENT_EVERY_N_TURNS = 3;
 let _turnsSinceAlignment = 0;
 
+// Cumulative count of completed visible turns this session run. Drives turn-based
+// cadence firing for background actors. Reset when a fresh auto-loop starts.
+let _globalTurnIndex = 0;
+export function resetTurnIndex() { _globalTurnIndex = 0; }
+
 export async function addMessage(message) {
   const storedMessage = cleanStoredMessage({
     id: crypto.randomUUID(),
@@ -138,17 +143,10 @@ export async function addMessage(message) {
 
 export function buildTurnQueue() {
   const enabledActors = state.actors.filter(a => a.enabled);
-  const currentRound = state.currentRound || 0;
 
-  // every-turn actors fire as between-turn hooks (not in queue)
-  // on-call actors only enter queue when explicitly routed to
-  // alternate actors participate only on odd rounds (1, 3, 5…)
-  const queueActors = enabledActors.filter(a => {
-    const sched = a.turnSchedule || 'normal';
-    if (sched === 'every-turn' || sched === 'on-call') return false;
-    if (sched === 'alternate') return currentRound % 2 !== 0;
-    return true;
-  });
+  // Queue holds ordinary round-robin participants. Background/cadence actors
+  // (directors, periodic orchestrators) fire as hooks, never in the queue.
+  const queueActors = enabledActors.filter(isQueueActor);
 
   let enabledIds = queueActors.map(a => a.id);
   const strategy = state.scenario?.systems?.turnRouting?.strategy ?? 'round-robin';
@@ -166,15 +164,10 @@ export function nextParticipant() {
   state.turnQueue = state.turnQueue.filter((id) => enabledSet.has(id));
 
   const queueSet = new Set(state.turnQueue);
-  const currentRound = state.currentRound || 0;
   const missing = enabled.filter(id => {
     if (queueSet.has(id)) return false;
     const a = state.actors.find(x => x.id === id);
-    if (!a) return false;
-    const sched = a.turnSchedule || 'normal';
-    if (sched === 'every-turn' || sched === 'on-call') return false;
-    if (sched === 'alternate') return currentRound % 2 !== 0;
-    return true;
+    return a ? isQueueActor(a) : false;
   });
   if (missing.length) {
     state.turnQueue.push(...missing);
@@ -233,13 +226,14 @@ function buildEventContextBlock(eventName, data = {}) {
  */
 async function fireTriggerActors(eventName, eventData = {}, signal = null, excludeId = null) {
   const effectiveSignal = signal || abortController?.signal || null;
+  const fired = new Set();
   const triggered = state.actors.filter(a =>
     a.enabled &&
     a.id !== excludeId &&
     Array.isArray(a.triggerOn) &&
     a.triggerOn.includes(eventName)
   );
-  if (!triggered.length) return;
+  if (!triggered.length) return fired;
 
   const nextActorId = state.turnQueue[0];
   const nextActor = nextActorId ? state.actors.find(a => a.id === nextActorId) : null;
@@ -247,6 +241,7 @@ async function fireTriggerActors(eventName, eventData = {}, signal = null, exclu
   for (const actor of triggered) {
     if (effectiveSignal?.aborted) break;
     setCurrentSpeaker('');
+    fired.add(actor.id);
     try {
       const result = await askActor(actor, effectiveSignal, null, false, {
         triggerEvent: eventName,
@@ -260,6 +255,7 @@ async function fireTriggerActors(eventName, eventData = {}, signal = null, exclu
       console.warn(`[turns] trigger "${eventName}" actor "${actor.name}" error:`, err.message);
     }
   }
+  return fired;
 }
 
 /** Called by useActions.sendMessage after a user message is added to state. */
@@ -283,25 +279,21 @@ export async function fireUserMessageTriggers(message) {
 }
 
 async function runBetweenTurnActors(signal, justSpokeId = null) {
-  // New event-based: actors with triggerOn including 'on_every_turn'.
-  // Exclude the actor that just took its visible turn this cycle — otherwise a
-  // director (canDirect + on_every_turn) double-fires every turn and can re-route
-  // the conversation back to itself, churning indefinitely.
-  await fireTriggerActors('on_every_turn', {}, signal, justSpokeId);
-
-  // Legacy: actors with turnSchedule: 'every-turn' but no triggerOn set
-  const legacyActors = state.actors.filter(a =>
-    a.enabled &&
-    a.id !== justSpokeId &&
-    (a.turnSchedule || 'normal') === 'every-turn' &&
-    !(Array.isArray(a.triggerOn) && a.triggerOn.length > 0)
-  );
-  if (!legacyActors.length) return;
+  // Cadence-based: background/periodic actors on a turn cadence that is due this
+  // turn (e.g. every turn, or every Nth turn). Exclude the actor that just took
+  // its visible turn — otherwise a per-turn director would re-fire on itself and
+  // could route the conversation back to itself, churning indefinitely.
+  const dueActors = state.actors.filter(a => {
+    if (!a.enabled || a.id === justSpokeId) return false;
+    const cadence = normalizeCadence(a);
+    return cadence?.unit === 'turn' && shouldFireCadence(cadence, { turnIndex: _globalTurnIndex });
+  });
+  if (!dueActors.length) return;
 
   const nextActorId = state.turnQueue[0];
   const nextActor = nextActorId ? state.actors.find(a => a.id === nextActorId) : null;
 
-  for (const actor of legacyActors) {
+  for (const actor of dueActors) {
     if (signal?.aborted) break;
     setCurrentSpeaker('');
     try {
@@ -310,7 +302,38 @@ async function runBetweenTurnActors(signal, justSpokeId = null) {
         await applyAiResult({ kind: 'actor', data: actor }, result, { justSpokeId });
       }
     } catch (err) {
-      console.warn(`[turns] between-turn actor "${actor.name}" error:`, err.message);
+      console.warn(`[turns] cadence actor "${actor.name}" error:`, err.message);
+    }
+  }
+}
+
+/**
+ * Fire background actors on a round cadence that is due for state.currentRound.
+ * Called at round start, after on_round_start triggers. `alreadyFired` is the
+ * Set returned by that trigger pass so an actor isn't fired twice.
+ */
+async function runRoundCadenceActors(signal, alreadyFired = new Set()) {
+  const roundIndex = state.currentRound || 0;
+  const dueActors = state.actors.filter(a => {
+    if (!a.enabled || alreadyFired.has(a.id)) return false;
+    const cadence = normalizeCadence(a);
+    return cadence?.unit === 'round' && shouldFireCadence(cadence, { roundIndex });
+  });
+  if (!dueActors.length) return;
+
+  const nextActorId = state.turnQueue[0];
+  const nextActor = nextActorId ? state.actors.find(a => a.id === nextActorId) : null;
+
+  for (const actor of dueActors) {
+    if (signal?.aborted) break;
+    setCurrentSpeaker('');
+    try {
+      const result = await askActor(actor, signal, null, false, { nextActor });
+      if (result && result.action !== 'skip') {
+        await applyAiResult({ kind: 'actor', data: actor }, result);
+      }
+    } catch (err) {
+      console.warn(`[turns] round-cadence actor "${actor.name}" error:`, err.message);
     }
   }
 }
@@ -480,8 +503,10 @@ async function _runTurn(options = {}) {
       };
 
       await applyAiResult(participant, result);
-      // Fire every-turn background actors between turns (excluding the actor that
-      // just spoke, so a director doesn't immediately re-fire on itself).
+      // Advance the global turn counter, then fire cadence/every-turn background
+      // actors (excluding the actor that just spoke, so a director doesn't
+      // immediately re-fire on itself).
+      _globalTurnIndex += 1;
       await runBetweenTurnActors(abortController.signal, participant.data.id);
       removeStreamingBubble();
 
@@ -572,14 +597,10 @@ export async function runRound(options = {}) {
 async function _runRound(options = {}) {
   abortController = null; // Reset abort state for the new round
   _stopFlag = false;       // Clear stop flag for this round
-  // Count only actors that actually take queue turns — every-turn and on-call actors
-  // fire as background hooks and are never in the turn queue. Counting them inflates
-  // the round loop, causing normal actors to speak extra times (looks like a loop).
-  const count = state.actors.filter(a => {
-    if (!a.enabled) return false;
-    const sched = a.turnSchedule || 'normal';
-    return sched !== 'every-turn' && sched !== 'on-call';
-  }).length;
+  // Count only actors that actually take queue turns — background/cadence actors
+  // fire as hooks and are never in the turn queue. Counting them inflates the
+  // round loop, causing normal actors to speak extra times (looks like a loop).
+  const count = state.actors.filter(a => a.enabled && isQueueActor(a)).length;
   if (!count) {
     setStatus("Add at least one enabled actor or turn on the DM.", "warn");
     return false;
@@ -588,8 +609,10 @@ async function _runRound(options = {}) {
   let completedTurns = 0;
   state.currentRound = (state.currentRound || 0) + 1;
 
-  // Fire round-start triggers (background orchestrators can set up injections/routing)
-  await fireTriggerActors('on_round_start', { round: state.currentRound }, abortController?.signal);
+  // Fire round-start triggers (background orchestrators can set up injections/routing),
+  // then any round-cadence background actors that are due this round.
+  const rsFired = await fireTriggerActors('on_round_start', { round: state.currentRound }, abortController?.signal);
+  await runRoundCadenceActors(abortController?.signal, rsFired);
 
   const strategy = state.scenario?.systems?.turnRouting?.strategy ?? 'round-robin';
 
@@ -679,11 +702,7 @@ async function _runRound(options = {}) {
 }
 
 export function participantCycleCount() {
-  return Math.max(1, state.actors.filter(a => {
-    if (!a.enabled) return false;
-    const sched = a.turnSchedule || 'normal';
-    return sched !== 'every-turn' && sched !== 'on-call';
-  }).length);
+  return Math.max(1, state.actors.filter(a => a.enabled && isQueueActor(a)).length);
 }
 
 export async function runAutoLoop() {
@@ -702,6 +721,7 @@ export async function runAutoLoop() {
   _stopFlag = false;
   if (starting) {
     state.autoStop.roundsRun = 0;
+    _globalTurnIndex = 0;
     setAutoStopStatus("Auto running.");
   } else {
     setAutoStopStatus("Auto paused.");

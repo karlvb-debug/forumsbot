@@ -401,3 +401,34 @@ describe('nextParticipant @mention routing', () => {
     expect(mockState.turnQueue.filter(id => id === 'a1').length).toBe(1);
   });
 });
+
+// ── Cadence-based queue membership (Phase 6) ──────────────────────────────────
+import { buildTurnQueue, participantCycleCount } from './turns.js';
+
+describe('buildTurnQueue — cadence scheduling', () => {
+  beforeEach(() => {
+    mockState.scenario = { systems: { turnRouting: { strategy: 'round-robin' } } };
+  });
+
+  it('excludes background and cadence actors from the queue', () => {
+    mockState.actors = [
+      { id: 'd1', name: 'Director', enabled: true, cadence: { unit: 'turn', n: 1 }, actorMode: 'background' },
+      { id: 'a1', name: 'Alice', enabled: true, cadence: null },
+      { id: 'a2', name: 'Bob', enabled: true, cadence: null },
+      { id: 'r1', name: 'Rounder', enabled: true, cadence: { unit: 'round', n: 2 } },
+    ];
+    mockState.turnQueue = [];
+    const queue = buildTurnQueue();
+    expect(queue).toEqual(['a1', 'a2']);
+    expect(participantCycleCount()).toBe(2);
+  });
+
+  it('migrates legacy turnSchedule on raw actors via isQueueActor', () => {
+    mockState.actors = [
+      { id: 'd1', name: 'Director', enabled: true, turnSchedule: 'every-turn' },
+      { id: 'a1', name: 'Alice', enabled: true, turnSchedule: 'normal' },
+    ];
+    mockState.turnQueue = [];
+    expect(buildTurnQueue()).toEqual(['a1']);
+  });
+});

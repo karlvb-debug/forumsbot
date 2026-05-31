@@ -40,8 +40,8 @@ export const ACTOR_LIBRARY = [
     goal: 'Converge the group on clear, well-reasoned decisions.',
     voice: 'Calm, concise, neutral.',
     canDirect: true, canManageCast: true, canInject: true, directorMode: 'facilitator',
-    turnSchedule: 'every-turn', actorMode: 'background',
-    triggerOn: ['on_every_turn', 'on_user_message', 'on_conflict', 'on_agent_repetition'],
+    cadence: { unit: 'turn', n: 1 }, actorMode: 'background',
+    triggerOn: ['on_user_message', 'on_conflict', 'on_agent_repetition'],
     temperature: 0.6, maxTokens: 600, color: C.gold,
   },
   {
@@ -117,8 +117,8 @@ export const ACTOR_LIBRARY = [
     persona: 'Leads the review: frames what the change is trying to do, keeps reviewers focused on the diff, and summarizes the verdict (approve / request changes) with the key reasons.',
     goal: 'Produce a clear, actionable review verdict.',
     voice: 'Organized, fair, decisive.',
-    canDirect: true, canInject: true, directorMode: 'facilitator', turnSchedule: 'every-turn', actorMode: 'background',
-    triggerOn: ['on_every_turn', 'on_user_message'],
+    canDirect: true, canInject: true, directorMode: 'facilitator', cadence: { unit: 'turn', n: 1 }, actorMode: 'background',
+    triggerOn: ['on_user_message'],
     temperature: 0.5, maxTokens: 700, color: C.gold,
   },
   {
@@ -177,8 +177,8 @@ export const ACTOR_LIBRARY = [
     persona: 'Narrates the world, sets scenes, and drives the story forward. Describes the environment and consequences — never speaks or acts for the player characters.',
     goal: 'Build an engaging narrative with rising tension and payoff.',
     voice: 'Vivid, sensory, cinematic.',
-    canDirect: true, directorMode: 'narrator', turnSchedule: 'every-turn',
-    triggerOn: ['on_every_turn', 'on_user_message'],
+    canDirect: true, directorMode: 'narrator', cadence: { unit: 'turn', n: 1 },
+    triggerOn: ['on_user_message'],
     temperature: 0.9, color: C.purple,
   },
   {
@@ -205,8 +205,8 @@ export const ACTOR_LIBRARY = [
     persona: 'Runs the writers\' room: turns the user\'s concept into a working plan, keeps the team moving from brainstorm → outline → draft → revision, and makes the final call when the room disagrees. Decides when the outline is solid enough to start drafting prose.',
     goal: 'Ship a finished story draft that honors the user\'s concept.',
     voice: 'Decisive, organized, encouraging.',
-    canDirect: true, canInject: true, directorMode: 'facilitator', turnSchedule: 'every-turn', actorMode: 'background',
-    triggerOn: ['on_every_turn', 'on_user_message'],
+    canDirect: true, canInject: true, directorMode: 'facilitator', cadence: { unit: 'turn', n: 1 }, actorMode: 'background',
+    triggerOn: ['on_user_message'],
     temperature: 0.6, maxTokens: 700, color: C.gold,
   },
   {

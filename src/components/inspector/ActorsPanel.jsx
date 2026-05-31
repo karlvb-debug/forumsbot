@@ -17,7 +17,8 @@ const PERM_DEFS = [
 const DEFAULT_COLORS = ['#2a9d8f', '#7c5cbf', '#4a7fd4', '#c97a40', '#e76f51', '#457b9d', '#c8a830'];
 
 const TRIGGER_DEFS = [
-  { key: 'on_every_turn',       label: 'Every turn',   icon: '🔄' },
+  // 'on_every_turn' is intentionally absent — periodic firing is configured via
+  // the Schedule control (cadence), not as an event trigger.
   { key: 'on_user_message',     label: 'User message', icon: '💬' },
   { key: 'on_round_start',      label: 'Round start',  icon: '▶️'  },
   { key: 'on_round_end',        label: 'Round end',    icon: '⏹️'  },
@@ -103,7 +104,7 @@ export function ActorsPanel() {
         canSeeThoughts: false,
         directorMode: 'facilitator',
         authority: 50,
-        turnSchedule: 'normal',
+        cadence: null,
         actorMode: 'participant',
         triggerOn: [],
         temperature: overrides.temperature ?? 0.8,
@@ -190,7 +191,7 @@ export function ActorsPanel() {
                 directorMode: tpl.directorMode || 'facilitator',
                 canSeeThoughts: !!tpl.canSeeThoughts,
                 authority: tpl.authority ?? 50,
-                turnSchedule: tpl.turnSchedule || 'normal',
+                cadence: tpl.cadence ?? null,
                 actorMode: tpl.actorMode || 'participant',
                 triggerOn: Array.isArray(tpl.triggerOn) ? [...tpl.triggerOn] : [],
                 ...(tpl.maxTokens != null ? { maxTokens: tpl.maxTokens } : {}),
@@ -364,28 +365,58 @@ export function ActorsPanel() {
 
                     <div>
                       <div className="actor-section-label">Scheduling</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 6 }}>
-                        <Field label="Turn schedule" info="When this actor is eligible to speak: every round, every single turn, alternating rounds, or only when called on.">
-                          <select value={a.turnSchedule || 'normal'} onChange={e => updateActor(a.id, 'turnSchedule', e.target.value)}>
-                            <option value="normal">Normal — once per round</option>
-                            <option value="every-turn">Every turn</option>
-                            <option value="alternate">Alternate rounds</option>
-                            <option value="on-call">On-call only</option>
-                          </select>
-                        </Field>
-                        <Field label="Visibility">
-                          <select value={a.actorMode || 'participant'} onChange={e => updateActor(a.id, 'actorMode', e.target.value)}>
-                            <option value="participant">Participant</option>
-                            <option value="background">Background</option>
-                          </select>
-                        </Field>
-                      </div>
-                      {(a.turnSchedule === 'every-turn' || a.actorMode === 'background') && (
-                        <div className="field-hint" style={{ marginTop: 4 }}>
-                          {a.turnSchedule === 'every-turn' && 'Runs silently between each actor turn. '}
-                          {a.actorMode === 'background' && 'No transcript entry — injections/routing/cast changes only.'}
-                        </div>
-                      )}
+                      {(() => {
+                        // Cadence model: null = queue participant; otherwise
+                        // { unit:'turn'|'round', n } where n=0 means on-call.
+                        const cad = a.cadence || null;
+                        const schedType = !cad ? 'queue'
+                          : cad.n === 0 ? 'on-call'
+                          : cad.unit === 'round' ? 'round' : 'turn';
+                        const n = cad && cad.n > 0 ? cad.n : 1;
+                        const setCadence = (type, count = n) => {
+                          const next = type === 'queue' ? null
+                            : type === 'on-call' ? { unit: 'turn', n: 0 }
+                            : { unit: type, n: Math.max(1, Math.floor(count) || 1) };
+                          updateActor(a.id, 'cadence', next);
+                        };
+                        return (
+                          <>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 6 }}>
+                              <Field label="Schedule" info="Queue = takes ordinary round-robin turns. Every N turns/rounds = a background actor that fires periodically (e.g. a director). On-call = only speaks when routed to.">
+                                <select value={schedType} onChange={e => setCadence(e.target.value)}>
+                                  <option value="queue">Queue — round-robin turns</option>
+                                  <option value="turn">Every N turns</option>
+                                  <option value="round">Every N rounds</option>
+                                  <option value="on-call">On-call only</option>
+                                </select>
+                              </Field>
+                              {(schedType === 'turn' || schedType === 'round') && (
+                                <Field label={`Every N ${schedType === 'turn' ? 'turns' : 'rounds'}`}>
+                                  <input
+                                    type="number" min={1} max={20} value={n}
+                                    onChange={e => setCadence(schedType, Number(e.target.value))}
+                                    style={{ width: 80 }}
+                                  />
+                                </Field>
+                              )}
+                            </div>
+                            <Field label="Visibility">
+                              <select value={a.actorMode || 'participant'} onChange={e => updateActor(a.id, 'actorMode', e.target.value)}>
+                                <option value="participant">Participant</option>
+                                <option value="background">Background</option>
+                              </select>
+                            </Field>
+                            {(schedType !== 'queue' || a.actorMode === 'background') && (
+                              <div className="field-hint" style={{ marginTop: 4 }}>
+                                {schedType === 'turn' && `Fires ${n === 1 ? 'between each turn' : `every ${n} turns`}. `}
+                                {schedType === 'round' && `Fires ${n === 1 ? 'each round' : `every ${n} rounds`}. `}
+                                {schedType === 'on-call' && 'Only speaks when another actor routes to it. '}
+                                {a.actorMode === 'background' && 'No transcript entry — injections/routing/cast changes only.'}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
 
                     <div>

@@ -1257,7 +1257,7 @@ function buildActorFromTemplate(tpl, index) {
     canResearch: !!tpl.canResearch,
     canSeeThoughts: !!tpl.canSeeThoughts,
     authority: tpl.authority ?? 50,
-    turnSchedule: tpl.turnSchedule || 'normal',
+    cadence: tpl.cadence ?? null,
     actorMode: tpl.actorMode || 'participant',
     triggerOn: Array.isArray(tpl.triggerOn) ? [...tpl.triggerOn] : [],
     temperature: tpl.temperature ?? 0.8,

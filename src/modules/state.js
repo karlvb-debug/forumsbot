@@ -21,7 +21,20 @@ function normalizeDocumentEntry(e) {
   };
 }
 
-
+/**
+ * Resolve an actor's scheduling cadence, folding the legacy 'on_every_turn'
+ * trigger into a turn cadence. Periodic firing has exactly one source of truth
+ * (the cadence); on_every_turn is no longer a distinct trigger. A pre-existing
+ * cadence/turnSchedule wins; otherwise an on_every_turn trigger implies { turn, 1 }.
+ */
+function migrateEveryTurnTrigger(actor) {
+  const cadence = normalizeCadence(actor);
+  if (cadence) return cadence;
+  if (Array.isArray(actor?.triggerOn) && actor.triggerOn.includes('on_every_turn')) {
+    return { unit: 'turn', n: 1 };
+  }
+  return null;
+}
 
 function normalizeState(value) {
   const merged = {
@@ -51,11 +64,11 @@ function normalizeState(value) {
     actors: (Array.isArray(value.actors) && value.actors.length ? value.actors : structuredClone(defaultState.actors))
       .map(a => ({
         canInject: false,
-        turnSchedule: 'normal',
+        cadence: null,
         actorMode: 'participant',
         triggerOn: [],
         ...a,
-        triggerOn: Array.isArray(a.triggerOn) ? a.triggerOn : [],
+        triggerOn: Array.isArray(a.triggerOn) ? a.triggerOn.filter(t => t !== 'on_every_turn') : [],
       })),
     messages: Array.isArray(value.messages) ? value.messages.map(cleanStoredMessage) : [],
     turnQueue: Array.isArray(value.turnQueue) ? value.turnQueue : [],
@@ -243,8 +256,13 @@ function normalizeState(value) {
     // Scheduling: migrate the legacy four-way turnSchedule enum to the cadence
     // model. Queue participants have cadence: null; background/periodic actors
     // have { unit: 'turn'|'round', n }. See utils.normalizeCadence.
-    cadence: normalizeCadence(actor),
+    // The legacy 'on_every_turn' trigger is redundant with a turn cadence — fold
+    // it in so periodic firing has exactly one source of truth (the cadence).
+    cadence: migrateEveryTurnTrigger(actor),
     actorMode: actor.actorMode || 'participant',
+    // Event triggers (genuine events only — periodic firing is the cadence's job,
+    // so 'on_every_turn' is filtered out here as part of the Phase 6 unification).
+    triggerOn: Array.isArray(actor.triggerOn) ? actor.triggerOn.filter(t => t !== 'on_every_turn') : [],
   }));
   return merged;
 }
