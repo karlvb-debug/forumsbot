@@ -101,6 +101,12 @@ async function promptPause(pauseRecord) {
 
 export let abortController = null;
 let _stopFlag = false;
+// Pipeline re-entrancy lock. Held for the full duration of a manual single turn,
+// a manual round, or an auto-loop — NOT toggled between turns the way `busy` is.
+// Prevents concurrent turn pipelines when the user double-clicks Next/Round/Auto
+// or fires the Alt+N/R/A shortcuts (which bypass button `disabled` state).
+let _pipelineActive = false;
+export function isPipelineActive() { return _pipelineActive; }
 let _lastPromptParts = null;
 export function getLastPromptParts() { return _lastPromptParts; }
 
@@ -252,7 +258,22 @@ async function fireTriggerActors(eventName, eventData = {}, signal = null, exclu
 
 /** Called by useActions.sendMessage after a user message is added to state. */
 export async function fireUserMessageTriggers(message) {
-  await fireTriggerActors('on_user_message', { message });
+  // This is the one trigger entry point fired from OUTSIDE the turn pipeline
+  // (the others run inside runNextTurn/runRound). If a turn, round, or auto-loop
+  // is already in flight, firing here would run a director/manager model call
+  // concurrently with the running pipeline — exactly the "responds, then responds
+  // again before finishing" loop seen with director/manager actors. The running
+  // pipeline already sees the user message in its transcript context, so we skip.
+  if (_pipelineActive) {
+    console.warn('[turns] fireUserMessageTriggers skipped — pipeline already active');
+    return;
+  }
+  _pipelineActive = true;
+  try {
+    await fireTriggerActors('on_user_message', { message });
+  } finally {
+    _pipelineActive = false;
+  }
 }
 
 async function runBetweenTurnActors(signal, justSpokeId = null) {
@@ -313,6 +334,23 @@ async function countdownRetry(attempt, maxMs) {
 }
 
 export async function runNextTurn(options = {}) {
+  // Internal round-continuation calls run under the lock already held by
+  // runRound/runAutoLoop — they bypass acquisition. Only manual single-turn
+  // calls acquire the lock here.
+  if (options.isRoundContinuation) return _runTurn(options);
+  if (_pipelineActive) {
+    console.warn('[turns] runNextTurn ignored — a turn is already in progress');
+    return false;
+  }
+  _pipelineActive = true;
+  try {
+    return await _runTurn(options);
+  } finally {
+    _pipelineActive = false;
+  }
+}
+
+async function _runTurn(options = {}) {
   console.log('[turns] runNextTurn called', options);
   if (_stopFlag) {
     console.log('[turns] runNextTurn blocked by stop flag');
@@ -585,6 +623,23 @@ export async function runNextTurn(options = {}) {
 
 export async function runRound(options = {}) {
   console.log('[turns] runRound called', options);
+  // Auto-loop calls pass fromAuto:true and already hold the pipeline lock.
+  const ownLock = !options.fromAuto;
+  if (ownLock) {
+    if (_pipelineActive) {
+      console.warn('[turns] runRound ignored — a turn or round is already in progress');
+      return false;
+    }
+    _pipelineActive = true;
+  }
+  try {
+    return await _runRound(options);
+  } finally {
+    if (ownLock) _pipelineActive = false;
+  }
+}
+
+async function _runRound(options = {}) {
   abortController = null; // Reset abort state for the new round
   _stopFlag = false;       // Clear stop flag for this round
   const count = state.actors.filter((actor) => actor.enabled).length;
@@ -692,6 +747,16 @@ export function participantCycleCount() {
 
 export async function runAutoLoop() {
   const starting = !state.autoRunning;
+  // Starting a fresh auto-loop acquires the pipeline lock for its whole lifetime.
+  // A toggle-off call (starting === false) is just a stop — it neither acquires
+  // nor releases; the already-running loop releases when its while() exits.
+  if (starting) {
+    if (_pipelineActive) {
+      setStatus('A turn or round is already in progress.', 'warn');
+      return;
+    }
+    _pipelineActive = true;
+  }
   state.autoRunning = starting;
   _stopFlag = false;
   if (starting) {
@@ -718,6 +783,7 @@ export async function runAutoLoop() {
     const msg = err instanceof Error ? err.message : String(err);
     setStatus(`Auto-run error: ${msg}`, 'error');
   } finally {
+    if (starting) _pipelineActive = false;
     saveState();
     extractOutcomes();
   }
@@ -726,6 +792,7 @@ export async function runAutoLoop() {
 export function stopGeneration() {
   state.autoRunning = false;
   _stopFlag = true;
+  _pipelineActive = false; // force-release the lock; aborted pipelines also release in finally
   abortController?.abort();
   setAutoStopStatus("Stopped.");
   saveState();
@@ -1333,6 +1400,11 @@ export async function runDirectorBrief() {
     setStatus("Choose a model first.", "warn");
     return;
   }
+  if (_pipelineActive) {
+    setStatus("A turn or round is already in progress.", "warn");
+    return;
+  }
+  _pipelineActive = true;
   setBusy(true);
   try {
     abortController = new AbortController();
@@ -1369,6 +1441,7 @@ export async function runDirectorBrief() {
     removeStreamingBubble();
     setStatus(`Brief failed: ${err.message}`, "error");
   } finally {
+    _pipelineActive = false;
     setBusy(false);
     abortController = null;
   }

@@ -24,6 +24,10 @@ export function Topbar() {
   const turnCount = useForumState(s => (s.messages || []).filter(m => m.type !== 'system').length);
   const autoRunning = useForumState(s => s.autoRunning);
 
+  // Busy state — disable manual transport controls while a turn/round is generating
+  useSyncExternalStore(subscribeBusy, getBusy);
+  const busy = getBusy();
+
   // Connection status
   useSyncExternalStore(subscribeConnectionStatus, getConnectionStatusVersion);
   const connStatus = getConnectionStatus();
@@ -88,6 +92,7 @@ export function Topbar() {
         </button>
         <button
           onClick={nextTurn}
+          disabled={busy}
           title="Next actor turn (Alt+N)"
           aria-label="Next turn"
         >
@@ -95,6 +100,7 @@ export function Topbar() {
         </button>
         <button
           onClick={runRound}
+          disabled={busy}
           title="Run a full round (Alt+R)"
           aria-label="Run round"
         >
