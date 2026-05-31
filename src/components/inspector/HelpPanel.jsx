@@ -335,15 +335,6 @@ export function HelpPanel() {
             <strong>Target</strong> — set "All actors" or restrict a document to specific actors.
             Useful for private briefings or role-specific context.
           </li>
-          <li>
-            <strong>Import PR</strong> — paste a GitHub PR URL to auto-import the diff as reference
-            documents and configure 4 specialist code-review actors: Review Lead, Security Analyst,
-            Architecture Reviewer, and Test Coverage Reviewer.
-          </li>
-          <li>
-            <strong>Import Folder</strong> — load source files from your local machine as reference
-            documents. Supports up to 20 files, 8 KB each.
-          </li>
         </ul>
       </HelpSection>
 
