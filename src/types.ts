@@ -199,10 +199,16 @@ export interface LineAttribution {
 }
 
 export interface Scenario {
-  mode: string;
   title: string;
   premise: string;
   objective: string;
+  systems?: {
+    stageDirections?: { enabled?: boolean; intensity?: string; maxTokenShare?: number };
+    alignment?: { strictness?: string; anchorInPrompt?: boolean; nudgeStyle?: string };
+    turnRouting?: { strategy?: string; allowDirectAddress?: boolean };
+    dmRole?: { role?: string; narrates?: boolean; canIntroduceElements?: boolean };
+    document?: { schema?: string };
+  };
 }
 
 export interface ContextInfo {

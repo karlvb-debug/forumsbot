@@ -4,7 +4,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const { mockState } = vi.hoisted(() => {
   const mockState = {
     scenario: {
-      mode: 'problem',
       title: 'Test Forum',
       premise: 'Test premise',
       objective: 'Test objective',
@@ -57,6 +56,7 @@ vi.mock('./state.js', () => ({
 vi.mock('./api.js', () => ({
   setStatus: vi.fn(),
   chatJson: vi.fn(),
+  chatStructured: vi.fn(),
   chatCompletion: vi.fn(),
   setCurrentSpeaker: vi.fn(),
   getLastToolCalls: vi.fn(() => []),
@@ -115,7 +115,8 @@ vi.mock('./knowledge.js', () => ({
 }));
 
 // ── Import after mocks ────────────────────────────────────────────────────────
-import { resolvePolicy, resolveSystemSettings, scenarioBlock } from './turns.js';
+import { resolvePolicy, resolveSystemSettings, scenarioBlock, sanitizeSpeakingPlan } from './turns.js';
+import { extractOutcomes } from './memory.js';
 
 // ── resolvePolicy ─────────────────────────────────────────────────────────────
 describe('resolvePolicy', () => {
@@ -179,37 +180,22 @@ describe('resolvePolicy', () => {
 // ── resolveSystemSettings ─────────────────────────────────────────────────────
 describe('resolveSystemSettings', () => {
   beforeEach(() => {
-    mockState.scenario = { mode: 'problem', systems: {} };
+    mockState.scenario = { systems: {} };
+    mockState.actors = [];
   });
 
-  it('problem mode — stageDirections off, alignment strict, facilitator DM', () => {
+  it('uses explicit defaults when no systems are configured', () => {
     const s = resolveSystemSettings();
     expect(s.stageDirectionsEnabled).toBe(false);
-    expect(s.alignmentStrictness).toBe('strict');
-    expect(s.dmNarrates).toBe(false);
-    expect(s.dmRole).toBe('facilitator');
-    expect(s.documentSchema).toBe('findings');
-  });
-
-  it('story mode — stageDirections on by default, DM narrates, narrator role', () => {
-    mockState.scenario.mode = 'story';
-    const s = resolveSystemSettings();
-    expect(s.stageDirectionsEnabled).toBe(true);
-    expect(s.dmNarrates).toBe(true);
-    expect(s.dmRole).toBe('narrator');
-    expect(s.documentSchema).toBe('story-bible');
-  });
-
-  it('freeform mode — does NOT inherit story defaults', () => {
-    mockState.scenario.mode = 'freeform';
-    const s = resolveSystemSettings();
-    expect(s.stageDirectionsEnabled).toBe(false);
+    expect(s.alignmentStrictness).toBe('moderate');
     expect(s.dmNarrates).toBe(false);
     expect(s.dmRole).toBe('facilitator');
     expect(s.documentSchema).toBe('freeform');
+    expect(s.turnStrategy).toBe('sequential');
+    expect(s.allowDirectAddress).toBe(true);
   });
 
-  it('explicit systems override mode defaults', () => {
+  it('explicit systems are respected', () => {
     mockState.scenario.systems = {
       stageDirections: { enabled: true, intensity: 'immersive', maxTokenShare: 0.4 },
       dmRole: { role: 'narrator', narrates: true },
@@ -226,37 +212,52 @@ describe('resolveSystemSettings', () => {
     expect(s.documentSchema).toBe('story-bible');
   });
 
-  it('partial systems overrides fall through to mode defaults', () => {
-    mockState.scenario.mode = 'story';
+  it('a director actor directorMode overrides scenario dmRole', () => {
+    mockState.scenario.systems = {
+      dmRole: { role: 'narrator', narrates: true },
+    };
+    mockState.actors = [{ id: 'd1', name: 'Director', enabled: true, canDirect: true, directorMode: 'arbiter' }];
+    const s = resolveSystemSettings();
+    expect(s.dmRole).toBe('arbiter');
+    expect(s.dmNarrates).toBe(false);
+  });
+
+  it('partial systems fall back to explicit defaults', () => {
     mockState.scenario.systems = {
       stageDirections: { enabled: false },
     };
     const s = resolveSystemSettings();
     expect(s.stageDirectionsEnabled).toBe(false);
-    expect(s.dmNarrates).toBe(true); // story mode default still applies
+    expect(s.dmNarrates).toBe(false);
   });
 
-  it('alignment strictness defaults to moderate for freeform', () => {
-    mockState.scenario.mode = 'freeform';
+  it('alignment strictness defaults to moderate', () => {
     mockState.scenario.systems = {};
     const s = resolveSystemSettings();
     expect(s.alignmentStrictness).toBe('moderate');
+  });
+
+  it('normalizes legacy routing names to agentic speaking order', () => {
+    mockState.scenario.systems = { turnRouting: { strategy: 'dm-directed', allowDirectAddress: false } };
+    const s = resolveSystemSettings();
+    expect(s.turnStrategy).toBe('agentic');
+    expect(s.allowDirectAddress).toBe(false);
   });
 });
 
 // ── scenarioBlock ─────────────────────────────────────────────────────────────
 describe('scenarioBlock', () => {
   beforeEach(() => {
-    mockState.scenario = { mode: 'problem', title: 'My Forum', premise: 'Test premise', objective: 'Test objective', systems: {} };
+    mockState.scenario = { title: 'My Forum', premise: 'Test premise', objective: 'Test objective', systems: {} };
     mockState.userContext = { interactionMode: 'collaborator', displayName: '', storyRole: '', pausePolicy: {} };
   });
 
-  it('includes mode, title, premise, objective', () => {
+  it('includes title, premise, objective without a mode line', () => {
     const block = scenarioBlock();
-    expect(block).toContain('Mode: Problem');
     expect(block).toContain('Title: My Forum');
     expect(block).toContain('Premise: Test premise');
     expect(block).toContain('Objective: Test objective');
+    expect(block).not.toContain('Mode:');
   });
 
   it('no user line when displayName and storyRole are empty', () => {
@@ -310,7 +311,7 @@ describe('scenarioBlock', () => {
 });
 
 // ── applyAiResult ─────────────────────────────────────────────────────────────
-import { applyAiResult, fireUserMessageTriggers, runRound } from './turns.js';
+import { applyAiResult, fireUserMessageTriggers, runRound, stopGeneration } from './turns.js';
 import { chatJson } from './api.js';
 
 describe('applyAiResult', () => {
@@ -327,6 +328,7 @@ describe('applyAiResult', () => {
     ];
     mockState.messages = [];
     mockState.turnQueue = ['manager-id'];
+    mockState.scenario = { systems: { turnRouting: { strategy: 'sequential', allowDirectAddress: true } } };
   });
 
   it('creates new actors via applyAiResult with custom permissions, authority, and temperature', async () => {
@@ -361,6 +363,23 @@ describe('applyAiResult', () => {
     expect(bob.canDirect).toBe(true);
     expect(bob.authority).toBe(80);
     expect(bob.temperature).toBe(0.5);
+  });
+
+  it('does not honor nextSpeaker when direct addressing is disabled', async () => {
+    mockState.scenario = { systems: { turnRouting: { allowDirectAddress: false } } };
+    mockState.actors = [
+      { id: 'a1', name: 'Alice', role: 'Participant', enabled: true, color: '#18726d' },
+      { id: 'a2', name: 'Bob', role: 'Participant', enabled: true, color: '#b84738' },
+    ];
+    mockState.turnQueue = ['a1', 'a2'];
+
+    await applyAiResult({ data: mockState.actors[0] }, {
+      action: 'speak',
+      message: 'Bob should go next.',
+      nextSpeaker: 'Bob',
+    });
+
+    expect(mockState.turnQueue).toEqual(['a1', 'a2']);
   });
 
   it('preserves queue rotation when a manager changes the cast during its turn', async () => {
@@ -418,6 +437,18 @@ describe('applyAiResult', () => {
   });
 });
 
+describe('outcome extraction trigger policy', () => {
+  beforeEach(() => {
+    extractOutcomes.mockClear();
+    mockState.autoRunning = true;
+  });
+
+  it('does not extract outcomes automatically when stopping generation', () => {
+    stopGeneration();
+    expect(extractOutcomes).not.toHaveBeenCalled();
+  });
+});
+
 // ── nextParticipant @mention routing ──────────────────────────────────────────
 import { nextParticipant } from './turns.js';
 
@@ -458,7 +489,7 @@ import { buildTurnQueue, participantCycleCount } from './turns.js';
 
 describe('buildTurnQueue — cadence scheduling', () => {
   beforeEach(() => {
-    mockState.scenario = { systems: { turnRouting: { strategy: 'round-robin' } } };
+    mockState.scenario = { systems: { turnRouting: { strategy: 'sequential' } } };
   });
 
   it('excludes background and cadence actors from the queue', () => {
@@ -481,5 +512,19 @@ describe('buildTurnQueue — cadence scheduling', () => {
     ];
     mockState.turnQueue = [];
     expect(buildTurnQueue()).toEqual(['a1']);
+  });
+});
+
+describe('sanitizeSpeakingPlan', () => {
+  it('keeps only eligible unique actor names or ids', () => {
+    const eligible = [
+      { id: 'a1', name: 'Alice' },
+      { id: 'a2', name: 'Bob' },
+    ];
+    expect(sanitizeSpeakingPlan(['Bob', 'missing', 'a1', 'bob'], eligible)).toEqual(['a2', 'a1']);
+  });
+
+  it('returns null when the router did not return an array', () => {
+    expect(sanitizeSpeakingPlan('Alice', [{ id: 'a1', name: 'Alice' }])).toBeNull();
   });
 });

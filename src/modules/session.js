@@ -48,7 +48,7 @@ export function savePreset() {
       openQuestions: state.memory.openQuestions,
       dmState: state.memory.dmState
     },
-    scenario: state.scenario,
+    scenario: scenarioWithoutMode(state.scenario),
     actors: state.actors,
     autoStop: {
       ...state.autoStop,
@@ -132,10 +132,9 @@ export async function exportSession(mode = 'debug') {
       exportMode: 'eval',
       settings: {
         model: state.settings.model,
-        mode: state.scenario.mode,
         temperature: state.settings.temperature
       },
-      scenario: state.scenario,
+      scenario: scenarioWithoutMode(state.scenario),
       autoStop: {
         goal: state.autoStop.goal,
         roundsRun: state.autoStop.roundsRun
@@ -227,7 +226,6 @@ export async function copySessionToClipboard() {
   const header = [
     `# Forum Session Digest`,
     `**Title:** ${state.scenario.title || 'Untitled'}`,
-    `**Mode:** ${state.scenario.mode || 'problem'}`,
     `**Premise:** ${state.scenario.premise || 'None'}`,
     `**Objective:** ${state.scenario.objective || 'None'}`,
     `---`,
@@ -277,6 +275,11 @@ export function slugDate() {
   return new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
 }
 
+function scenarioWithoutMode(scenario = {}) {
+  const { mode: _legacyMode, ...cleanScenario } = scenario || {};
+  return cleanScenario;
+}
+
 export async function resetSession(fullReset = false) {
   try { await clearMessages(); } catch (err) { console.warn("clearMessages failed:", err); }
   try { await clearChunks(); } catch (err) { console.warn("clearChunks failed:", err); }
@@ -286,7 +289,7 @@ export async function resetSession(fullReset = false) {
   } else {
     const keepConfig = {
       settings: state.settings,
-      scenario: state.scenario,
+      scenario: scenarioWithoutMode(state.scenario),
       actors: state.actors.map((actor) => ({ ...actor, thoughts: "" })),
       memory: {
         ...structuredClone(defaultState.memory),
@@ -321,7 +324,7 @@ export function loadPresetFile(file) {
         settings: { ...state.settings, ...preset.settings },
         memory: { ...state.memory, ...preset.memory },
         autoStop: { ...state.autoStop, ...preset.autoStop, roundsRun: 0 },
-        scenario: { ...state.scenario, ...preset.scenario },
+        scenario: { ...scenarioWithoutMode(state.scenario), ...scenarioWithoutMode(preset.scenario || {}) },
         actors: preset.actors || state.actors
       }));
       if (Array.isArray(preset.messages)) {
@@ -423,20 +426,20 @@ export async function generateQuickStart(promptOverride = "") {
   setQuickStartStatus("Thinking…");
 
   const currentConfig = {
-    scenario: state.scenario,
+    scenario: scenarioWithoutMode(state.scenario),
     dm: (() => { const d = state.actors.find(a => a.canDirect); return d ? { enabled: d.enabled, name: d.name, persona: d.persona, canSeeThoughts: d.canSeeThoughts } : { enabled: false }; })(),
-    actors: state.actors.map(a => ({ name: a.name, role: a.role, persona: a.persona, goal: a.goal, voice: a.voice, enabled: a.enabled, temperature: a.temperature, authority: a.authority ?? 50, canDirect: !!a.canDirect, canManageCast: !!a.canManageCast, canResearch: !!a.canResearch, canSeeThoughts: !!a.canSeeThoughts })),
+    actors: state.actors.map(a => ({ name: a.name, role: a.role, persona: a.persona, goal: a.goal, voice: a.voice, enabled: a.enabled, temperature: a.temperature, authority: a.authority ?? 50, canDirect: !!a.canDirect, canManageCast: !!a.canManageCast, canResearch: !!a.canResearch, canSeeThoughts: !!a.canSeeThoughts, directorMode: a.directorMode })),
     settings: {
       temperature: state.settings.temperature,
       maxTokens: state.settings.maxTokens ?? 2000,
       topP: state.settings.topP ?? 1.0,
       repeatPenalty: state.settings.repeatPenalty ?? 1.1,
-      toolsEnabled: state.settings.toolsEnabled,
+      toolsEnabled: !!state.settings.toolsEnabled,
       streamingEnabled: state.settings.streamingEnabled !== false,
       showThoughts: state.settings.showThoughts,
       turboMode: !!state.settings.turboMode,
-      enablePreflightRouter: state.settings.enablePreflightRouter !== false,
-      enableCrossSessionMemory: state.settings.enableCrossSessionMemory !== false,
+      enablePreflightRouter: !!state.settings.enablePreflightRouter,
+      enableCrossSessionMemory: !!state.settings.enableCrossSessionMemory,
       enableAdaptiveCompression: state.settings.enableAdaptiveCompression !== false,
       turnDelay: state.settings.turnDelay ?? 0,
     },
@@ -457,18 +460,18 @@ export async function generateQuickStart(promptOverride = "") {
   };
 
   const patchChangesShape = `{
-  "addActors": [{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"authority":50,"canDirect":false,"canManageCast":false,"canResearch":false,"canSeeThoughts":false}],
+  "addActors": [{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"authority":50,"canDirect":false,"canManageCast":false,"canResearch":false,"canSeeThoughts":false,"directorMode":"facilitator|narrator|arbiter|observer"}],
   "removeActors": ["ActorName"],
-  "modifyActors": [{"find":"ActorName","name":"...","role":"...","persona":"...","goal":"...","voice":"...","enabled":true,"temperature":0.9,"authority":70,"canDirect":false,"canManageCast":false,"canResearch":false,"canSeeThoughts":false}],
-  "scenario": {"title":"...","premise":"...","objective":"...","mode":"problem|story|freeform","systems":{"stageDirections":{"enabled":false,"intensity":"minimal|moderate|immersive","maxTokenShare":0.2},"alignment":{"strictness":"strict|moderate|loose|off","anchorInPrompt":false,"nudgeStyle":"hard-redirect|gentle-nudge|question"},"turnRouting":{"strategy":"round-robin|dm-directed|narrative-flow","allowDirectAddress":true},"dmRole":{"role":"narrator|facilitator|arbiter|observer","narrates":false,"canIntroduceElements":false},"document":{"schema":"freeform|decisions|story-bible|findings"}}},
+  "modifyActors": [{"find":"ActorName","name":"...","role":"...","persona":"...","goal":"...","voice":"...","enabled":true,"temperature":0.9,"authority":70,"canDirect":false,"canManageCast":false,"canResearch":false,"canSeeThoughts":false,"directorMode":"facilitator|narrator|arbiter|observer"}],
+  "scenario": {"title":"...","premise":"...","objective":"...","systems":{"stageDirections":{"enabled":false,"intensity":"minimal|moderate|immersive","maxTokenShare":0.2},"alignment":{"strictness":"strict|moderate|loose|off","anchorInPrompt":false,"nudgeStyle":"hard-redirect|gentle-nudge|question"},"turnRouting":{"strategy":"sequential|agentic","allowDirectAddress":true},"dmRole":{"role":"narrator|facilitator|arbiter|observer","narrates":false,"canIntroduceElements":false},"document":{"schema":"freeform|decisions|story-bible|findings"}}},
   "dm": {"enabled":true,"name":"...","persona":"...","canSeeThoughts":false},
-  "settings": {"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"seed":-1,"seedEnabled":false,"toolsEnabled":true,"streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":false,"preflightThreshold":0.35,"enableCrossSessionMemory":false,"enableAdaptiveCompression":true,"roundSnapshotEnabled":true,"gravitySensitivity":50,"turnDelay":0},
+  "settings": {"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"seed":-1,"seedEnabled":false,"toolsEnabled":false,"streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":false,"preflightThreshold":0.35,"enableCrossSessionMemory":false,"enableAdaptiveCompression":true,"roundSnapshotEnabled":true,"gravitySensitivity":50,"turnDelay":0},
   "memory": {"addFacts":["fact text"],"removeFacts":["text to match and remove"],"sharedSummary":"...","openQuestions":"...","dmState":"..."},
   "autoStop": {"enabled":true,"goal":"...","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5},
   "userContext": {"interactionMode":"sponsor|collaborator|observer","displayName":"","storyRole":""}
 }`;
 
-  const fullSetupShape = `{"scenario":{"mode":"problem|story|freeform","title":"","premise":"","objective":"","systems":{"stageDirections":{"enabled":false,"intensity":"moderate","maxTokenShare":0.2},"alignment":{"strictness":"moderate","anchorInPrompt":false,"nudgeStyle":"gentle-nudge"},"turnRouting":{"strategy":"round-robin","allowDirectAddress":true},"dmRole":{"role":"facilitator","narrates":false,"canIntroduceElements":false},"document":{"schema":"freeform"}}},"dm":{"enabled":true,"name":"","persona":"","canSeeThoughts":false},"actors":[{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"authority":50,"canDirect":false,"canManageCast":false,"canResearch":false,"canSeeThoughts":false}],"memory":{"pinnedFacts":[],"sharedSummary":"","openQuestions":"","dmState":""},"settings":{"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"seed":-1,"seedEnabled":false,"toolsEnabled":false,"streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":false,"preflightThreshold":0.35,"enableCrossSessionMemory":false,"enableAdaptiveCompression":true,"roundSnapshotEnabled":true,"gravitySensitivity":50,"turnDelay":0},"autoStop":{"enabled":false,"goal":"","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5},"userContext":{"interactionMode":"collaborator","displayName":"","storyRole":""}}`;
+  const fullSetupShape = `{"scenario":{"title":"","premise":"","objective":"","systems":{"stageDirections":{"enabled":false,"intensity":"moderate","maxTokenShare":0.2},"alignment":{"strictness":"moderate","anchorInPrompt":false,"nudgeStyle":"gentle-nudge"},"turnRouting":{"strategy":"sequential","allowDirectAddress":true},"dmRole":{"role":"facilitator","narrates":false,"canIntroduceElements":false},"document":{"schema":"freeform"}}},"dm":{"enabled":true,"name":"","persona":"","canSeeThoughts":false},"actors":[{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"authority":50,"canDirect":false,"canManageCast":false,"canResearch":false,"canSeeThoughts":false,"directorMode":"facilitator|narrator|arbiter|observer"}],"memory":{"pinnedFacts":[],"sharedSummary":"","openQuestions":"","dmState":""},"settings":{"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"seed":-1,"seedEnabled":false,"toolsEnabled":false,"streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":false,"preflightThreshold":0.35,"enableCrossSessionMemory":false,"enableAdaptiveCompression":true,"roundSnapshotEnabled":true,"gravitySensitivity":50,"turnDelay":0},"autoStop":{"enabled":false,"goal":"","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5},"userContext":{"interactionMode":"collaborator","displayName":"","storyRole":""}}`;
 
   const system = [
     "You are the AI Assistant for Forum, a local multi-agent AI discussion app running LLM actors via LM Studio.",
@@ -489,13 +492,13 @@ export async function generateQuickStart(promptOverride = "") {
     "Actors are separate LLM personas. A round runs each enabled actor once. Director (canDirect) moderates. Manager (canManageCast) adds/removes actors. Researcher (canResearch) can search web.",
     "",
     "## ACTOR FIELDS",
-    "name, role, persona (up to 700 chars, 2nd person), goal (up to 500 chars), voice (up to 120 chars), enabled, temperature (0-2, default 0.8), authority (0-100, default 50), canDirect, canManageCast, canResearch, canSeeThoughts.",
+    "name, role, persona (up to 700 chars, 2nd person), goal (up to 500 chars), voice (up to 120 chars), enabled, temperature (0-2, default 0.8), authority (0-100, default 50), canDirect, canManageCast, canResearch, canSeeThoughts, directorMode for canDirect actors.",
     "",
     "## SCENARIO",
-    "mode: problem|story|freeform. title, premise (context), objective (goal). systems: stageDirections (enabled,intensity,maxTokenShare), alignment (strictness,nudgeStyle), turnRouting (strategy,allowDirectAddress), dmRole (role,narrates,canIntroduceElements), document (schema).",
+    "title, premise (context), objective (goal). systems: stageDirections (enabled,intensity,maxTokenShare), alignment (strictness,anchorInPrompt,nudgeStyle), turnRouting (strategy:'sequential|agentic',allowDirectAddress), dmRole (role,narrates,canIntroduceElements), document (schema).",
     "",
-    "## STORY MODE CHECKLIST",
-    "For stories/roleplay: mode='story', stageDirections.enabled=true, dmRole.role='narrator', dmRole.narrates=true, dmRole.canIntroduceElements=true, turnRouting.strategy='narrative-flow', alignment.strictness='loose', document.schema='story-bible'. Create character actors with temp 1.0-1.2. ALWAYS include actors in fullSetup.",
+    "## ROLEPLAY CHECKLIST",
+    "For stories/roleplay: set stageDirections.enabled=true, dmRole.role='narrator', dmRole.narrates=true, dmRole.canIntroduceElements=true, turnRouting.strategy='agentic', alignment.strictness='loose', document.schema='story-bible'. Create character actors with temp 1.0-1.2. ALWAYS include actors in fullSetup.",
     "",
     "## SETTINGS (key fields)",
     "temperature, maxTokens (default 2000), topP, repeatPenalty, toolsEnabled, streamingEnabled, showThoughts, turboMode, enablePreflightRouter, turnDelay.",
@@ -519,7 +522,7 @@ export async function generateQuickStart(promptOverride = "") {
   }
 
   const hasContext = history.length > 0;
-  const looksLikeSetup = /\b(set up|create|add|change|modify|update|remove|configure|actors?|scenario|settings?|mode|story|roleplay)\b/i.test(prompt);
+  const looksLikeSetup = /\b(set up|create|add|change|modify|update|remove|configure|actors?|scenario|settings?|story|roleplay)\b/i.test(prompt);
   const userContent = (looksLikeSetup || !hasContext)
     ? "Current config:\n" + JSON.stringify(currentConfig, null, 2) + "\n\nRequest: " + prompt
     : "Request: " + prompt;
@@ -653,10 +656,10 @@ export async function applyQuickStartAtIndex(index) {
     setQuickStartStatus("Already applied.", "warn");
     return;
   }
-  console.log('[applyQuickStartAtIndex] PRE-APPLY state snapshot:', { mode: state.scenario.mode, actorCount: state.actors.length, actorNames: state.actors.map(a => a.name) });
+  console.log('[applyQuickStartAtIndex] PRE-APPLY state snapshot:', { actorCount: state.actors.length, actorNames: state.actors.map(a => a.name) });
   await _applyDraft(entry.draft);
   entry.applied = true;
-  console.log('[applyQuickStartAtIndex] POST-APPLY state snapshot:', { mode: state.scenario.mode, actorCount: state.actors.length, actorNames: state.actors.map(a => a.name), title: state.scenario.title });
+  console.log('[applyQuickStartAtIndex] POST-APPLY state snapshot:', { actorCount: state.actors.length, actorNames: state.actors.map(a => a.name), title: state.scenario.title });
   // Also clear global draft if it matches
   state.ui.quickStartDraft = null;
   updateAiAssistantApplyButton();
@@ -684,11 +687,12 @@ async function _applyDraft(draft) {
   }
   console.log('[_applyDraft] FULL SETUP branch — normalizing draft with keys:', Object.keys(draft));
   const normalized = normalizeQuickStartConfig(draft);
-  console.log('[_applyDraft] normalized result:', { mode: normalized.scenario?.mode, systems: normalized.scenario?.systems ? Object.keys(normalized.scenario.systems) : 'NONE', actorCount: normalized.actors?.length, dmEnabled: normalized.dm?.enabled, hasSettings: !!normalized.settings, hasAutoStop: !!normalized.autoStop });
+  console.log('[_applyDraft] normalized result:', { systems: normalized.scenario?.systems ? Object.keys(normalized.scenario.systems) : 'NONE', actorCount: normalized.actors?.length, dmEnabled: normalized.dm?.enabled, hasSettings: !!normalized.settings, hasAutoStop: !!normalized.autoStop });
   const hadConversation = state.messages.length > 0;
   state.scenario = normalized.scenario;
   state.actors = normalized.actors;
   let directorActor = state.actors.find(a => a.canDirect);
+  const scenarioDirectorMode = normalized.scenario?.systems?.dmRole?.role || 'facilitator';
   if (!directorActor && normalized.dm && normalized.dm.enabled !== false) {
     // Look for an actor with the same name to promote
     const nameLower = (normalized.dm.name || "").toLowerCase();
@@ -697,6 +701,7 @@ async function _applyDraft(draft) {
     }
     if (directorActor) {
       directorActor.canDirect = true;
+      if (!directorActor.directorMode) directorActor.directorMode = scenarioDirectorMode;
     } else {
       // Create a brand new director
       directorActor = {
@@ -712,12 +717,15 @@ async function _applyDraft(draft) {
         canManageCast: false,
         canResearch: false,
         canSeeThoughts: !!(normalized.dm.canSeeThoughts || normalized.dm.seesPrivateThoughts),
+        directorMode: scenarioDirectorMode,
         enabled: true,
         thoughts: "",
         color: colors[state.actors.length % colors.length]
       };
       state.actors.push(directorActor);
     }
+  } else if (directorActor && !directorActor.directorMode) {
+    directorActor.directorMode = scenarioDirectorMode;
   }
 
   if (directorActor && normalized.dm) {
@@ -802,6 +810,7 @@ export function applyAssistantPatch(changes) {
 
   // Actors — add
   for (const a of (c.addActors || [])) {
+    const canDirect = !!a.isDirector || !!a.canDirect;
     state.actors.push({
       id: crypto.randomUUID(),
       name: a.name || "New Actor",
@@ -811,10 +820,11 @@ export function applyAssistantPatch(changes) {
       voice: a.voice || "",
       temperature: typeof a.temperature === "number" ? a.temperature : 0.8,
       authority: typeof a.authority === "number" ? a.authority : 50,
-      canDirect: !!a.isDirector || !!a.canDirect,
+      canDirect,
       canManageCast: !!a.isManager || !!a.canManageCast,
       canResearch: !!a.isResearcher || !!a.canResearch,
       canSeeThoughts: !!a.canSeeThoughts,
+      directorMode: a.directorMode || (canDirect ? state.scenario?.systems?.dmRole?.role || 'facilitator' : undefined),
       enabled: true,
       thoughts: "",
       color: colors[state.actors.length % colors.length]
@@ -843,6 +853,7 @@ export function applyAssistantPatch(changes) {
   if (c.scenario && typeof c.scenario === "object") {
     for (const [key, val] of Object.entries(c.scenario)) {
       if (val === null || val === undefined) continue;
+      if (key === "mode") continue;
       if (key === "systems" && typeof val === "object") {
         if (!state.scenario.systems) state.scenario.systems = {};
         for (const [sysKey, sysVal] of Object.entries(val)) {
@@ -855,6 +866,11 @@ export function applyAssistantPatch(changes) {
           } else {
             state.scenario.systems[sysKey] = sysVal;
           }
+        }
+        const role = val.dmRole?.role;
+        if (role) {
+          const director = state.actors.find(a => a.canDirect);
+          if (director) director.directorMode = role;
         }
       } else {
         state.scenario[key] = val;
@@ -873,6 +889,7 @@ export function applyAssistantPatch(changes) {
       }
       if (director) {
         director.canDirect = true;
+        if (!director.directorMode) director.directorMode = state.scenario?.systems?.dmRole?.role || 'facilitator';
       } else {
         // Create a brand new director
         director = {
@@ -888,6 +905,7 @@ export function applyAssistantPatch(changes) {
           canManageCast: false,
           canResearch: false,
           canSeeThoughts: !!c.dm.canSeeThoughts || !!c.dm.seesPrivateThoughts,
+          directorMode: state.scenario?.systems?.dmRole?.role || 'facilitator',
           enabled: true,
           thoughts: "",
           color: colors[state.actors.length % colors.length]
@@ -896,6 +914,7 @@ export function applyAssistantPatch(changes) {
       }
     }
     if (director) {
+      if (!director.directorMode) director.directorMode = state.scenario?.systems?.dmRole?.role || 'facilitator';
       if (c.dm.enabled !== undefined) director.enabled = !!c.dm.enabled;
       if (c.dm.name !== undefined) director.name = c.dm.name;
       if (c.dm.persona !== undefined) director.persona = c.dm.persona;
@@ -971,7 +990,7 @@ export async function saveCurrentSession() {
     actorCount: state.actors.filter(a => a.enabled).length,
     messageCount: state.messages.length,
     messages: state.messages.map(m => ({ ...m })),
-    scenario: { ...state.scenario },
+    scenario: scenarioWithoutMode(state.scenario),
     memory: { ...state.memory },
     actors: state.actors.map(a => ({ ...a })),
   };
@@ -1067,105 +1086,97 @@ export async function forkSessionAtMessage(messageId) {
 
 export const SCENARIO_PRESETS = {
   brainstorm: {
-    mode: "problem",
     title: "Brainstorm Session",
     premise: "A diverse panel is gathered to generate creative ideas around the user's topic without premature judgment.",
     objective: "Generate at least 10 distinct ideas, cluster them into themes, and identify the top 3 most promising.",
     systems: {
       stageDirections: { enabled: false },
       alignment: { strictness: "moderate", nudgeStyle: "gentle-nudge" },
-      turnRouting: { strategy: "dm-directed", allowDirectAddress: true },
+      turnRouting: { strategy: "agentic", allowDirectAddress: true },
       dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false },
       document: { schema: "decisions" }
     }
   },
   risk: {
-    mode: "problem",
     title: "Risk Assessment",
     premise: "The panel is analyzing a proposed plan or decision for risks, blind spots, and failure modes.",
     objective: "Identify all significant risks, rate likelihood and impact, and recommend mitigations for the top 3.",
     systems: {
       stageDirections: { enabled: false },
       alignment: { strictness: "strict", nudgeStyle: "hard-redirect" },
-      turnRouting: { strategy: "round-robin", allowDirectAddress: true },
+      turnRouting: { strategy: "sequential", allowDirectAddress: true },
       dmRole: { role: "arbiter", narrates: false, canIntroduceElements: false },
       document: { schema: "findings" }
     }
   },
   debate: {
-    mode: "problem",
     title: "Structured Debate",
     premise: "Two or more positions are presented. The panel must argue each side rigorously before reaching a verdict.",
     objective: "Steelman every position, identify the strongest objections, and converge on a reasoned verdict.",
     systems: {
       stageDirections: { enabled: false },
       alignment: { strictness: "strict", nudgeStyle: "hard-redirect" },
-      turnRouting: { strategy: "round-robin", allowDirectAddress: true },
+      turnRouting: { strategy: "sequential", allowDirectAddress: true },
       dmRole: { role: "arbiter", narrates: false, canIntroduceElements: false },
       document: { schema: "findings" }
     }
   },
   retrospective: {
-    mode: "problem",
     title: "Project Retrospective",
     premise: "The panel reviews a recently completed project or sprint to extract lessons.",
     objective: "Surface what went well, what went wrong, and produce a concrete list of process improvements.",
     systems: {
       stageDirections: { enabled: false },
       alignment: { strictness: "moderate", nudgeStyle: "gentle-nudge" },
-      turnRouting: { strategy: "round-robin", allowDirectAddress: true },
+      turnRouting: { strategy: "sequential", allowDirectAddress: true },
       dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false },
       document: { schema: "findings" }
     }
   },
   story: {
-    mode: "story",
     title: "Collaborative Story",
     premise: "A group of characters finds themselves in an unfolding situation. The DM narrates the world.",
     objective: "Collaboratively build an engaging narrative with rising tension and satisfying resolution.",
     systems: {
       stageDirections: { enabled: true, intensity: "immersive", maxTokenShare: 0.4 },
       alignment: { strictness: "loose", anchorInPrompt: false, nudgeStyle: "question" },
-      turnRouting: { strategy: "narrative-flow", allowDirectAddress: true },
+      turnRouting: { strategy: "agentic", allowDirectAddress: true },
       dmRole: { role: "narrator", narrates: true, canIntroduceElements: true },
       document: { schema: "story-bible" }
     }
   },
   interview: {
-    mode: "freeform",
     title: "Expert Panel Interview",
     premise: "The user is interviewing a panel of specialists on their topic of choice.",
     objective: "Surface deep insights, surface disagreements between experts, and synthesize practical takeaways.",
     systems: {
       stageDirections: { enabled: false },
       alignment: { strictness: "moderate", nudgeStyle: "gentle-nudge" },
-      turnRouting: { strategy: "dm-directed", allowDirectAddress: true },
+      turnRouting: { strategy: "agentic", allowDirectAddress: true },
       dmRole: { role: "observer", narrates: false, canIntroduceElements: false },
       document: { schema: "freeform" }
     }
   },
   improv: {
-    mode: "story",
     title: "Collaborative Improv",
     premise: "Actors collaborate on an unscripted scene. There is no DM narration — characters drive the story themselves.",
     objective: "Build a coherent, entertaining scene through reactive character play. Say 'yes, and' to keep momentum.",
     systems: {
       stageDirections: { enabled: true, intensity: "moderate", maxTokenShare: 0.3 },
       alignment: { strictness: "loose", nudgeStyle: "question" },
-      turnRouting: { strategy: "narrative-flow", allowDirectAddress: true },
+      turnRouting: { strategy: "agentic", allowDirectAddress: true },
       dmRole: { role: "observer", narrates: false, canIntroduceElements: false },
       document: { schema: "freeform" }
     }
   },
   problemsolving: {
-    mode: "problem",
     title: "Problem Solving",
     premise: "The panel is focused on solving a well-defined problem with concrete constraints and a clear success criterion.",
     objective: "Arrive at a specific, actionable solution with clear implementation steps and trade-off rationale.",
     systems: {
       stageDirections: { enabled: false },
       alignment: { strictness: "strict", anchorInPrompt: true, nudgeStyle: "hard-redirect" },
-      turnRouting: { strategy: "dm-directed", allowDirectAddress: true },
+      turnRouting: { strategy: "agentic", allowDirectAddress: true },
       dmRole: { role: "arbiter", narrates: false, canIntroduceElements: false },
       document: { schema: "findings" }
     }
@@ -1175,19 +1186,7 @@ export const SCENARIO_PRESETS = {
 export function applyScenarioPreset(key) {
   const preset = SCENARIO_PRESETS[key];
   if (!preset) return;
-  state.scenario = {
-    ...state.scenario,
-    ...preset,
-    systems: {
-      ...state.scenario.systems,
-      ...(preset.systems || {}),
-      stageDirections: { ...state.scenario.systems?.stageDirections, ...(preset.systems?.stageDirections || {}) },
-      alignment:        { ...state.scenario.systems?.alignment,        ...(preset.systems?.alignment        || {}) },
-      turnRouting:      { ...state.scenario.systems?.turnRouting,      ...(preset.systems?.turnRouting      || {}) },
-      dmRole:           { ...state.scenario.systems?.dmRole,           ...(preset.systems?.dmRole           || {}) },
-      document:         { ...state.scenario.systems?.document,         ...(preset.systems?.document         || {}) },
-    },
-  };
+  state.scenario = mergeScenario(state.scenario, preset);
   saveState();
 }
 
@@ -1268,11 +1267,12 @@ function buildActorFromTemplate(tpl, index) {
 }
 
 function mergeScenario(target, src) {
-  const sys = src.systems || {};
+  const { mode: _legacyMode, ...cleanSrc } = src || {};
+  const sys = cleanSrc.systems || {};
   const cur = target.systems || {};
   return {
     ...target,
-    ...src,
+    ...cleanSrc,
     systems: {
       ...cur,
       ...sys,
@@ -1354,7 +1354,7 @@ export function saveConfiguration(name) {
     name: (name || state.scenario?.title || 'Configuration').trim().slice(0, 80),
     savedAt: new Date().toISOString(),
     actorCount: (state.actors || []).filter(a => a.enabled).length,
-    scenario: { ...state.scenario },
+    scenario: scenarioWithoutMode(state.scenario),
     actors: (state.actors || []).map(a => ({ ...a })),
     autoStop: { ...state.autoStop },
     settings: {
@@ -1362,7 +1362,19 @@ export function saveConfiguration(name) {
       maxTokens: state.settings?.maxTokens,
       topP: state.settings?.topP,
       repeatPenalty: state.settings?.repeatPenalty,
-      toolsEnabled: state.settings?.toolsEnabled,
+      toolsEnabled: !!state.settings?.toolsEnabled,
+      streamingEnabled: state.settings?.streamingEnabled !== false,
+      showThoughts: !!state.settings?.showThoughts,
+      turboMode: !!state.settings?.turboMode,
+      enablePreflightRouter: !!state.settings?.enablePreflightRouter,
+      preflightThreshold: state.settings?.preflightThreshold,
+      enableCrossSessionMemory: !!state.settings?.enableCrossSessionMemory,
+      enableAdaptiveCompression: state.settings?.enableAdaptiveCompression !== false,
+      roundSnapshotEnabled: state.settings?.roundSnapshotEnabled !== false,
+      gravitySensitivity: state.settings?.gravitySensitivity,
+      turnDelay: state.settings?.turnDelay,
+      seed: state.settings?.seed,
+      seedEnabled: !!state.settings?.seedEnabled,
     },
   };
   configs.unshift(config);
@@ -1381,7 +1393,7 @@ export function applyConfiguration(config) {
   if (!config) return;
   const normalized = normalizeState({
     ...state,
-    scenario: { ...state.scenario, ...(config.scenario || {}) },
+    scenario: { ...scenarioWithoutMode(state.scenario), ...scenarioWithoutMode(config.scenario || {}) },
     actors: Array.isArray(config.actors) && config.actors.length ? config.actors : state.actors,
     autoStop: { ...state.autoStop, ...(config.autoStop || {}), roundsRun: 0 },
     settings: { ...state.settings, ...(config.settings || {}) },

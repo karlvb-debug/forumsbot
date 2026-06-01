@@ -110,13 +110,7 @@ function publicMsgContent(message) {
 }
 
 function scenarioBlock() {
-  const labelForMode = (mode) => {
-    if (mode === "story") return "Story";
-    if (mode === "freeform") return "Freeform";
-    return "Problem";
-  };
   return [
-    `Mode: ${labelForMode(state.scenario.mode)}`,
     `Title: ${state.scenario.title || "Untitled forum"}`,
     state.scenario.premise ? `Premise: ${state.scenario.premise}` : "",
     state.scenario.objective ? `Objective: ${state.scenario.objective}` : ""
@@ -189,12 +183,11 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
     : "No actors spoke; set actorMemoryUpdates to {}";
 
   // Relationship tracking is an N² output the summariser must emit for every
-  // pair of actors. It is only meaningful for roleplay/story sessions; for a
+  // pair of actors. It is only meaningful for roleplay/stage-direction sessions; for a
   // problem-solving council it bloats the JSON (a top cause of truncation on
-  // small models) for no value. Gate it behind story mode. Relationships remain
+  // small models) for no value. Gate it behind Stage Directions. Relationships remain
   // user-editable in the Actors panel regardless.
-  const storyMode = state.scenario?.systems?.stageDirections?.enabled
-    ?? (state.scenario?.mode === "story");
+  const storyMode = state.scenario?.systems?.stageDirections?.enabled === true;
   const relShapeDelta = storyMode
     ? ',"actorRelationshipUpdates":{"Actor A":{"Actor B":"how A now sees B, max 25 words, or null if unchanged"}}'
     : "";
@@ -547,7 +540,6 @@ export async function archiveMemoryChunk(update, sourceMessages) {
     text: chunkText,
     keywords: update.keywords.length ? update.keywords : extractKeywords(formatTranscript(sourceMessages, 1000)),
     speakers,
-    mode: state.scenario.mode,
     title: state.scenario.title,
     messageIds: sourceMessages.map((message) => message.id),
     embeddingModel,

@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Blueprints & the curated actor library.
 //
-// A *blueprint* is a turnkey configuration: a scenario (mode/premise/objective +
+// A *blueprint* is a turnkey configuration: a scenario (premise/objective/systems +
 // systems) bundled with a recommended cast. Applying one sets up a ready-to-run
 // forum in a single step.
 //
@@ -255,7 +255,7 @@ function castMemberFromKey(key) {
 }
 
 // ── Blueprints ───────────────────────────────────────────────────────────────
-// Each blueprint = scenario (mode/title/premise/objective/systems) + a cast of
+// Each blueprint = scenario (title/premise/objective/systems) + a cast of
 // actor-library keys + optional autoStop. Casts are deliberately small (3–4) and
 // "good enough"; users edit freely after applying.
 export const BLUEPRINTS = [
@@ -264,14 +264,13 @@ export const BLUEPRINTS = [
     description: 'A four-person review panel works a diff for correctness, security, design, and test coverage.',
     cast: ['review-lead', 'security-analyst', 'architecture-reviewer', 'test-reviewer'],
     scenario: {
-      mode: 'problem',
       title: 'Code Review',
       premise: 'The panel is reviewing a code change. Paste the diff or import a PR/folder in the Documents panel as reference material.',
       objective: 'Deliver a clear verdict (approve / request changes) with specific, actionable findings grouped by severity.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'strict', nudgeStyle: 'hard-redirect' },
-        turnRouting: { strategy: 'dm-directed', allowDirectAddress: true },
+        turnRouting: { strategy: 'agentic', allowDirectAddress: true },
         dmRole: { role: 'facilitator', narrates: false, canIntroduceElements: false },
         document: { schema: 'findings' },
       },
@@ -283,14 +282,13 @@ export const BLUEPRINTS = [
     description: 'A researcher, an expert, and a skeptic investigate a question and synthesize sourced findings.',
     cast: ['researcher', 'expert', 'skeptic', 'synthesizer'],
     scenario: {
-      mode: 'problem',
       title: 'Research Investigation',
       premise: 'The panel is investigating the user\'s question, gathering current evidence and weighing it critically.',
       objective: 'Produce a well-sourced synthesis: key findings, confidence levels, and open questions.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'moderate', nudgeStyle: 'gentle-nudge' },
-        turnRouting: { strategy: 'dm-directed', allowDirectAddress: true },
+        turnRouting: { strategy: 'agentic', allowDirectAddress: true },
         dmRole: { role: 'facilitator', narrates: false, canIntroduceElements: false },
         document: { schema: 'findings' },
       },
@@ -301,14 +299,13 @@ export const BLUEPRINTS = [
     description: 'A divergent idea panel generates, clusters, and ranks options without premature judgment.',
     cast: ['director', 'visionary', 'pragmatist', 'synthesizer'],
     scenario: {
-      mode: 'problem',
       title: 'Brainstorm Session',
       premise: 'A diverse panel generates creative ideas around the user\'s topic without premature judgment.',
       objective: 'Generate at least 10 distinct ideas, cluster them into themes, and identify the top 3 most promising.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'moderate', nudgeStyle: 'gentle-nudge' },
-        turnRouting: { strategy: 'dm-directed', allowDirectAddress: true },
+        turnRouting: { strategy: 'agentic', allowDirectAddress: true },
         dmRole: { role: 'facilitator', narrates: false, canIntroduceElements: false },
         document: { schema: 'decisions' },
       },
@@ -319,14 +316,13 @@ export const BLUEPRINTS = [
     description: 'Market, finance, and operations pressure-test a business idea into an executable plan.',
     cast: ['director', 'market-analyst', 'financial-modeler', 'operator', 'skeptic'],
     scenario: {
-      mode: 'problem',
       title: 'Business Plan Review',
       premise: 'The panel is developing and pressure-testing a business idea or plan from the user.',
       objective: 'Produce a plan covering market, unit economics, go-to-market, and the top risks with mitigations.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'strict', nudgeStyle: 'hard-redirect' },
-        turnRouting: { strategy: 'dm-directed', allowDirectAddress: true },
+        turnRouting: { strategy: 'agentic', allowDirectAddress: true },
         dmRole: { role: 'arbiter', narrates: false, canIntroduceElements: false },
         document: { schema: 'decisions' },
       },
@@ -337,14 +333,13 @@ export const BLUEPRINTS = [
     description: 'A narrator and characters act out a story live, in-character — interactive role-play.',
     cast: ['narrator', 'plot-architect', 'character-lead'],
     scenario: {
-      mode: 'story',
       title: 'Collaborative Story',
       premise: 'A group of characters finds themselves in an unfolding situation. The narrator describes the world.',
       objective: 'Collaboratively build an engaging narrative with rising tension and a satisfying resolution.',
       systems: {
         stageDirections: { enabled: true, intensity: 'immersive', maxTokenShare: 0.4 },
         alignment: { strictness: 'loose', anchorInPrompt: false, nudgeStyle: 'question' },
-        turnRouting: { strategy: 'narrative-flow', allowDirectAddress: true },
+        turnRouting: { strategy: 'agentic', allowDirectAddress: true },
         dmRole: { role: 'narrator', narrates: true, canIntroduceElements: true },
         document: { schema: 'story-bible' },
       },
@@ -355,14 +350,13 @@ export const BLUEPRINTS = [
     description: "A writers' room develops your story concept, then composes the manuscript into the document editor.",
     cast: ['showrunner', 'concept-developer', 'world-character-builder', 'prose-writer', 'story-critic'],
     scenario: {
-      mode: 'freeform',
       title: "Story Writers' Room",
       premise: 'The team is developing and writing a story from the user\'s concept. Brainstorm the premise, characters, and arc into the Story Outline, then draft the manuscript into the Story Draft document. This is a writing session about the story — the team does not act it out in character.',
       objective: 'Produce a finished, well-structured story draft in the Story Draft document that realizes the user\'s concept.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'moderate', nudgeStyle: 'gentle-nudge' },
-        turnRouting: { strategy: 'dm-directed', allowDirectAddress: true },
+        turnRouting: { strategy: 'agentic', allowDirectAddress: true },
         dmRole: { role: 'facilitator', narrates: false, canIntroduceElements: false },
         document: { schema: 'freeform' },
       },
@@ -384,14 +378,13 @@ export const BLUEPRINTS = [
     description: 'Opposing advocates argue rigorously while an arbiter drives toward a verdict.',
     cast: ['skeptic', 'expert', 'synthesizer'],
     scenario: {
-      mode: 'problem',
       title: 'Structured Debate',
       premise: 'Two or more positions are presented. The panel must argue each side rigorously before reaching a verdict.',
       objective: 'Steelman every position, identify the strongest objections, and converge on a reasoned verdict.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'strict', nudgeStyle: 'hard-redirect' },
-        turnRouting: { strategy: 'round-robin', allowDirectAddress: true },
+        turnRouting: { strategy: 'sequential', allowDirectAddress: true },
         dmRole: { role: 'arbiter', narrates: false, canIntroduceElements: false },
         document: { schema: 'findings' },
       },
@@ -402,14 +395,13 @@ export const BLUEPRINTS = [
     description: 'A panel analyzes a plan for risks, blind spots, and failure modes with mitigations.',
     cast: ['director', 'skeptic', 'expert', 'pragmatist'],
     scenario: {
-      mode: 'problem',
       title: 'Risk Assessment',
       premise: 'The panel is analyzing a proposed plan or decision for risks, blind spots, and failure modes.',
       objective: 'Identify all significant risks, rate likelihood and impact, and recommend mitigations for the top 3.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'strict', nudgeStyle: 'hard-redirect' },
-        turnRouting: { strategy: 'round-robin', allowDirectAddress: true },
+        turnRouting: { strategy: 'sequential', allowDirectAddress: true },
         dmRole: { role: 'arbiter', narrates: false, canIntroduceElements: false },
         document: { schema: 'findings' },
       },
@@ -420,14 +412,13 @@ export const BLUEPRINTS = [
     description: 'The team reviews a finished project to extract concrete process improvements.',
     cast: ['director', 'pragmatist', 'skeptic', 'synthesizer'],
     scenario: {
-      mode: 'problem',
       title: 'Project Retrospective',
       premise: 'The panel reviews a recently completed project or sprint to extract lessons.',
       objective: 'Surface what went well, what went wrong, and produce a concrete list of process improvements.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'moderate', nudgeStyle: 'gentle-nudge' },
-        turnRouting: { strategy: 'round-robin', allowDirectAddress: true },
+        turnRouting: { strategy: 'sequential', allowDirectAddress: true },
         dmRole: { role: 'facilitator', narrates: false, canIntroduceElements: false },
         document: { schema: 'findings' },
       },
@@ -438,14 +429,13 @@ export const BLUEPRINTS = [
     description: 'Interview a panel of specialists; surface disagreements and practical takeaways.',
     cast: ['expert', 'researcher', 'pragmatist'],
     scenario: {
-      mode: 'freeform',
       title: 'Expert Panel Interview',
       premise: 'The user is interviewing a panel of specialists on their topic of choice.',
       objective: 'Surface deep insights and disagreements between experts, then synthesize practical takeaways.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'moderate', nudgeStyle: 'gentle-nudge' },
-        turnRouting: { strategy: 'dm-directed', allowDirectAddress: true },
+        turnRouting: { strategy: 'agentic', allowDirectAddress: true },
         dmRole: { role: 'observer', narrates: false, canIntroduceElements: false },
         document: { schema: 'freeform' },
       },
@@ -456,14 +446,13 @@ export const BLUEPRINTS = [
     description: 'A focused panel drives a well-defined problem to a concrete, actionable solution.',
     cast: ['director', 'expert', 'pragmatist', 'skeptic'],
     scenario: {
-      mode: 'problem',
       title: 'Problem Solving',
       premise: 'The panel is focused on solving a well-defined problem with concrete constraints and a clear success criterion.',
       objective: 'Arrive at a specific, actionable solution with implementation steps and trade-off rationale.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'strict', anchorInPrompt: true, nudgeStyle: 'hard-redirect' },
-        turnRouting: { strategy: 'dm-directed', allowDirectAddress: true },
+        turnRouting: { strategy: 'agentic', allowDirectAddress: true },
         dmRole: { role: 'arbiter', narrates: false, canIntroduceElements: false },
         document: { schema: 'findings' },
       },

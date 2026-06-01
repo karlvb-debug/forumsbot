@@ -1,16 +1,16 @@
 import React, { useMemo } from 'react';
 import * as Ic from '../Icons';
-import { Field, Toggle, Seg } from '../shared/FormControls';
+import { Field, Toggle } from '../shared/FormControls';
 import { useForumState, mutateState } from '../../hooks/useForumState';
 import { navigateToPanel } from '../../hooks/navigation.js';
 
 export function ScenarioPanel() {
-  const mode = useForumState(s => s.scenario?.mode || 'problem');
   const title = useForumState(s => s.scenario?.title || '');
   const premise = useForumState(s => s.scenario?.premise || '');
   const objective = useForumState(s => s.scenario?.objective || '');
   const systems = useForumState(s => s.scenario?.systems || {});
   const actors = useForumState(s => s.actors || []);
+  const activeDirector = actors.find(a => a.canDirect && a.enabled) || actors.find(a => a.canDirect);
 
   const updateScenario = (key, val) => mutateState(s => { s.scenario[key] = val; });
   const updateSystem = (group, key, val) => {
@@ -21,19 +21,35 @@ export function ScenarioPanel() {
       s.scenario.systems[group][key] = val;
     });
   };
+  const updateDirectorMode = (role) => {
+    mutateState(s => {
+      const director = (s.actors || []).find(a => a.canDirect && a.enabled)
+        || (s.actors || []).find(a => a.canDirect);
+      if (director) director.directorMode = role;
+      if (!s.scenario.systems) s.scenario.systems = {};
+      if (!s.scenario.systems.dmRole) s.scenario.systems.dmRole = {};
+      s.scenario.systems.dmRole.role = role;
+      s.scenario.systems.dmRole.narrates = role === 'narrator';
+      s.scenario.systems.dmRole.canIntroduceElements = role === 'narrator';
+    });
+  };
 
-  // Warn if the director is in Narrator mode but a non-director actor has a narrator-like name
-  const directorMode = actors.find(a => a.canDirect && a.enabled)?.directorMode || 'facilitator';
+  // Warn if the director is narrating while a non-director actor has a narrator-like name.
+  const directorMode = activeDirector?.directorMode || systems.dmRole?.role || 'facilitator';
   const collisionActors = useMemo(() => {
     if (directorMode !== 'narrator') return [];
     return actors.filter(a => a.enabled && !a.canDirect && /narrator|environment/i.test(`${a.name} ${a.role}`));
   }, [actors, directorMode]);
 
-  const stageEnabled = systems.stageDirections?.enabled ?? (mode === 'story');
+  const stageEnabled = systems.stageDirections?.enabled ?? false;
   const stageIntensity = systems.stageDirections?.intensity ?? 'moderate';
   const stageMaxShare = systems.stageDirections?.maxTokenShare ?? 0.2;
-  const alignStrictness = systems.alignment?.strictness ?? (mode === 'problem' ? 'strict' : 'moderate');
-  const docSchema = systems.document?.schema ?? (mode === 'story' ? 'story-bible' : mode === 'problem' ? 'findings' : 'freeform');
+  const alignStrictness = systems.alignment?.strictness ?? 'moderate';
+  const turnStrategy = ['agentic', 'smart', 'dm-directed', 'narrative-flow'].includes(systems.turnRouting?.strategy)
+    ? 'agentic'
+    : 'sequential';
+  const allowDirectAddress = systems.turnRouting?.allowDirectAddress ?? true;
+  const docSchema = systems.document?.schema ?? 'freeform';
 
   return (
     <div>
@@ -44,29 +60,26 @@ export function ScenarioPanel() {
       </div>
 
       <div className="card">
-        <div className="card-title"><h3><Ic.Target /> Mode</h3></div>
-        <Seg full
-          options={[
-            { value: "problem", label: "Problem" },
-            { value: "story", label: "Story" },
-            { value: "freeform", label: "Freeform" },
-          ]}
-          value={mode} onChange={(v) => updateScenario('mode', v)}
-        />
-        <div className="field-hint" style={{ marginTop: 8 }}>
-          {mode === "problem" && "Collaborative problem-solving — actors analyze, challenge assumptions, converge on solutions."}
-          {mode === "story" && "Narrative roleplay — actors speak in character. Disable web tools in the Tools panel if you don't want actors to search."}
-          {mode === "freeform" && "Open-ended discussion — no structured goal; actors explore freely."}
-        </div>
-      </div>
-
-      <div className="card">
         <div className="card-title"><h3>Systems</h3></div>
 
         {collisionActors.length > 0 && (
           <div className="warn-card" style={{ marginBottom: 10 }}>
-            ⚠ Director is in Narrator mode, but {collisionActors.map(a => a.name).join(', ')} has a narrator-like role. Consider disabling or renaming to avoid conflicts. Director mode is set on the director actor card in{' '}
+            ⚠ Director behavior is Narrator, but {collisionActors.map(a => a.name).join(', ')} has a narrator-like role. Consider disabling or renaming to avoid conflicts. Director behavior is also set on the director actor card in{' '}
             <button className="link-btn" onClick={() => navigateToPanel('actors')}>Actors</button>.
+          </div>
+        )}
+
+        <Field label="Director Behavior" info="How the active Director frames their turns. This is also editable on the Director actor card.">
+          <select value={directorMode} onChange={e => updateDirectorMode(e.target.value)}>
+            <option value="facilitator">Facilitator — guides discussion, summarizes</option>
+            <option value="narrator">Narrator — describes scene, drives story</option>
+            <option value="arbiter">Arbiter — enforces rules, delivers verdicts</option>
+            <option value="observer">Observer — silent unless directly addressed</option>
+          </select>
+        </Field>
+        {!activeDirector && (
+          <div className="field-hint" style={{ marginTop: -4, marginBottom: 8 }}>
+            Add or enable a Director actor for this setting to affect director turns.
           </div>
         )}
 
@@ -74,7 +87,7 @@ export function ScenarioPanel() {
           <Toggle
             checked={stageEnabled}
             onChange={v => updateSystem('stageDirections', 'enabled', v)}
-            label={stageEnabled ? 'On — theatrical actions in *asterisks*' : 'Off — analytical forum mode'}
+            label={stageEnabled ? 'On — theatrical actions in *asterisks*' : 'Off — analytical forum'}
           />
         </Field>
 
@@ -103,6 +116,21 @@ export function ScenarioPanel() {
             <option value="loose">Loose — follow the thread naturally</option>
             <option value="off">Off — no alignment signals</option>
           </select>
+        </Field>
+
+        <Field label="Speaking Order" info="Sequential follows the visible queue. Agentic uses one small router call per round to pick only the actors likely to have something useful to add.">
+          <select value={turnStrategy} onChange={e => updateSystem('turnRouting', 'strategy', e.target.value)}>
+            <option value="sequential">Sequential — actors rotate in order</option>
+            <option value="agentic">Agentic — router picks a short speaking plan</option>
+          </select>
+        </Field>
+
+        <Field label="Direct Addressing">
+          <Toggle
+            checked={allowDirectAddress}
+            onChange={v => updateSystem('turnRouting', 'allowDirectAddress', v)}
+            label={allowDirectAddress ? 'On — actors can route to a named speaker' : 'Off — follow the configured turn route'}
+          />
         </Field>
 
         <Field label="Document Schema">

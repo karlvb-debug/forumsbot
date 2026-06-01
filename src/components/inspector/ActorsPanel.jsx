@@ -77,7 +77,17 @@ export function ActorsPanel() {
   const updateActor = useCallback((id, key, val) => {
     mutateState(s => {
       const a = s.actors.find(x => x.id === id);
-      if (a) a[key] = val;
+      if (a) {
+        a[key] = val;
+        if ((key === 'directorMode' && a.canDirect) || (key === 'canDirect' && val)) {
+          const role = key === 'directorMode' ? val : (a.directorMode || 'facilitator');
+          if (!s.scenario.systems) s.scenario.systems = {};
+          if (!s.scenario.systems.dmRole) s.scenario.systems.dmRole = {};
+          s.scenario.systems.dmRole.role = role;
+          s.scenario.systems.dmRole.narrates = role === 'narrator';
+          s.scenario.systems.dmRole.canIntroduceElements = role === 'narrator';
+        }
+      }
     });
   }, []);
 
@@ -319,11 +329,11 @@ export function ActorsPanel() {
                   </div>
                 </div>
 
-                {/* ── Director Mode (only for canDirect actors) ── */}
+                {/* ── Director Behavior (only for canDirect actors) ── */}
                 {a.canDirect && (
                   <>
                     <div className="actor-section-divider" />
-                    <Field label="Director Mode" info="How the Director runs the conversation. Narrator describes the scene; Facilitator guides discussion; Arbiter enforces rules; Observer stays silent unless addressed.">
+                    <Field label="Director Behavior" info="How the Director runs the conversation. Narrator describes the scene; Facilitator guides discussion; Arbiter enforces rules; Observer stays silent unless addressed.">
                       <select value={a.directorMode || 'facilitator'} onChange={e => updateActor(a.id, 'directorMode', e.target.value)}>
                         <option value="narrator">Narrator — describes scene, drives story</option>
                         <option value="facilitator">Facilitator — guides discussion, summarizes</option>
@@ -333,7 +343,7 @@ export function ActorsPanel() {
                     </Field>
                     {(a.directorMode || 'facilitator') === 'narrator' && (
                       <div className="field-hint" style={{ marginTop: -4 }}>
-                        Narrator mode — the Director describes scene context and consequences. Stage Directions (in Scenario → Systems) should also be enabled.
+                        Narrator behavior — the Director describes scene context and consequences. Stage Directions (in Scenario → Systems) should also be enabled.
                       </div>
                     )}
                   </>
@@ -381,9 +391,9 @@ export function ActorsPanel() {
                         return (
                           <>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 6 }}>
-                              <Field label="Schedule" info="Queue = takes ordinary round-robin turns. Every N turns/rounds = a background actor that fires periodically (e.g. a director). On-call = only speaks when routed to.">
+                              <Field label="Schedule" info="Queue = takes ordinary sequential turns. Every N turns/rounds = a background actor that fires periodically (e.g. a director). On-call = only speaks when routed to.">
                                 <select value={schedType} onChange={e => setCadence(e.target.value)}>
-                                  <option value="queue">Queue — round-robin turns</option>
+                                  <option value="queue">Queue — sequential turns</option>
                                   <option value="turn">Every N turns</option>
                                   <option value="round">Every N rounds</option>
                                   <option value="on-call">On-call only</option>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import * as Ic from '../Icons';
 import { ConnectionPanel } from './ConnectionPanel';
 import { ScenarioPanel } from './ScenarioPanel';
@@ -29,21 +29,26 @@ const PANELS = {
 
 export function Inspector({ active, meta, nav, embedded = false }) {
   const [showPrompt, setShowPrompt] = useState(false);
+  const canShowPrompt = active === 'telemetry';
+
+  useEffect(() => {
+    setShowPrompt(false);
+  }, [active]);
 
   const navItem = nav.find(n => n.id === active);
   const Icon = navItem ? Ic[navItem.icon] : null;
   const Panel = PANELS[active];
 
-  const promptToggle = (
+  const promptToggle = canShowPrompt ? (
     <button
       className={"chip-btn" + (showPrompt ? " active" : "")}
       style={{ marginLeft: 'auto' }}
-      title="View the last prompt sent to the model"
+      title="View the last actor prompt sent to the model"
       onClick={() => setShowPrompt(v => !v)}
     >
       {showPrompt ? '← Back' : '🔬 Prompt'}
     </button>
-  );
+  ) : null;
 
   const body = (
     <div className="inspector-body">
@@ -59,7 +64,7 @@ export function Inspector({ active, meta, nav, embedded = false }) {
   if (embedded) {
     return (
       <div className="inspector inspector--embedded" aria-label="Inspector">
-        <div className="inspector-embedded-actions">{promptToggle}</div>
+        {promptToggle && <div className="inspector-embedded-actions">{promptToggle}</div>}
         {body}
       </div>
     );

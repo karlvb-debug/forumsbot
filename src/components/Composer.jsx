@@ -11,7 +11,7 @@ export function Composer({ showThoughts, onToggleThoughts }) {
   const [noteText, setNoteText] = useState('');
   const taRef = useRef(null);
 
-  const toolsEnabled = useForumState(s => s.settings?.toolsEnabled !== false);
+  const toolsEnabled = useForumState(s => !!s.settings?.toolsEnabled);
   const autoRunning = useForumState(s => s.autoRunning);
 
   const { nextTurn, runRound, sendMessage } = useActions();
@@ -106,7 +106,7 @@ export function Composer({ showThoughts, onToggleThoughts }) {
             type="button"
             className={"chip-btn" + (toolsEnabled ? " active" : "")}
             onClick={handleToggleTools}
-            title="Allow actors to search the web"
+            title="Allow researcher actors to search the web"
           >
             <Ic.Globe width={12} height={12} /> Tools
           </button>

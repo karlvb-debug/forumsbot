@@ -240,16 +240,6 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
   text-overflow: ellipsis;
   max-width: 360px;
 }
-.session-title .mode-chip {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  color: var(--fg-dim);
-  font-family: var(--font-mono);
-  text-transform: lowercase;
-}
 .topbar-spacer { flex: 1; }
 
 .status-cluster { display: flex; align-items: center; gap: 6px; }

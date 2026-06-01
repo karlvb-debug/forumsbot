@@ -77,7 +77,6 @@ describe('applyAssistantPatch', () => {
   });
   it('correctly deep merges scenario systems nested objects', () => {
     state.scenario = {
-      mode: 'problem',
       title: 'Initial Title',
       systems: {
         stageDirections: { enabled: false, intensity: 'moderate' },

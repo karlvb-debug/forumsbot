@@ -140,11 +140,11 @@ function logApiError(status, model, startTime, message, endpoint = "/v1/chat/com
 
 // Internal (unscheduled) implementation — used by chatJson retry/correction
 // calls to avoid deadlocking the scheduler.
-async function _chatCompletionDirect(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, jsonSchema = null } = {}) {
+async function _chatCompletionDirect(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, jsonSchema = null, toolsAllowed = false } = {}) {
   _lastToolCalls = []; // reset per-call log
-  const stageDir = state.scenario?.systems?.stageDirections?.enabled ?? (state.scenario?.mode === 'story');
+  const stageDir = state.scenario?.systems?.stageDirections?.enabled === true;
   // Tools are text-tags only ([SEARCH:]/[READ:]), which are grammar-compatible.
-  const toolsAllowed = state.settings.toolsEnabled && !stageDir;
+  const allowTextTools = !!toolsAllowed && state.settings.toolsEnabled && !stageDir;
   const model = state.settings.model;
   let useSchema = !!jsonSchema && _schemaSupportByModel[model] !== false;
   const messages = [
@@ -241,7 +241,7 @@ async function _chatCompletionDirect(system, user, { temperature = state.setting
     }
 
     // Text-tag tools: parse [SEARCH:]/[READ:] requests embedded in the response.
-    if (toolsAllowed && round < MAX_TOOL_ROUNDS) {
+    if (allowTextTools && round < MAX_TOOL_ROUNDS) {
       const textCalls = parseTextToolCalls(content);
       if (textCalls.length) {
         const callTypes = textCalls.map((tc) => tc.tool).join(", ");
@@ -482,12 +482,13 @@ async function _getEmbeddingsBatchDirect(texts) {
   return items.map(item => item.embedding).filter(Array.isArray);
 }
 
-export async function chatJson(system, user, temperature, signal, onStream = null, maxTokens = null, jsonSchema = null) {
+export async function chatJson(system, user, temperature, signal, onStream = null, maxTokens = null, jsonSchema = null, options = {}) {
   // Stream when a callback is provided and streaming is enabled. The grammar
   // schema is applied inside chatStream/_chatCompletionDirect; text-tag tool
   // calls are detected post-response (the vast majority of turns have none).
-  const stageDir2 = state.scenario?.systems?.stageDirections?.enabled ?? (state.scenario?.mode === 'story');
-  const toolsAllowed = state.settings.toolsEnabled && !stageDir2;
+  const stageDir2 = state.scenario?.systems?.stageDirections?.enabled === true;
+  const callAllowsTools = options.toolsAllowed !== false;
+  const toolsAllowed = callAllowsTools && state.settings.toolsEnabled && !stageDir2;
   const canStream = onStream && state.settings.streamingEnabled !== false;
   const resolvedMaxTokens = maxTokens || state.settings.maxTokens;
 
@@ -530,6 +531,7 @@ ${result}
           maxTokens: resolvedMaxTokens,
           signal,
           jsonSchema,
+          toolsAllowed: callAllowsTools,
         });
       }
     }
@@ -539,6 +541,7 @@ ${result}
       maxTokens: resolvedMaxTokens,
       signal,
       jsonSchema,
+      toolsAllowed: callAllowsTools,
     });
   }
 
@@ -581,7 +584,8 @@ ${result}
         const retryContent = await _chatCompletionDirect(system, resumeUser, {
           temperature: 0.1, // deterministic for repair
           maxTokens: Math.min(resolvedMaxTokens * 2, 4000),
-          signal
+          signal,
+          toolsAllowed: false,
         });
         // Merge: try the retry content alone first, then as a suffix to the original
         const candidates = [retryContent, content + retryContent];

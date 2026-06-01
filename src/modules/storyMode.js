@@ -2,7 +2,7 @@
 // storyMode.js — prompt fragments for roleplay / stage-direction sessions.
 //
 // These builders are only used when scenario stage directions are enabled
-// (story mode). Extracting them keeps the large narrative-RP prompt text out of
+// (stage-direction sessions). Extracting them keeps the large narrative-RP prompt text out of
 // the hot problem-solving path in turns.js (askActor), where it roughly doubled
 // the prompt-assembly surface.
 //

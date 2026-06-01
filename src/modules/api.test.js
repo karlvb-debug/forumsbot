@@ -9,7 +9,7 @@ const { mockState } = vi.hoisted(() => ({
       toolsEnabled: false, streamingEnabled: false, maxTokens: 2000, temperature: 0.8,
       topP: 1.0, repeatPenalty: 1.0, seedEnabled: false, seed: -1,
     },
-    scenario: { mode: 'problem', systems: {} },
+    scenario: { systems: {} },
     diagnostics: {},
     contextInfo: {},
   },
@@ -119,6 +119,20 @@ describe('chatJson — grammar schema & capability detection', () => {
     // Schema probe disables schema and retries once; the retry still fails → throws.
     await expect(chatJson('sys', 'usr', 0.2, null, null, null, SCHEMA)).rejects.toThrow(/model not loaded/);
     expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('chatJson — text tool gating', () => {
+  it('does not execute text-tag tools when the caller disables tools', async () => {
+    mockState.settings.toolsEnabled = true;
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(
+      chatResponse('{"thought":"[SEARCH: local llms]","action":"speak","message":"No tool call should run."}')
+    );
+
+    const parsed = await chatJson('sys', 'usr', 0.2, null, null, null, null, { toolsAllowed: false });
+
+    expect(parsed.message).toContain('No tool call should run');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });
 

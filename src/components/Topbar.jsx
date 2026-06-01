@@ -18,7 +18,6 @@ export function Topbar() {
       setTimeout(() => setMdCopied(false), 2000);
     }
   };
-  const mode = useForumState(s => s.scenario?.mode || 'problem');
   const title = useForumState(s => s.scenario?.title || 'Forum — Mission Control');
   const roundNum = useForumState(s => s.currentRound || 0);
   const turnCount = useForumState(s => (s.messages || []).filter(m => m.type !== 'system').length);
@@ -54,7 +53,6 @@ export function Topbar() {
     <header className="topbar">
       <div className="session-title">
         <h1>{title}</h1>
-        <span className="mode-chip">{mode}</span>
       </div>
       <span className="topbar-spacer" />
 

@@ -5,7 +5,7 @@
  *   buildActorSchema(actor, options)      → JSON Schema for API response_format
  *   buildSchemaPromptLine(actor, options) → "Return only valid JSON: {...}" string
  *
- * Options: { showThoughts = true, hasEditable = false, stageDirections = false }
+ * Options: { showThoughts = true, hasEditable = false, stageDirections = false, allowNextSpeaker = true }
  */
 
 // ── Field definitions ─────────────────────────────────────────────────────────
@@ -142,11 +142,11 @@ const FIELDS = {
 /**
  * Returns an ordered list of field names for the given actor and options.
  * @param {object} actor
- * @param {{ showThoughts?: boolean, hasEditable?: boolean, stageDirections?: boolean }} options
+ * @param {{ showThoughts?: boolean, hasEditable?: boolean, stageDirections?: boolean, allowNextSpeaker?: boolean }} options
  * @returns {{ required: string[], optional: string[] }}
  */
 function selectFields(actor, options = {}) {
-  const { showThoughts = true, hasEditable = false, stageDirections = false } = options;
+  const { showThoughts = true, hasEditable = false, stageDirections = false, allowNextSpeaker = true } = options;
 
   const required = [];
   const optional = [];
@@ -158,7 +158,8 @@ function selectFields(actor, options = {}) {
   // Director
   if (actor.canDirect) {
     required.push('action', 'message');
-    optional.push('nextSpeaker', 'anchor', 'pinFact', 'pauseRequest');
+    if (allowNextSpeaker) optional.push('nextSpeaker');
+    optional.push('anchor', 'pinFact', 'pauseRequest');
     optional.push('manageActors', 'promptInjections', 'privateMessages');
     if (hasEditable) optional.push('documentEdits');
     return { required, optional };
@@ -183,7 +184,8 @@ function selectFields(actor, options = {}) {
 
   // Regular actor
   required.push('action', 'message');
-  optional.push('nextSpeaker', 'anchor', 'pinFact', 'pauseRequest');
+  if (allowNextSpeaker) optional.push('nextSpeaker');
+  optional.push('anchor', 'pinFact', 'pauseRequest');
   if (hasEditable) optional.push('documentEdits');
   if (actor.canInject) {
     optional.push('promptInjections', 'privateMessages');
@@ -196,7 +198,7 @@ function selectFields(actor, options = {}) {
 /**
  * Build the JSON Schema object for LM Studio's response_format field.
  * @param {object} actor
- * @param {{ showThoughts?: boolean, hasEditable?: boolean, stageDirections?: boolean }} options
+ * @param {{ showThoughts?: boolean, hasEditable?: boolean, stageDirections?: boolean, allowNextSpeaker?: boolean }} options
  * @returns {object} JSON Schema
  */
 export function buildActorSchema(actor, options = {}) {
@@ -219,7 +221,7 @@ export function buildActorSchema(actor, options = {}) {
 /**
  * Build the human-readable "Return only valid JSON: {...}" prompt line.
  * @param {object} actor
- * @param {{ showThoughts?: boolean, hasEditable?: boolean, stageDirections?: boolean }} options
+ * @param {{ showThoughts?: boolean, hasEditable?: boolean, stageDirections?: boolean, allowNextSpeaker?: boolean }} options
  * @returns {string}
  */
 export function buildSchemaPromptLine(actor, options = {}) {
@@ -239,7 +241,7 @@ export function buildSchemaPromptLine(actor, options = {}) {
   const allFields = [...reqFields, ...optFields];
   const pairs = allFields.map(name => {
     let promptValue = FIELDS[name].prompt;
-    // Story mode overrides the message description
+    // Stage directions override the message description.
     if (name === 'message' && stageDirections) {
       promptValue = '*actions in asterisks* plus "spoken dialogue in quotes"';
     }

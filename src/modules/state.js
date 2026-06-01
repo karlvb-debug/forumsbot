@@ -1,5 +1,5 @@
 import { STORAGE_KEY, VALID_TABS, defaultState, colors } from './constants.js';
-import { normalizeQuickStartConfig, cleanStoredMessage, normalizeStringArray, normalizeCadence } from './utils.js';
+import { DEFAULT_SYSTEMS, legacySystemsFromMode, normalizeQuickStartConfig, cleanStoredMessage, normalizeStringArray, normalizeCadence, normalizeSpeakingOrderStrategy } from './utils.js';
 
 function normalizeDocumentEntry(e) {
   return {
@@ -43,7 +43,48 @@ function migrateEveryTurnTrigger(actor) {
   return cadence;
 }
 
-function normalizeState(value) {
+function normalizeState(value = {}) {
+  const scenarioInput = value.scenario && typeof value.scenario === "object" ? value.scenario : {};
+  const { mode: legacyMode, systems: inputSystems = {}, ...scenarioFields } = scenarioInput;
+  const rawScenarioSystems = inputSystems && typeof inputSystems === "object" ? inputSystems : {};
+  const legacySystems = legacySystemsFromMode(legacyMode);
+  const scenarioSystems = {
+    ...DEFAULT_SYSTEMS,
+    ...defaultState.scenario.systems,
+    ...legacySystems,
+    ...rawScenarioSystems,
+    stageDirections: {
+      ...DEFAULT_SYSTEMS.stageDirections,
+      ...defaultState.scenario.systems.stageDirections,
+      ...(legacySystems.stageDirections || {}),
+      ...(rawScenarioSystems.stageDirections || {})
+    },
+    alignment: {
+      ...DEFAULT_SYSTEMS.alignment,
+      ...defaultState.scenario.systems.alignment,
+      ...(legacySystems.alignment || {}),
+      ...(rawScenarioSystems.alignment || {})
+    },
+    turnRouting: {
+      ...DEFAULT_SYSTEMS.turnRouting,
+      ...defaultState.scenario.systems.turnRouting,
+      ...(legacySystems.turnRouting || {}),
+      ...(rawScenarioSystems.turnRouting || {})
+    },
+    dmRole: {
+      ...DEFAULT_SYSTEMS.dmRole,
+      ...defaultState.scenario.systems.dmRole,
+      ...(legacySystems.dmRole || {}),
+      ...(rawScenarioSystems.dmRole || {})
+    },
+    document: {
+      ...DEFAULT_SYSTEMS.document,
+      ...defaultState.scenario.systems.document,
+      ...(legacySystems.document || {}),
+      ...(rawScenarioSystems.document || {})
+    },
+  };
+  scenarioSystems.turnRouting.strategy = normalizeSpeakingOrderStrategy(scenarioSystems.turnRouting.strategy);
   const merged = {
     ...structuredClone(defaultState),
     ...value,
@@ -56,16 +97,8 @@ function normalizeState(value) {
     autoStop: { ...defaultState.autoStop, ...value.autoStop },
     scenario: {
       ...defaultState.scenario,
-      ...value.scenario,
-      systems: {
-        ...defaultState.scenario.systems,
-        ...(value.scenario?.systems || {}),
-        stageDirections: { ...defaultState.scenario.systems.stageDirections, ...(value.scenario?.systems?.stageDirections || {}) },
-        alignment:        { ...defaultState.scenario.systems.alignment,        ...(value.scenario?.systems?.alignment        || {}) },
-        turnRouting:      { ...defaultState.scenario.systems.turnRouting,      ...(value.scenario?.systems?.turnRouting      || {}) },
-        dmRole:           { ...defaultState.scenario.systems.dmRole,           ...(value.scenario?.systems?.dmRole           || {}) },
-        document:         { ...defaultState.scenario.systems.document,         ...(value.scenario?.systems?.document         || {}) },
-      }
+      ...scenarioFields,
+      systems: scenarioSystems
     },
     dm: { ...defaultState.dm, ...value.dm },
     actors: (Array.isArray(value.actors) && value.actors.length ? value.actors : structuredClone(defaultState.actors))
@@ -153,9 +186,10 @@ function normalizeState(value) {
   if (value.settings?.maxTokens === 700) {
     merged.settings.maxTokens = defaultState.settings.maxTokens;
   }
-  // toolsEnabled didn't exist in early versions — treat undefined/missing as true
+  // toolsEnabled didn't exist in early versions. Default missing values to false:
+  // web tools are expensive on local models and researcher-scoped when enabled.
   if (value.settings && typeof value.settings.toolsEnabled === "undefined") {
-    merged.settings.toolsEnabled = true;
+    merged.settings.toolsEnabled = false;
   }
   if (!VALID_TABS.includes(merged.ui.activeTab)) {
     merged.ui.activeTab = "";
@@ -240,6 +274,7 @@ function normalizeState(value) {
     delete merged.dm;
   }
 
+  const scenarioDirectorMode = merged.scenario.systems?.dmRole?.role || 'facilitator';
   merged.actors = merged.actors.map((actor, index) => ({
     id: actor.id || crypto.randomUUID(),
     name: actor.name || `Actor ${index + 1}`,
@@ -260,7 +295,7 @@ function normalizeState(value) {
     canResearch: !!(actor.canResearch || actor.isResearcher),
     canSeeThoughts: !!(actor.canSeeThoughts),
     canInject: !!(actor.canInject),
-    directorMode: actor.directorMode || 'facilitator',
+    directorMode: actor.directorMode || ((actor.canDirect || actor.isDirector) ? scenarioDirectorMode : 'facilitator'),
     authority: typeof actor.authority === "number" ? Math.max(0, Math.min(100, actor.authority)) : 50,
     // Scheduling: migrate the legacy four-way turnSchedule enum to the cadence
     // model. Queue participants have cadence: null; background/periodic actors

@@ -56,7 +56,7 @@ const NAV = [
 ];
 
 const NAV_TITLES = {
-  scenario:      { title: 'Scenario',      sub: 'premise · objective · mode' },
+  scenario:      { title: 'Scenario',      sub: 'premise · objective · systems' },
   actors:        { title: 'Actors',        sub: 'panel composition' },
   participation: { title: 'Participation', sub: 'your role · pause policy' },
   memory:        { title: 'Memory',        sub: 'facts · summary · anchors · outcomes' },

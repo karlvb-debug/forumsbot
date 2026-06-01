@@ -315,5 +315,21 @@ describe('normalizeQuickStartConfig', () => {
     expect(result.memory.pinnedFacts).toEqual(['Fact 1', 'Fact 2']);
     expect(result.memory.openQuestions).toEqual(['Question 1', 'Question 2']);
   });
-});
 
+  it('does not emit scenario.mode for new quick-start configs', () => {
+    const result = normalizeQuickStartConfig({ scenario: { title: 'No Modes' } });
+    expect(result.scenario.mode).toBeUndefined();
+    expect(result.scenario.systems.stageDirections.enabled).toBe(false);
+    expect(result.scenario.systems.document.schema).toBe('freeform');
+    expect(result.scenario.systems.turnRouting.strategy).toBe('sequential');
+  });
+
+  it('translates legacy story mode into explicit systems', () => {
+    const result = normalizeQuickStartConfig({ scenario: { mode: 'story', title: 'Legacy Story' } });
+    expect(result.scenario.mode).toBeUndefined();
+    expect(result.scenario.systems.stageDirections.enabled).toBe(true);
+    expect(result.scenario.systems.turnRouting.strategy).toBe('agentic');
+    expect(result.scenario.systems.dmRole.role).toBe('narrator');
+    expect(result.scenario.systems.document.schema).toBe('story-bible');
+  });
+});

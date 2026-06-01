@@ -125,15 +125,10 @@ export function HelpPanel() {
       <HelpSection id="scenario" title="Scenario" openId={openId} setOpenId={setOpenId}>
         <ul style={{ margin: '4px 0 8px 0', paddingLeft: 16, lineHeight: 1.6 }}>
           <li>
-            <strong>Presets</strong> — applies a named template that sets Mode, Title, Premise,
-            Objective, and all Systems fields at once. Options: Brainstorm, Risk Assessment,
+            <strong>Presets</strong> — applies a named template that sets Title, Premise,
+            Objective, Systems, and a recommended cast at once. Options: Brainstorm, Risk Assessment,
             Structured Debate, Project Retrospective, Collaborative Story, Expert Interview,
             Collaborative Improv, Problem Solving.
-          </li>
-          <li>
-            <strong>Mode</strong> — coarse behavioral switch: <em>Problem</em> (analytical),{' '}
-            <em>Story</em> (roleplay), or <em>Freeform</em> (open). Systems settings override
-            individual actor behaviors.
           </li>
         </ul>
         <p style={{ marginBottom: 8 }}>
@@ -143,7 +138,7 @@ export function HelpPanel() {
           <li>
             <strong>Stage Directions</strong> — the key roleplay toggle. On = actors speak in
             character with <em>*asterisk*</em> physical actions, web tools disabled, theatrical
-            formatting rules apply. Off = analytical forum mode.
+            formatting rules apply. Off = analytical forum behavior.
             <ul style={{ margin: '4px 0 4px 0', paddingLeft: 16, lineHeight: 1.6 }}>
               <li>
                 <em>Intensity</em>: how much physical description is expected — Minimal, Moderate,
@@ -164,6 +159,11 @@ export function HelpPanel() {
             <strong>Alignment Strictness</strong> — how firmly actors are nudged back to the
             objective when drifting. Strict = hard redirects in prompt. Loose = free exploration.
             Off = no alignment signals at all.
+          </li>
+          <li>
+            <strong>Speaking Order</strong> — Sequential rotates through the visible queue.
+            Agentic makes one small router call per round to pick a short speaker plan from
+            eligible actors.
           </li>
           <li>
             <strong>Document Schema</strong> — labels the working document type for context:
@@ -226,8 +226,8 @@ export function HelpPanel() {
             messages).
           </li>
           <li>
-            <strong>Research (canResearch)</strong> — gets a specialized web-search prompt. Uses
-            [SEARCH: query] in their thought field to fetch live data before responding.
+            <strong>Research (canResearch)</strong> — gets the specialized research prompt. When
+            Tools are enabled, uses [SEARCH: query] in their thought field to fetch live data.
           </li>
           <li>
             <strong>See Thoughts (canSeeThoughts)</strong> — Directors with this see all actors'
@@ -255,7 +255,7 @@ export function HelpPanel() {
           </li>
           <li>
             <strong>DM State</strong> — scenario-specific state maintained by the Director (scene
-            location, introduced elements, tension level). Used in Story mode.
+            location, introduced elements, tension level). Used when Stage Directions are enabled.
           </li>
           <li>
             <strong>Pending Anchors</strong> — the Director suggests these during sessions; you

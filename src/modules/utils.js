@@ -24,7 +24,7 @@ export function appendMemory(existing, thought) {
 // ── Actor scheduling (cadence model) ─────────────────────────────────────────
 // A single source of truth replacing the legacy four-way `turnSchedule` enum
 // ('normal' | 'every-turn' | 'alternate' | 'on-call'). An actor is either a
-// queue participant (speaks in round-robin order) or a background actor that
+// queue participant (speaks in sequential order) or a background actor that
 // fires on a cadence: { unit: 'turn' | 'round', n: >=1 }.
 //
 //   queue participant     → cadence: null
@@ -62,7 +62,7 @@ export function normalizeCadence(actor) {
 }
 
 /**
- * True when the actor takes ordinary round-robin turns (is in the queue).
+ * True when the actor takes ordinary sequential turns (is in the queue).
  * Background/cadence actors are excluded.
  */
 export function isQueueActor(actor) {
@@ -508,6 +508,7 @@ export function normalizeQuickStartActor(actor, index, assignFreshIds) {
     canResearch: !!(source.canResearch || source.isResearcher),
     canManageCast: !!(source.canManageCast || source.isManager),
     canSeeThoughts: !!source.canSeeThoughts,
+    directorMode: ["narrator", "facilitator", "arbiter", "observer"].includes(source.directorMode) ? source.directorMode : undefined,
     color: ["#18726d", "#b84738", "#a2611a", "#355f9f", "#6e4c99", "#4f7d2d", "#9a4668"][index % 7]
   };
 }
@@ -539,6 +540,62 @@ export function stringifyBullets(value) {
   return stringifyList(value);
 }
 
+export const DEFAULT_SYSTEMS = {
+  stageDirections: { enabled: false, intensity: "moderate", maxTokenShare: 0.2 },
+  alignment: { strictness: "moderate", anchorInPrompt: false, nudgeStyle: "gentle-nudge" },
+  turnRouting: { strategy: "sequential", allowDirectAddress: true },
+  dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false },
+  document: { schema: "freeform" }
+};
+
+export function normalizeSpeakingOrderStrategy(strategy) {
+  if (strategy === "agentic" || strategy === "smart" || strategy === "dm-directed" || strategy === "narrative-flow") {
+    return "agentic";
+  }
+  return "sequential";
+}
+
+export function legacySystemsFromMode(mode) {
+  if (mode === "story") {
+    return {
+      stageDirections: { enabled: true, intensity: "immersive", maxTokenShare: 0.4 },
+      alignment: { strictness: "loose", anchorInPrompt: false, nudgeStyle: "question" },
+      turnRouting: { strategy: "agentic", allowDirectAddress: true },
+      dmRole: { role: "narrator", narrates: true, canIntroduceElements: true },
+      document: { schema: "story-bible" }
+    };
+  }
+  if (mode === "problem") {
+    return {
+      stageDirections: { enabled: false, intensity: "moderate", maxTokenShare: 0.2 },
+      alignment: { strictness: "strict", anchorInPrompt: false, nudgeStyle: "hard-redirect" },
+      turnRouting: { strategy: "sequential", allowDirectAddress: true },
+      dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false },
+      document: { schema: "findings" }
+    };
+  }
+  if (mode === "freeform") {
+    return {
+      stageDirections: { enabled: false, intensity: "moderate", maxTokenShare: 0.2 },
+      alignment: { strictness: "moderate", anchorInPrompt: false, nudgeStyle: "gentle-nudge" },
+      turnRouting: { strategy: "sequential", allowDirectAddress: true },
+      dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false },
+      document: { schema: "freeform" }
+    };
+  }
+  return {};
+}
+
+function mergeSystemDefaults(base, legacy, raw) {
+  return {
+    stageDirections: { ...base.stageDirections, ...(legacy.stageDirections || {}), ...(raw.stageDirections || {}) },
+    alignment: { ...base.alignment, ...(legacy.alignment || {}), ...(raw.alignment || {}) },
+    turnRouting: { ...base.turnRouting, ...(legacy.turnRouting || {}), ...(raw.turnRouting || {}) },
+    dmRole: { ...base.dmRole, ...(legacy.dmRole || {}), ...(raw.dmRole || {}) },
+    document: { ...base.document, ...(legacy.document || {}), ...(raw.document || {}) }
+  };
+}
+
 export function normalizeQuickStartConfig(config, assignFreshIds = true) {
   const source = config && typeof config === "object" ? config : {};
   const scenario = source.scenario && typeof source.scenario === "object" ? source.scenario : {};
@@ -557,8 +614,7 @@ export function normalizeQuickStartConfig(config, assignFreshIds = true) {
 
   // ── Normalize scenario.systems (deep-merge with validation) ──
   const rawSystems = scenario.systems && typeof scenario.systems === "object" ? scenario.systems : {};
-  const normalizedMode = ["problem", "story", "freeform"].includes(scenario.mode) ? scenario.mode : "problem";
-  const isStoryMode = normalizedMode === "story";
+  const legacySystems = legacySystemsFromMode(scenario.mode);
 
   const normSub = (raw, defaults) => {
     if (!raw || typeof raw !== "object") return { ...defaults };
@@ -569,30 +625,15 @@ export function normalizeQuickStartConfig(config, assignFreshIds = true) {
     return out;
   };
 
+  const systemDefaults = mergeSystemDefaults(DEFAULT_SYSTEMS, legacySystems, {});
   const systems = {
-    stageDirections: normSub(rawSystems.stageDirections, {
-      enabled: isStoryMode,
-      intensity: "moderate",
-      maxTokenShare: 0.2
-    }),
-    alignment: normSub(rawSystems.alignment, {
-      strictness: isStoryMode ? "loose" : "moderate",
-      anchorInPrompt: false,
-      nudgeStyle: isStoryMode ? "question" : "gentle-nudge"
-    }),
-    turnRouting: normSub(rawSystems.turnRouting, {
-      strategy: isStoryMode ? "narrative-flow" : "round-robin",
-      allowDirectAddress: true
-    }),
-    dmRole: normSub(rawSystems.dmRole, {
-      role: isStoryMode ? "narrator" : "facilitator",
-      narrates: isStoryMode,
-      canIntroduceElements: isStoryMode
-    }),
-    document: normSub(rawSystems.document, {
-      schema: isStoryMode ? "story-bible" : "freeform"
-    })
+    stageDirections: normSub(rawSystems.stageDirections, systemDefaults.stageDirections),
+    alignment: normSub(rawSystems.alignment, systemDefaults.alignment),
+    turnRouting: normSub(rawSystems.turnRouting, systemDefaults.turnRouting),
+    dmRole: normSub(rawSystems.dmRole, systemDefaults.dmRole),
+    document: normSub(rawSystems.document, systemDefaults.document)
   };
+  systems.turnRouting.strategy = normalizeSpeakingOrderStrategy(systems.turnRouting.strategy);
 
   // ── Normalize settings (pass through known fields) ──
   let settings = undefined;
@@ -620,7 +661,6 @@ export function normalizeQuickStartConfig(config, assignFreshIds = true) {
 
   const result = {
     scenario: {
-      mode: normalizedMode,
       title: cleanConfigText(scenario.title, "Untitled forum", 80),
       premise: cleanConfigText(scenario.premise, "A small group of local AI actors are gathered to discuss the user's topic.", 700),
       objective: cleanConfigText(scenario.objective, "Ask clarifying questions, challenge weak assumptions, and converge on practical next steps.", 500),

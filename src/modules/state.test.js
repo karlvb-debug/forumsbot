@@ -72,6 +72,18 @@ describe('normalizeState — userContext', () => {
   });
 });
 
+describe('normalizeState — settings defaults', () => {
+  it('defaults missing toolsEnabled to false', () => {
+    const result = normalizeState({ settings: {} });
+    expect(result.settings.toolsEnabled).toBe(false);
+  });
+
+  it('preserves explicit toolsEnabled true', () => {
+    const result = normalizeState({ settings: { toolsEnabled: true } });
+    expect(result.settings.toolsEnabled).toBe(true);
+  });
+});
+
 // ── pendingPauses normalization ───────────────────────────────────────────────
 describe('normalizeState — cadence migration & loop guard', () => {
   it('migrates legacy every-turn director to a per-round cadence (loop guard)', () => {
@@ -151,16 +163,16 @@ describe('normalizeState — pause UI state reset', () => {
 // ── scenario.systems deep-merge ───────────────────────────────────────────────
 describe('normalizeState — scenario.systems deep-merge', () => {
   it('fills missing systems with defaults', () => {
-    const result = normalizeState({ scenario: { mode: 'problem' } });
+    const result = normalizeState({ scenario: {} });
     expect(result.scenario.systems.stageDirections.enabled).toBe(false);
     expect(result.scenario.systems.alignment.strictness).toBe('moderate');
     expect(result.scenario.systems.dmRole.role).toBe('facilitator');
+    expect(result.scenario.mode).toBeUndefined();
   });
 
   it('preserves partial system overrides without clobbering siblings', () => {
     const result = normalizeState({
       scenario: {
-        mode: 'problem',
         systems: {
           stageDirections: { enabled: true, intensity: 'immersive' },
         },
@@ -184,6 +196,29 @@ describe('normalizeState — scenario.systems deep-merge', () => {
     expect(result.scenario.systems.alignment.strictness).toBe('loose');
     expect(result.scenario.systems.alignment.nudgeStyle).toBe('gentle-nudge');
     expect(result.scenario.systems.alignment.anchorInPrompt).toBe(false);
+  });
+
+  it('migrates legacy routing strategies to speaking-order values', () => {
+    const result = normalizeState({
+      scenario: {
+        systems: { turnRouting: { strategy: 'dm-directed' } },
+      },
+    });
+    expect(result.scenario.systems.turnRouting.strategy).toBe('agentic');
+  });
+
+  it('migrates legacy story mode into explicit systems and strips mode', () => {
+    const result = normalizeState({
+      scenario: { mode: 'story' },
+      actors: [{ name: 'Director', canDirect: true }],
+    });
+    expect(result.scenario.mode).toBeUndefined();
+    expect(result.scenario.systems.stageDirections.enabled).toBe(true);
+    expect(result.scenario.systems.alignment.strictness).toBe('loose');
+    expect(result.scenario.systems.turnRouting.strategy).toBe('agentic');
+    expect(result.scenario.systems.dmRole.role).toBe('narrator');
+    expect(result.scenario.systems.document.schema).toBe('story-bible');
+    expect(result.actors[0].directorMode).toBe('narrator');
   });
 });
 

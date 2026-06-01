@@ -73,7 +73,7 @@ export const defaultState = {
     seed: -1,
     seedEnabled: false,
     showThoughts: false,
-    toolsEnabled: true,
+    toolsEnabled: false,
     theme: "dark",
     includeTraces: true,
     gravitySensitivity: 50,
@@ -172,7 +172,6 @@ export const defaultState = {
   pendingInjections: [],     // CAP-1: director prompt injection queue
   pendingPrivateMessages: [], // CAP-2: actor-to-actor private message queue
   scenario: {
-    mode: "problem",
     title: "Design council",
     premise: "A small group of local AI actors are gathered to discuss the user's topic.",
     objective: "Ask clarifying questions, challenge weak assumptions, and converge on practical next steps.",
@@ -188,7 +187,7 @@ export const defaultState = {
         nudgeStyle: "gentle-nudge" // "hard-redirect" | "gentle-nudge" | "question"
       },
       turnRouting: {
-        strategy: "round-robin",  // "round-robin" | "dm-directed" | "narrative-flow"
+        strategy: "sequential",  // "sequential" | "agentic"
         allowDirectAddress: true
       },
       dmRole: {
@@ -219,6 +218,7 @@ export const defaultState = {
       canResearch: false,
       canSeeThoughts: false,
       canInject: true,
+      directorMode: "facilitator",
       authority: 50,
       // Fire once per round, not per turn. A per-turn director re-runs after
       // every actor turn and looks like an infinite "responds again" loop.
