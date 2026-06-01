@@ -6,6 +6,9 @@
  *   buildSchemaPromptLine(actor, options) → "Return only valid JSON: {...}" string
  *
  * Options: { showThoughts = true, hasEditable = false, stageDirections = false, allowNextSpeaker = true }
+ *
+ * Normal actor turns intentionally do not include documentEdits anymore. Document
+ * writing happens through the dedicated writer-task schema below.
  */
 
 // ── Field definitions ─────────────────────────────────────────────────────────
@@ -161,7 +164,6 @@ function selectFields(actor, options = {}) {
     if (allowNextSpeaker) optional.push('nextSpeaker');
     optional.push('anchor', 'pinFact', 'pauseRequest');
     optional.push('manageActors', 'promptInjections', 'privateMessages');
-    if (hasEditable) optional.push('documentEdits');
     return { required, optional };
   }
 
@@ -178,7 +180,6 @@ function selectFields(actor, options = {}) {
   // Researcher
   if (actor.canResearch) {
     required.push('action', 'message');
-    if (hasEditable) optional.push('documentEdits');
     return { required, optional };
   }
 
@@ -186,11 +187,32 @@ function selectFields(actor, options = {}) {
   required.push('action', 'message');
   if (allowNextSpeaker) optional.push('nextSpeaker');
   optional.push('anchor', 'pinFact', 'pauseRequest');
-  if (hasEditable) optional.push('documentEdits');
   if (actor.canInject) {
     optional.push('promptInjections', 'privateMessages');
   }
   return { required, optional };
+}
+
+export function buildDocumentWriterSchema() {
+  return {
+    type: 'object',
+    properties: {
+      thought: FIELDS.thought.json,
+      summary: { type: 'string' },
+      documentEdits: FIELDS.documentEdits.json,
+    },
+    required: ['thought', 'summary', 'documentEdits'],
+    additionalProperties: false,
+  };
+}
+
+export function buildDocumentWriterPromptLine() {
+  return [
+    'Return only valid JSON with:',
+    '- "thought": brief private planning, or "" if not needed',
+    '- "summary": one sentence describing the proposed document change',
+    `- "documentEdits": ${FIELDS.documentEdits.prompt}`
+  ].join('\n');
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

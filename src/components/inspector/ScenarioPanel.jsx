@@ -49,7 +49,6 @@ export function ScenarioPanel() {
     ? 'agentic'
     : 'sequential';
   const allowDirectAddress = systems.turnRouting?.allowDirectAddress ?? true;
-  const docSchema = systems.document?.schema ?? 'freeform';
 
   return (
     <div>
@@ -131,15 +130,6 @@ export function ScenarioPanel() {
             onChange={v => updateSystem('turnRouting', 'allowDirectAddress', v)}
             label={allowDirectAddress ? 'On — actors can route to a named speaker' : 'Off — follow the configured turn route'}
           />
-        </Field>
-
-        <Field label="Document Schema">
-          <select value={docSchema} onChange={e => updateSystem('document', 'schema', e.target.value)}>
-            <option value="freeform">Freeform</option>
-            <option value="decisions">Decisions — track choices and rationale</option>
-            <option value="findings">Findings — structured analysis output</option>
-            <option value="story-bible">Story Bible — characters, world, arc</option>
-          </select>
         </Field>
       </div>
 

@@ -8,6 +8,9 @@ function normalizeDocumentEntry(e) {
     type: e.type === "link" ? "link" : "document",
     content: e.content || "",
     url: e.url || "",
+    purpose: e.purpose || "",
+    format: e.format || "",
+    writerId: e.writerId || "",
     target: (e.target === "all" || Array.isArray(e.target)) ? e.target : "all",
     enabled: e.enabled !== false,
     createdAt: e.createdAt || new Date().toISOString(),
@@ -76,13 +79,7 @@ function normalizeState(value = {}) {
       ...defaultState.scenario.systems.dmRole,
       ...(legacySystems.dmRole || {}),
       ...(rawScenarioSystems.dmRole || {})
-    },
-    document: {
-      ...DEFAULT_SYSTEMS.document,
-      ...defaultState.scenario.systems.document,
-      ...(legacySystems.document || {}),
-      ...(rawScenarioSystems.document || {})
-    },
+    }
   };
   scenarioSystems.turnRouting.strategy = normalizeSpeakingOrderStrategy(scenarioSystems.turnRouting.strategy);
   const merged = {
@@ -95,6 +92,7 @@ function normalizeState(value = {}) {
     diagnostics: { ...defaultState.diagnostics, ...value.diagnostics },
     outcomes: { ...defaultState.outcomes, ...value.outcomes },
     autoStop: { ...defaultState.autoStop, ...value.autoStop },
+    documentWriting: { ...defaultState.documentWriting, ...(value.documentWriting || {}) },
     scenario: {
       ...defaultState.scenario,
       ...scenarioFields,
@@ -160,6 +158,8 @@ function normalizeState(value = {}) {
   }
   delete merged.document;
   delete merged.knowledgeBase;
+  if (!Array.isArray(merged.documentTasks)) merged.documentTasks = [];
+  if (!Array.isArray(merged.pendingDocumentEdits)) merged.pendingDocumentEdits = [];
 
   if (!Array.isArray(merged.telemetry.alignmentHistory)) merged.telemetry.alignmentHistory = [];
   if (!Array.isArray(merged.diagnostics.transitions)) merged.diagnostics.transitions = [];
@@ -295,6 +295,7 @@ function normalizeState(value = {}) {
     canResearch: !!(actor.canResearch || actor.isResearcher),
     canSeeThoughts: !!(actor.canSeeThoughts),
     canInject: !!(actor.canInject),
+    canWriteDocuments: !!(actor.canWriteDocuments || actor.isWriter),
     directorMode: actor.directorMode || ((actor.canDirect || actor.isDirector) ? scenarioDirectorMode : 'facilitator'),
     authority: typeof actor.authority === "number" ? Math.max(0, Math.min(100, actor.authority)) : 50,
     // Scheduling: migrate the legacy four-way turnSchedule enum to the cadence
@@ -310,6 +311,12 @@ function normalizeState(value = {}) {
     // so 'on_every_turn' is filtered out here as part of the Phase 6 unification).
     triggerOn: Array.isArray(actor.triggerOn) ? actor.triggerOn.filter(t => t !== 'on_every_turn') : [],
   }));
+  const writerId = merged.documentWriting?.designatedWriterId;
+  const writerActive = writerId && merged.actors.some(a => a.id === writerId && a.enabled && a.canWriteDocuments);
+  if (!writerActive) {
+    const fallbackWriter = merged.actors.find(a => a.enabled && a.canWriteDocuments);
+    merged.documentWriting.designatedWriterId = fallbackWriter?.id || "";
+  }
   return merged;
 }
 

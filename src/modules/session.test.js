@@ -195,7 +195,7 @@ describe('blueprints', () => {
     expect(room.documents.map(d => d.title)).toEqual(['Story Outline', 'Story Draft']);
   });
 
-  it("applying the writers' room seeds AI-editable working documents", async () => {
+  it("applying the writers' room seeds writer-owned working documents", async () => {
     const { applyBlueprint } = await import('./session.js');
     state.messages = [];
     state.documents = [];
@@ -204,15 +204,20 @@ describe('blueprints', () => {
     const titles = state.documents.map(d => d.title);
     expect(titles).toContain('Story Outline');
     expect(titles).toContain('Story Draft');
-    // Must be writable by the cast and visible to all, or they can't draft into them.
+    // Working documents stay readable to the room, but edits go through the designated writer.
     for (const d of state.documents) {
       expect(d.aiEditable).toBe(true);
       expect(d.target).toBe('all');
     }
-    // The Prose Writer carries its raised drafting budget.
+    // The Prose Writer carries its drafting budget and owns document-writing tasks.
     const writer = state.actors.find(a => a.role === 'Drafting Lead');
     expect(writer).toBeTruthy();
     expect(writer.maxTokens).toBe(1400);
+    expect(writer.canWriteDocuments).toBe(true);
+    expect(state.documentWriting.designatedWriterId).toBe(writer.id);
+    for (const d of state.documents) {
+      expect(d.writerId).toBe(writer.id);
+    }
   });
 });
 

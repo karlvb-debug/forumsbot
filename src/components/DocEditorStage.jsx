@@ -13,10 +13,15 @@ export function DocEditorStage({ transcript, composer }) {
   const focusedDocId = useForumState(s => s.ui.focusedDocId);
   const documents = useForumState(s => s.documents || []);
   const actors = useForumState(s => s.actors || []);
+  const designatedWriterId = useForumState(s => s.documentWriting?.designatedWriterId || '');
+  const pendingDocumentEdits = useForumState(s => s.pendingDocumentEdits || []);
   const doc = documents.find(d => d.id === focusedDocId);
 
   const [view, setView] = useState('edit');
   const [historyIdx, setHistoryIdx] = useState(null);
+  const [writerInstruction, setWriterInstruction] = useState('');
+  const [writerBusy, setWriterBusy] = useState(false);
+  const [writerError, setWriterError] = useState('');
   const editorRef = useRef(null);
   const containerRef = useRef(null);
 
@@ -107,6 +112,63 @@ export function DocEditorStage({ transcript, composer }) {
   const attrLines = doc.lineAttribution || [];
   const versions = doc.versions || [];
   const wordCount = doc.wordCount || 0;
+  const writerActors = actors.filter(a => a.enabled && a.canWriteDocuments);
+  const writer = writerActors.find(a => a.id === (doc.writerId || designatedWriterId));
+  const proposals = pendingDocumentEdits.filter(p => p.documentId === doc.id && ['pending', 'conflicted'].includes(p.status));
+
+  const selectedLines = useCallback(() => {
+    const el = editorRef.current;
+    if (!el || el.selectionStart === el.selectionEnd) return null;
+    const content = doc.content || '';
+    const startLine = content.slice(0, el.selectionStart).split('\n').length;
+    const endLine = content.slice(0, el.selectionEnd).split('\n').length;
+    return { startLine, endLine };
+  }, [doc.content]);
+
+  const askWriter = useCallback(async (instruction) => {
+    if (!doc.aiEditable) {
+      setWriterError('Turn on Writable by Writer before asking for document edits.');
+      return;
+    }
+    const taskInstruction = String(instruction || writerInstruction || '').trim();
+    if (!taskInstruction) {
+      setWriterError('Tell the writer what to change.');
+      return;
+    }
+    setWriterBusy(true);
+    setWriterError('');
+    try {
+      const mod = await import('../modules/documentWriting.js');
+      let actorId = doc.writerId || designatedWriterId || writer?.id || '';
+      if (!actorId) {
+        const created = mod.ensureWriterForDocuments();
+        actorId = created.id;
+      }
+      await mod.createAndRunDocumentTask({
+        documentId: doc.id,
+        actorId,
+        instruction: taskInstruction,
+        selection: selectedLines()
+      });
+      setWriterInstruction('');
+      setView('preview');
+    } catch (err) {
+      setWriterError(err?.message || 'Writer task failed.');
+    } finally {
+      setWriterBusy(false);
+    }
+  }, [designatedWriterId, doc, selectedLines, writer, writerInstruction]);
+
+  const acceptProposal = useCallback(async (id) => {
+    const mod = await import('../modules/documentWriting.js');
+    const ok = await mod.acceptDocumentProposal(id);
+    if (!ok) setWriterError('Could not apply proposal. The document may have changed; regenerate the proposal.');
+  }, []);
+
+  const rejectProposal = useCallback(async (id) => {
+    const mod = await import('../modules/documentWriting.js');
+    mod.rejectDocumentProposal(id);
+  }, []);
 
   return (
     <div
@@ -128,13 +190,14 @@ export function DocEditorStage({ transcript, composer }) {
               <span className={`doc-type-badge ${doc.type === 'link' ? 'link' : ''}`}>
                 {doc.type || 'doc'}
               </span>
-              {doc.aiEditable && <span className="doc-ai-badge">AI editable</span>}
+              {doc.aiEditable && <span className="doc-ai-badge">Writable</span>}
               <span className="doc-word-count">{wordCount} words</span>
             </div>
           </div>
           <div className="doc-editor-actions">
+            {writer && <span className="doc-word-count">Writer: {writer.name}</span>}
             <label style={{ fontSize: 'var(--fs-sm)', color: 'var(--fg-mute)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              AI editable
+              Writable by Writer
               <Toggle checked={!!doc.aiEditable} onChange={(v) => updateDoc({ aiEditable: v })} />
             </label>
             <button className="btn sm ghost" onClick={close} title="Close editor">
@@ -156,6 +219,27 @@ export function DocEditorStage({ transcript, composer }) {
             </button>
           )}
         </div>
+
+        {doc.aiEditable && (
+          <div className="doc-writer-toolbar">
+            <textarea
+              value={writerInstruction}
+              onChange={(e) => setWriterInstruction(e.target.value)}
+              placeholder={writer ? `Ask ${writer.name} to update this document...` : 'Choose or create a document writer...'}
+              rows={2}
+            />
+            <div className="doc-writer-actions">
+              <button className="btn sm" disabled={writerBusy} onClick={() => askWriter(writerInstruction)}>
+                <Ic.Robot width={12} height={12} /> Ask Writer
+              </button>
+              <button className="btn sm ghost" disabled={writerBusy} onClick={() => askWriter('Draft useful content from the recent discussion.')}>Draft</button>
+              <button className="btn sm ghost" disabled={writerBusy} onClick={() => askWriter('Revise the selected section using the recent discussion and the document purpose.')}>Revise selection</button>
+              <button className="btn sm ghost" disabled={writerBusy} onClick={() => askWriter('Polish this document for clarity, flow, and consistency.')}>Polish</button>
+            </div>
+            {writerBusy && <div className="field-hint">Writer is preparing a proposal...</div>}
+            {writerError && <div className="field-hint hint-warn">{writerError}</div>}
+          </div>
+        )}
 
         <div className="doc-editor-content">
           {view === 'edit' && (
@@ -181,7 +265,7 @@ export function DocEditorStage({ transcript, composer }) {
           {view === 'history' && (
             <div className="doc-editor-history">
               {versions.length === 0 && (
-                <div className="empty" style={{ padding: 24 }}>No version history yet. Edits by AI actors will appear here.</div>
+                <div className="empty" style={{ padding: 24 }}>No version history yet. Accepted writer proposals will appear here.</div>
               )}
               <div className="history-list">
                 {versions.slice().reverse().map((v, i) => {
@@ -216,6 +300,25 @@ export function DocEditorStage({ transcript, composer }) {
             </div>
           )}
         </div>
+
+        {proposals.length > 0 && (
+          <div className="doc-proposals">
+            <div className="doc-proposals-title">Proposed changes</div>
+            {proposals.map(p => (
+              <div key={p.id} className={`doc-proposal ${p.status}`}>
+                <div className="doc-proposal-meta">
+                  <strong>{p.writerName}</strong>
+                  <span>{p.status === 'conflicted' ? 'Conflict: document changed' : p.summary}</span>
+                </div>
+                <div className="doc-proposal-preview md-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(p.previewContent || '') }} />
+                <div className="btn-row">
+                  <button className="btn sm" disabled={p.status === 'conflicted'} onClick={() => acceptProposal(p.id)}>Accept</button>
+                  <button className="btn ghost sm" onClick={() => rejectProposal(p.id)}>Reject</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Attribution bars */}
         {doc.aiEditable && enabledActors.length > 0 && attrLines.length > 0 && (

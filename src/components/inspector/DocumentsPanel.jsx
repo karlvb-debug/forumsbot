@@ -6,9 +6,9 @@ import * as Ic from '../Icons';
 /* ────────────────────────────────────────────────────────
    DocRow — compact file-browser-style row per document.
    Collapsed: icon · title · word-count · type badge · open · toggle
-   Expanded:  settings (AI-editable, visibility, URL) + delete
+   Expanded: writer ownership, read visibility, URL, and delete controls
    ──────────────────────────────────────────────────────── */
-function DocRow({ entry, actors, onUpdate, onDelete }) {
+function DocRow({ entry, actors, writerActors, designatedWriterId, onUpdate, onDelete }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [fetchingId, setFetchingId] = useState(false);
   const [fetchError, setFetchError] = useState(null);
@@ -60,10 +60,10 @@ function DocRow({ entry, actors, onUpdate, onDelete }) {
           onClick={(e) => e.stopPropagation()}
         />
 
-        <span className="doc-row-meta">
-          {wordCount > 0 && <span className="doc-row-words">{wordCount}w</span>}
-          {versionCount > 0 && <span className="doc-row-versions">v{versionCount}</span>}
-          {entry.aiEditable && <span className="doc-ai-badge">AI</span>}
+          <span className="doc-row-meta">
+            {wordCount > 0 && <span className="doc-row-words">{wordCount}w</span>}
+            {versionCount > 0 && <span className="doc-row-versions">v{versionCount}</span>}
+            {entry.aiEditable && <span className="doc-ai-badge">Writable</span>}
         </span>
 
         <button
@@ -74,9 +74,10 @@ function DocRow({ entry, actors, onUpdate, onDelete }) {
           <Ic.Expand width={13} height={13} />
         </button>
 
-        <Toggle
+          <Toggle
           checked={entry.enabled !== false}
           onChange={(v) => update({ enabled: v })}
+          title="Include in AI-readable context"
         />
       </div>
 
@@ -84,12 +85,29 @@ function DocRow({ entry, actors, onUpdate, onDelete }) {
       {settingsOpen && (
         <div className="doc-row-settings">
           <div className="doc-row-setting">
-            <label>AI can edit</label>
+            <label>Writable by Writer</label>
             <Toggle checked={!!entry.aiEditable} onChange={(v) => update({ aiEditable: v })} />
           </div>
 
+          {entry.aiEditable && (
+            <div className="doc-row-setting">
+              <label>Document writer</label>
+              <select
+                value={entry.writerId || ''}
+                onChange={(e) => update({ writerId: e.target.value })}
+              >
+                <option value="">Session writer</option>
+                {writerActors.map(a => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}{a.id === designatedWriterId ? ' (session)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="doc-row-setting">
-            <label>Visible to</label>
+            <label>Read visibility</label>
             <select
               value={entry.target === 'all' ? 'all' : 'specific'}
               onChange={(e) => update({ target: e.target.value === 'all' ? 'all' : [] })}
@@ -118,6 +136,26 @@ function DocRow({ entry, actors, onUpdate, onDelete }) {
               ))}
             </div>
           )}
+
+          <div className="doc-row-setting vertical">
+            <label>Purpose</label>
+            <textarea
+              rows={2}
+              value={entry.purpose || ''}
+              onChange={(e) => update({ purpose: e.target.value })}
+              placeholder="What this document is for"
+            />
+          </div>
+
+          <div className="doc-row-setting vertical">
+            <label>Format</label>
+            <textarea
+              rows={2}
+              value={entry.format || ''}
+              onChange={(e) => update({ format: e.target.value })}
+              placeholder="Desired structure, tone, or sections"
+            />
+          </div>
 
           {entry.type === 'link' && (
             <div className="doc-row-setting">
@@ -160,6 +198,8 @@ function DocRow({ entry, actors, onUpdate, onDelete }) {
 export function DocumentsPanel() {
   const documents = useForumState(s => s.documents || []);
   const actors = useForumState(s => s.actors || []);
+  const designatedWriterId = useForumState(s => s.documentWriting?.designatedWriterId || '');
+  const writerActors = actors.filter(a => a.enabled && a.canWriteDocuments);
 
   // On mount: sync any IDB entries not already in state.documents
   useEffect(() => {
@@ -207,11 +247,47 @@ export function DocumentsPanel() {
     mutateState(s => { s.documents = (s.documents || []).filter(e => e.id !== id); });
   };
 
+  const setDesignatedWriter = useCallback((id) => {
+    mutateState(s => {
+      if (!s.documentWriting) s.documentWriting = {};
+      s.documentWriting.designatedWriterId = id;
+      const writer = (s.actors || []).find(a => a.id === id);
+      if (writer) writer.canWriteDocuments = true;
+    });
+  }, []);
+
+  const createWriter = useCallback(async () => {
+    const mod = await import('../../modules/documentWriting.js');
+    const writer = mod.ensureWriterForDocuments();
+    mutateState(s => {
+      if (!s.documentWriting) s.documentWriting = {};
+      s.documentWriting.designatedWriterId = writer.id;
+    });
+  }, []);
+
   const workingDocs = documents.filter(d => d.aiEditable);
   const refDocs = documents.filter(d => !d.aiEditable);
 
   return (
     <div>
+      <div className="card">
+        <div className="card-title">
+          <h3><Ic.Robot /> Document Writer</h3>
+          <span className="badge">review-first</span>
+        </div>
+        <div className="doc-row-setting">
+          <label>Designated writer</label>
+          <select value={designatedWriterId} onChange={(e) => setDesignatedWriter(e.target.value)}>
+            <option value="">No active writer</option>
+            {writerActors.map(a => <option key={a.id} value={a.id}>{a.name} — {a.role}</option>)}
+          </select>
+          <button className="btn sm" onClick={createWriter}><Ic.Plus width={11} height={11} /> Writer</button>
+        </div>
+        <div className="field-hint">
+          Only the designated writer receives document-writing tasks. Other actors can discuss and critique documents.
+        </div>
+      </div>
+
       {/* Working Documents */}
       <div className="card">
         <div className="card-title">
@@ -224,6 +300,8 @@ export function DocumentsPanel() {
               key={entry.id}
               entry={entry}
               actors={actors}
+              writerActors={writerActors}
+              designatedWriterId={designatedWriterId}
               onUpdate={persistEntry}
               onDelete={deleteEntry}
             />
@@ -248,6 +326,8 @@ export function DocumentsPanel() {
               key={entry.id}
               entry={entry}
               actors={actors}
+              writerActors={writerActors}
+              designatedWriterId={designatedWriterId}
               onUpdate={persistEntry}
               onDelete={deleteEntry}
             />

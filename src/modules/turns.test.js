@@ -109,7 +109,7 @@ vi.mock('./preflight.js', () => ({
 vi.mock('./knowledge.js', () => ({
   getKbEntriesForDirector: vi.fn(async () => []),
   splitDocuments: vi.fn(() => ({ editable: [], reference: [] })),
-  buildEditableDocSection: vi.fn(() => ''),
+  buildDocumentManifestSection: vi.fn(() => ''),
   buildReferenceSection: vi.fn(() => ''),
   buildKbSection: vi.fn(() => ''),
 }));
@@ -190,7 +190,6 @@ describe('resolveSystemSettings', () => {
     expect(s.alignmentStrictness).toBe('moderate');
     expect(s.dmNarrates).toBe(false);
     expect(s.dmRole).toBe('facilitator');
-    expect(s.documentSchema).toBe('freeform');
     expect(s.turnStrategy).toBe('sequential');
     expect(s.allowDirectAddress).toBe(true);
   });
@@ -200,7 +199,6 @@ describe('resolveSystemSettings', () => {
       stageDirections: { enabled: true, intensity: 'immersive', maxTokenShare: 0.4 },
       dmRole: { role: 'narrator', narrates: true },
       alignment: { strictness: 'loose' },
-      document: { schema: 'story-bible' },
     };
     const s = resolveSystemSettings();
     expect(s.stageDirectionsEnabled).toBe(true);
@@ -209,7 +207,6 @@ describe('resolveSystemSettings', () => {
     expect(s.dmNarrates).toBe(true);
     expect(s.dmRole).toBe('narrator');
     expect(s.alignmentStrictness).toBe('loose');
-    expect(s.documentSchema).toBe('story-bible');
   });
 
   it('a director actor directorMode overrides scenario dmRole', () => {

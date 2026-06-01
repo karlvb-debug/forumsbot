@@ -19,6 +19,8 @@ export interface Actor {
   canManageCast: boolean;
   canResearch: boolean;
   canSeeThoughts: boolean;
+  canInject?: boolean;
+  canWriteDocuments: boolean;
 }
 
 export type MessageType = 'actor' | 'system' | 'user' | 'director' | 'researcher';
@@ -175,9 +177,17 @@ export interface AutoStop {
 }
 
 export interface SharedDocument {
+  id?: string;
   enabled: boolean;
   title: string;
   content: string;
+  type?: 'document' | 'link';
+  url?: string;
+  target?: 'all' | string[];
+  purpose?: string;
+  format?: string;
+  writerId?: string;
+  aiEditable?: boolean;
   versions: DocumentVersion[];
   maxVersions: number;
   lineAttribution: LineAttribution[];
@@ -207,8 +217,38 @@ export interface Scenario {
     alignment?: { strictness?: string; anchorInPrompt?: boolean; nudgeStyle?: string };
     turnRouting?: { strategy?: string; allowDirectAddress?: boolean };
     dmRole?: { role?: string; narrates?: boolean; canIntroduceElements?: boolean };
-    document?: { schema?: string };
   };
+}
+
+export interface DocumentWriting {
+  designatedWriterId: string;
+}
+
+export interface DocumentTask {
+  id: string;
+  documentId: string;
+  actorId: string;
+  instruction: string;
+  selection?: { startLine: number; endLine: number } | null;
+  status: 'pending' | 'running' | 'proposed' | 'failed';
+  createdAt: string;
+  updatedAt: string;
+  error?: string;
+}
+
+export interface PendingDocumentEdit {
+  id: string;
+  taskId: string;
+  documentId: string;
+  actorId: string;
+  writerName: string;
+  summary: string;
+  edits: unknown[];
+  previewContent: string;
+  baseHash: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'conflicted';
+  createdAt: string;
+  resolvedAt?: string;
 }
 
 export interface ContextInfo {
@@ -233,7 +273,10 @@ export interface ForumState {
   };
   outcomes: Outcomes;
   autoStop: AutoStop;
-  document: SharedDocument;
+  documentWriting: DocumentWriting;
+  documents: SharedDocument[];
+  documentTasks: DocumentTask[];
+  pendingDocumentEdits: PendingDocumentEdit[];
   scenario: Scenario;
   actors: Actor[];
   anchors: Anchor[];

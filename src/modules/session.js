@@ -50,6 +50,8 @@ export function savePreset() {
     },
     scenario: scenarioWithoutMode(state.scenario),
     actors: state.actors,
+    documentWriting: { ...(state.documentWriting || {}) },
+    documents: (state.documents || []).map(d => ({ ...d })),
     autoStop: {
       ...state.autoStop,
       roundsRun: 0,
@@ -428,7 +430,7 @@ export async function generateQuickStart(promptOverride = "") {
   const currentConfig = {
     scenario: scenarioWithoutMode(state.scenario),
     dm: (() => { const d = state.actors.find(a => a.canDirect); return d ? { enabled: d.enabled, name: d.name, persona: d.persona, canSeeThoughts: d.canSeeThoughts } : { enabled: false }; })(),
-    actors: state.actors.map(a => ({ name: a.name, role: a.role, persona: a.persona, goal: a.goal, voice: a.voice, enabled: a.enabled, temperature: a.temperature, authority: a.authority ?? 50, canDirect: !!a.canDirect, canManageCast: !!a.canManageCast, canResearch: !!a.canResearch, canSeeThoughts: !!a.canSeeThoughts, directorMode: a.directorMode })),
+    actors: state.actors.map(a => ({ name: a.name, role: a.role, persona: a.persona, goal: a.goal, voice: a.voice, enabled: a.enabled, temperature: a.temperature, authority: a.authority ?? 50, canDirect: !!a.canDirect, canManageCast: !!a.canManageCast, canResearch: !!a.canResearch, canWriteDocuments: !!a.canWriteDocuments, canSeeThoughts: !!a.canSeeThoughts, directorMode: a.directorMode })),
     settings: {
       temperature: state.settings.temperature,
       maxTokens: state.settings.maxTokens ?? 2000,
@@ -443,7 +445,8 @@ export async function generateQuickStart(promptOverride = "") {
       enableAdaptiveCompression: state.settings.enableAdaptiveCompression !== false,
       turnDelay: state.settings.turnDelay ?? 0,
     },
-    documents: (state.documents || []).map(d => ({ id: d.id, title: d.title, aiEditable: d.aiEditable, enabled: d.enabled })),
+    documentWriting: { ...(state.documentWriting || {}) },
+    documents: (state.documents || []).map(d => ({ id: d.id, title: d.title, aiEditable: d.aiEditable, enabled: d.enabled, purpose: d.purpose, format: d.format, writerId: d.writerId })),
     autoStop: { enabled: state.autoStop.enabled, goal: state.autoStop.goal, goalCheckEnabled: state.autoStop.goalCheckEnabled, stopOnAllSkip: state.autoStop.stopOnAllSkip, maxRoundsEnabled: state.autoStop.maxRoundsEnabled, maxRounds: state.autoStop.maxRounds },
     memory: {
       pinnedFacts: Array.isArray(state.memory.pinnedFacts) ? state.memory.pinnedFacts : [],
@@ -460,10 +463,10 @@ export async function generateQuickStart(promptOverride = "") {
   };
 
   const patchChangesShape = `{
-  "addActors": [{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"authority":50,"canDirect":false,"canManageCast":false,"canResearch":false,"canSeeThoughts":false,"directorMode":"facilitator|narrator|arbiter|observer"}],
+  "addActors": [{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"authority":50,"canDirect":false,"canManageCast":false,"canResearch":false,"canWriteDocuments":false,"canSeeThoughts":false,"directorMode":"facilitator|narrator|arbiter|observer"}],
   "removeActors": ["ActorName"],
-  "modifyActors": [{"find":"ActorName","name":"...","role":"...","persona":"...","goal":"...","voice":"...","enabled":true,"temperature":0.9,"authority":70,"canDirect":false,"canManageCast":false,"canResearch":false,"canSeeThoughts":false,"directorMode":"facilitator|narrator|arbiter|observer"}],
-  "scenario": {"title":"...","premise":"...","objective":"...","systems":{"stageDirections":{"enabled":false,"intensity":"minimal|moderate|immersive","maxTokenShare":0.2},"alignment":{"strictness":"strict|moderate|loose|off","anchorInPrompt":false,"nudgeStyle":"hard-redirect|gentle-nudge|question"},"turnRouting":{"strategy":"sequential|agentic","allowDirectAddress":true},"dmRole":{"role":"narrator|facilitator|arbiter|observer","narrates":false,"canIntroduceElements":false},"document":{"schema":"freeform|decisions|story-bible|findings"}}},
+  "modifyActors": [{"find":"ActorName","name":"...","role":"...","persona":"...","goal":"...","voice":"...","enabled":true,"temperature":0.9,"authority":70,"canDirect":false,"canManageCast":false,"canResearch":false,"canWriteDocuments":false,"canSeeThoughts":false,"directorMode":"facilitator|narrator|arbiter|observer"}],
+  "scenario": {"title":"...","premise":"...","objective":"...","systems":{"stageDirections":{"enabled":false,"intensity":"minimal|moderate|immersive","maxTokenShare":0.2},"alignment":{"strictness":"strict|moderate|loose|off","anchorInPrompt":false,"nudgeStyle":"hard-redirect|gentle-nudge|question"},"turnRouting":{"strategy":"sequential|agentic","allowDirectAddress":true},"dmRole":{"role":"narrator|facilitator|arbiter|observer","narrates":false,"canIntroduceElements":false}}},
   "dm": {"enabled":true,"name":"...","persona":"...","canSeeThoughts":false},
   "settings": {"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"seed":-1,"seedEnabled":false,"toolsEnabled":false,"streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":false,"preflightThreshold":0.35,"enableCrossSessionMemory":false,"enableAdaptiveCompression":true,"roundSnapshotEnabled":true,"gravitySensitivity":50,"turnDelay":0},
   "memory": {"addFacts":["fact text"],"removeFacts":["text to match and remove"],"sharedSummary":"...","openQuestions":"...","dmState":"..."},
@@ -471,7 +474,7 @@ export async function generateQuickStart(promptOverride = "") {
   "userContext": {"interactionMode":"sponsor|collaborator|observer","displayName":"","storyRole":""}
 }`;
 
-  const fullSetupShape = `{"scenario":{"title":"","premise":"","objective":"","systems":{"stageDirections":{"enabled":false,"intensity":"moderate","maxTokenShare":0.2},"alignment":{"strictness":"moderate","anchorInPrompt":false,"nudgeStyle":"gentle-nudge"},"turnRouting":{"strategy":"sequential","allowDirectAddress":true},"dmRole":{"role":"facilitator","narrates":false,"canIntroduceElements":false},"document":{"schema":"freeform"}}},"dm":{"enabled":true,"name":"","persona":"","canSeeThoughts":false},"actors":[{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"authority":50,"canDirect":false,"canManageCast":false,"canResearch":false,"canSeeThoughts":false,"directorMode":"facilitator|narrator|arbiter|observer"}],"memory":{"pinnedFacts":[],"sharedSummary":"","openQuestions":"","dmState":""},"settings":{"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"seed":-1,"seedEnabled":false,"toolsEnabled":false,"streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":false,"preflightThreshold":0.35,"enableCrossSessionMemory":false,"enableAdaptiveCompression":true,"roundSnapshotEnabled":true,"gravitySensitivity":50,"turnDelay":0},"autoStop":{"enabled":false,"goal":"","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5},"userContext":{"interactionMode":"collaborator","displayName":"","storyRole":""}}`;
+  const fullSetupShape = `{"scenario":{"title":"","premise":"","objective":"","systems":{"stageDirections":{"enabled":false,"intensity":"moderate","maxTokenShare":0.2},"alignment":{"strictness":"moderate","anchorInPrompt":false,"nudgeStyle":"gentle-nudge"},"turnRouting":{"strategy":"sequential","allowDirectAddress":true},"dmRole":{"role":"facilitator","narrates":false,"canIntroduceElements":false}}},"dm":{"enabled":true,"name":"","persona":"","canSeeThoughts":false},"actors":[{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"authority":50,"canDirect":false,"canManageCast":false,"canResearch":false,"canWriteDocuments":false,"canSeeThoughts":false,"directorMode":"facilitator|narrator|arbiter|observer"}],"memory":{"pinnedFacts":[],"sharedSummary":"","openQuestions":"","dmState":""},"settings":{"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"seed":-1,"seedEnabled":false,"toolsEnabled":false,"streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":false,"preflightThreshold":0.35,"enableCrossSessionMemory":false,"enableAdaptiveCompression":true,"roundSnapshotEnabled":true,"gravitySensitivity":50,"turnDelay":0},"autoStop":{"enabled":false,"goal":"","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5},"userContext":{"interactionMode":"collaborator","displayName":"","storyRole":""}}`;
 
   const system = [
     "You are the AI Assistant for Forum, a local multi-agent AI discussion app running LLM actors via LM Studio.",
@@ -489,16 +492,16 @@ export async function generateQuickStart(promptOverride = "") {
     '{"type":"fullSetup","message":"### New Scenario: [Title]\\n\\nSummary of scenario and cast.",' + fullSetupShape.slice(1),
     "",
     "## KEY CONCEPTS",
-    "Actors are separate LLM personas. A round runs each enabled actor once. Director (canDirect) moderates. Manager (canManageCast) adds/removes actors. Researcher (canResearch) can search web.",
+    "Actors are separate LLM personas. A round runs each enabled actor once. Director (canDirect) moderates. Manager (canManageCast) adds/removes actors. Researcher (canResearch) can search web. Writer (canWriteDocuments) handles explicit document-writing tasks.",
     "",
     "## ACTOR FIELDS",
-    "name, role, persona (up to 700 chars, 2nd person), goal (up to 500 chars), voice (up to 120 chars), enabled, temperature (0-2, default 0.8), authority (0-100, default 50), canDirect, canManageCast, canResearch, canSeeThoughts, directorMode for canDirect actors.",
+    "name, role, persona (up to 700 chars, 2nd person), goal (up to 500 chars), voice (up to 120 chars), enabled, temperature (0-2, default 0.8), authority (0-100, default 50), canDirect, canManageCast, canResearch, canWriteDocuments, canSeeThoughts, directorMode for canDirect actors.",
     "",
     "## SCENARIO",
-    "title, premise (context), objective (goal). systems: stageDirections (enabled,intensity,maxTokenShare), alignment (strictness,anchorInPrompt,nudgeStyle), turnRouting (strategy:'sequential|agentic',allowDirectAddress), dmRole (role,narrates,canIntroduceElements), document (schema).",
+    "title, premise (context), objective (goal). systems: stageDirections (enabled,intensity,maxTokenShare), alignment (strictness,anchorInPrompt,nudgeStyle), turnRouting (strategy:'sequential|agentic',allowDirectAddress), dmRole (role,narrates,canIntroduceElements).",
     "",
     "## ROLEPLAY CHECKLIST",
-    "For stories/roleplay: set stageDirections.enabled=true, dmRole.role='narrator', dmRole.narrates=true, dmRole.canIntroduceElements=true, turnRouting.strategy='agentic', alignment.strictness='loose', document.schema='story-bible'. Create character actors with temp 1.0-1.2. ALWAYS include actors in fullSetup.",
+    "For stories/roleplay: set stageDirections.enabled=true, dmRole.role='narrator', dmRole.narrates=true, dmRole.canIntroduceElements=true, turnRouting.strategy='agentic', alignment.strictness='loose'. Create character actors with temp 1.0-1.2. ALWAYS include actors in fullSetup.",
     "",
     "## SETTINGS (key fields)",
     "temperature, maxTokens (default 2000), topP, repeatPenalty, toolsEnabled, streamingEnabled, showThoughts, turboMode, enablePreflightRouter, turnDelay.",
@@ -811,7 +814,7 @@ export function applyAssistantPatch(changes) {
   // Actors — add
   for (const a of (c.addActors || [])) {
     const canDirect = !!a.isDirector || !!a.canDirect;
-    state.actors.push({
+    const actor = {
       id: crypto.randomUUID(),
       name: a.name || "New Actor",
       role: a.role || "Participant",
@@ -823,12 +826,18 @@ export function applyAssistantPatch(changes) {
       canDirect,
       canManageCast: !!a.isManager || !!a.canManageCast,
       canResearch: !!a.isResearcher || !!a.canResearch,
+      canWriteDocuments: !!a.isWriter || !!a.canWriteDocuments,
       canSeeThoughts: !!a.canSeeThoughts,
       directorMode: a.directorMode || (canDirect ? state.scenario?.systems?.dmRole?.role || 'facilitator' : undefined),
       enabled: true,
       thoughts: "",
       color: colors[state.actors.length % colors.length]
-    });
+    };
+    state.actors.push(actor);
+    if (actor.canWriteDocuments && !state.documentWriting?.designatedWriterId) {
+      if (!state.documentWriting) state.documentWriting = {};
+      state.documentWriting.designatedWriterId = actor.id;
+    }
   }
 
   // Actors — remove
@@ -846,6 +855,11 @@ export function applyAssistantPatch(changes) {
       if (rest.isDirector !== undefined) target.canDirect = !!rest.isDirector;
       if (rest.isManager !== undefined) target.canManageCast = !!rest.isManager;
       if (rest.isResearcher !== undefined) target.canResearch = !!rest.isResearcher;
+      if (rest.isWriter !== undefined) target.canWriteDocuments = !!rest.isWriter;
+      if (target.canWriteDocuments && !state.documentWriting?.designatedWriterId) {
+        if (!state.documentWriting) state.documentWriting = {};
+        state.documentWriting.designatedWriterId = target.id;
+      }
     }
   }
 
@@ -993,6 +1007,10 @@ export async function saveCurrentSession() {
     scenario: scenarioWithoutMode(state.scenario),
     memory: { ...state.memory },
     actors: state.actors.map(a => ({ ...a })),
+    documentWriting: { ...(state.documentWriting || {}) },
+    documents: (state.documents || []).map(d => ({ ...d })),
+    documentTasks: (state.documentTasks || []).map(t => ({ ...t })),
+    pendingDocumentEdits: (state.pendingDocumentEdits || []).map(p => ({ ...p })),
   };
 
   // Keep at most 20 sessions; remove oldest others if over limit. Guard each
@@ -1093,8 +1111,7 @@ export const SCENARIO_PRESETS = {
       stageDirections: { enabled: false },
       alignment: { strictness: "moderate", nudgeStyle: "gentle-nudge" },
       turnRouting: { strategy: "agentic", allowDirectAddress: true },
-      dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false },
-      document: { schema: "decisions" }
+      dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false }
     }
   },
   risk: {
@@ -1105,8 +1122,7 @@ export const SCENARIO_PRESETS = {
       stageDirections: { enabled: false },
       alignment: { strictness: "strict", nudgeStyle: "hard-redirect" },
       turnRouting: { strategy: "sequential", allowDirectAddress: true },
-      dmRole: { role: "arbiter", narrates: false, canIntroduceElements: false },
-      document: { schema: "findings" }
+      dmRole: { role: "arbiter", narrates: false, canIntroduceElements: false }
     }
   },
   debate: {
@@ -1117,8 +1133,7 @@ export const SCENARIO_PRESETS = {
       stageDirections: { enabled: false },
       alignment: { strictness: "strict", nudgeStyle: "hard-redirect" },
       turnRouting: { strategy: "sequential", allowDirectAddress: true },
-      dmRole: { role: "arbiter", narrates: false, canIntroduceElements: false },
-      document: { schema: "findings" }
+      dmRole: { role: "arbiter", narrates: false, canIntroduceElements: false }
     }
   },
   retrospective: {
@@ -1129,8 +1144,7 @@ export const SCENARIO_PRESETS = {
       stageDirections: { enabled: false },
       alignment: { strictness: "moderate", nudgeStyle: "gentle-nudge" },
       turnRouting: { strategy: "sequential", allowDirectAddress: true },
-      dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false },
-      document: { schema: "findings" }
+      dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false }
     }
   },
   story: {
@@ -1141,8 +1155,7 @@ export const SCENARIO_PRESETS = {
       stageDirections: { enabled: true, intensity: "immersive", maxTokenShare: 0.4 },
       alignment: { strictness: "loose", anchorInPrompt: false, nudgeStyle: "question" },
       turnRouting: { strategy: "agentic", allowDirectAddress: true },
-      dmRole: { role: "narrator", narrates: true, canIntroduceElements: true },
-      document: { schema: "story-bible" }
+      dmRole: { role: "narrator", narrates: true, canIntroduceElements: true }
     }
   },
   interview: {
@@ -1153,8 +1166,7 @@ export const SCENARIO_PRESETS = {
       stageDirections: { enabled: false },
       alignment: { strictness: "moderate", nudgeStyle: "gentle-nudge" },
       turnRouting: { strategy: "agentic", allowDirectAddress: true },
-      dmRole: { role: "observer", narrates: false, canIntroduceElements: false },
-      document: { schema: "freeform" }
+      dmRole: { role: "observer", narrates: false, canIntroduceElements: false }
     }
   },
   improv: {
@@ -1165,8 +1177,7 @@ export const SCENARIO_PRESETS = {
       stageDirections: { enabled: true, intensity: "moderate", maxTokenShare: 0.3 },
       alignment: { strictness: "loose", nudgeStyle: "question" },
       turnRouting: { strategy: "agentic", allowDirectAddress: true },
-      dmRole: { role: "observer", narrates: false, canIntroduceElements: false },
-      document: { schema: "freeform" }
+      dmRole: { role: "observer", narrates: false, canIntroduceElements: false }
     }
   },
   problemsolving: {
@@ -1177,8 +1188,7 @@ export const SCENARIO_PRESETS = {
       stageDirections: { enabled: false },
       alignment: { strictness: "strict", anchorInPrompt: true, nudgeStyle: "hard-redirect" },
       turnRouting: { strategy: "agentic", allowDirectAddress: true },
-      dmRole: { role: "arbiter", narrates: false, canIntroduceElements: false },
-      document: { schema: "findings" }
+      dmRole: { role: "arbiter", narrates: false, canIntroduceElements: false }
     }
   }
 };
@@ -1254,6 +1264,7 @@ function buildActorFromTemplate(tpl, index) {
     canManageCast: !!tpl.canManageCast,
     canInject: !!tpl.canInject,
     canResearch: !!tpl.canResearch,
+    canWriteDocuments: !!tpl.canWriteDocuments,
     canSeeThoughts: !!tpl.canSeeThoughts,
     authority: tpl.authority ?? 50,
     cadence: tpl.cadence ?? null,
@@ -1280,7 +1291,6 @@ function mergeScenario(target, src) {
       alignment:       { ...cur.alignment,       ...(sys.alignment       || {}) },
       turnRouting:     { ...cur.turnRouting,     ...(sys.turnRouting     || {}) },
       dmRole:          { ...cur.dmRole,          ...(sys.dmRole          || {}) },
-      document:        { ...cur.document,        ...(sys.document        || {}) },
     },
   };
 }
@@ -1303,24 +1313,28 @@ export async function applyBlueprint(id) {
     if (director) director.directorMode = bpDirectorMode;
   }
 
+  const designatedWriter = actors.find(a => a.canWriteDocuments);
   const normalized = normalizeState({
     ...state,
     scenario: mergeScenario(state.scenario, bp.scenario || {}),
     actors,
+    documentWriting: { ...(state.documentWriting || {}), designatedWriterId: designatedWriter?.id || "" },
     autoStop: { ...state.autoStop, ...(bp.autoStop || {}), roundsRun: 0 },
   });
   setState(normalized);
   state.turnQueue = [];
 
-  // Seed any working documents the blueprint declares (e.g. the Writers' Room's
-  // Outline + Draft) so the cast has something to write into via documentEdits.
-  // Always AI-editable and visible to all, since that is the point of seeding.
+  // Seed any working documents the blueprint declares. They are writable by the
+  // designated writer through review-first Writer tasks and visible to all.
   if (Array.isArray(bp.documents) && bp.documents.length) {
     const { newDocument, putKbEntry, countWords } = await import('./knowledge.js');
     for (const spec of bp.documents) {
       const doc = newDocument({
         title: spec.title || 'Working Document',
         content: spec.content || '',
+        purpose: spec.purpose || '',
+        format: spec.format || '',
+        writerId: designatedWriter?.id || '',
         aiEditable: true,
         target: 'all',
         enabled: true,
@@ -1356,6 +1370,8 @@ export function saveConfiguration(name) {
     actorCount: (state.actors || []).filter(a => a.enabled).length,
     scenario: scenarioWithoutMode(state.scenario),
     actors: (state.actors || []).map(a => ({ ...a })),
+    documentWriting: { ...(state.documentWriting || {}) },
+    documents: (state.documents || []).map(d => ({ ...d })),
     autoStop: { ...state.autoStop },
     settings: {
       temperature: state.settings?.temperature,
@@ -1395,6 +1411,8 @@ export function applyConfiguration(config) {
     ...state,
     scenario: { ...scenarioWithoutMode(state.scenario), ...scenarioWithoutMode(config.scenario || {}) },
     actors: Array.isArray(config.actors) && config.actors.length ? config.actors : state.actors,
+    documentWriting: { ...(state.documentWriting || {}), ...(config.documentWriting || {}) },
+    documents: Array.isArray(config.documents) ? config.documents : state.documents,
     autoStop: { ...state.autoStop, ...(config.autoStop || {}), roundsRun: 0 },
     settings: { ...state.settings, ...(config.settings || {}) },
   });

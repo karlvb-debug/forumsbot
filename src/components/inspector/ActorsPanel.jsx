@@ -11,6 +11,7 @@ const PERM_DEFS = [
   { key: 'canManageCast',  label: 'Manage',      icon: '🔧', color: 'var(--warn)'   },
   { key: 'canInject',      label: 'Inject',      icon: '🎯', color: 'var(--teal)'   },
   { key: 'canResearch',    label: 'Research',    icon: '🔍', color: 'var(--info)'   },
+  { key: 'canWriteDocuments', label: 'Write Docs', icon: '✍', color: 'var(--accent)' },
   { key: 'canSeeThoughts', label: 'See Thoughts', icon: '🧠', color: 'var(--purple)' },
 ];
 
@@ -79,6 +80,14 @@ export function ActorsPanel() {
       const a = s.actors.find(x => x.id === id);
       if (a) {
         a[key] = val;
+        if (key === 'canWriteDocuments' && val) {
+          if (!s.documentWriting) s.documentWriting = {};
+          if (!s.documentWriting.designatedWriterId) s.documentWriting.designatedWriterId = a.id;
+        }
+        if (key === 'canWriteDocuments' && !val && s.documentWriting?.designatedWriterId === a.id) {
+          const nextWriter = s.actors.find(x => x.id !== a.id && x.enabled && x.canWriteDocuments);
+          s.documentWriting.designatedWriterId = nextWriter?.id || "";
+        }
         if ((key === 'directorMode' && a.canDirect) || (key === 'canDirect' && val)) {
           const role = key === 'directorMode' ? val : (a.directorMode || 'facilitator');
           if (!s.scenario.systems) s.scenario.systems = {};
@@ -110,6 +119,7 @@ export function ActorsPanel() {
         canManageCast: false,
         canInject: false,
         canResearch: false,
+        canWriteDocuments: false,
         canSeeThoughts: false,
         directorMode: 'facilitator',
         authority: 50,
@@ -127,6 +137,10 @@ export function ActorsPanel() {
     mutateState(s => {
       s.actors = s.actors.filter(a => a.id !== id);
       s.turnQueue = (s.turnQueue || []).filter(qid => qid !== id);
+      if (s.documentWriting?.designatedWriterId === id) {
+        const nextWriter = s.actors.find(a => a.enabled && a.canWriteDocuments);
+        s.documentWriting.designatedWriterId = nextWriter?.id || "";
+      }
     });
   }, []);
 
@@ -197,6 +211,7 @@ export function ActorsPanel() {
                 canManageCast: !!tpl.canManageCast,
                 canInject: !!tpl.canInject,
                 canResearch: !!tpl.canResearch,
+                canWriteDocuments: !!tpl.canWriteDocuments,
                 directorMode: tpl.directorMode || 'facilitator',
                 canSeeThoughts: !!tpl.canSeeThoughts,
                 authority: tpl.authority ?? 50,

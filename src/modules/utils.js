@@ -508,6 +508,7 @@ export function normalizeQuickStartActor(actor, index, assignFreshIds) {
     canResearch: !!(source.canResearch || source.isResearcher),
     canManageCast: !!(source.canManageCast || source.isManager),
     canSeeThoughts: !!source.canSeeThoughts,
+    canWriteDocuments: !!(source.canWriteDocuments || source.isWriter),
     directorMode: ["narrator", "facilitator", "arbiter", "observer"].includes(source.directorMode) ? source.directorMode : undefined,
     color: ["#18726d", "#b84738", "#a2611a", "#355f9f", "#6e4c99", "#4f7d2d", "#9a4668"][index % 7]
   };
@@ -544,8 +545,7 @@ export const DEFAULT_SYSTEMS = {
   stageDirections: { enabled: false, intensity: "moderate", maxTokenShare: 0.2 },
   alignment: { strictness: "moderate", anchorInPrompt: false, nudgeStyle: "gentle-nudge" },
   turnRouting: { strategy: "sequential", allowDirectAddress: true },
-  dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false },
-  document: { schema: "freeform" }
+  dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false }
 };
 
 export function normalizeSpeakingOrderStrategy(strategy) {
@@ -561,8 +561,7 @@ export function legacySystemsFromMode(mode) {
       stageDirections: { enabled: true, intensity: "immersive", maxTokenShare: 0.4 },
       alignment: { strictness: "loose", anchorInPrompt: false, nudgeStyle: "question" },
       turnRouting: { strategy: "agentic", allowDirectAddress: true },
-      dmRole: { role: "narrator", narrates: true, canIntroduceElements: true },
-      document: { schema: "story-bible" }
+      dmRole: { role: "narrator", narrates: true, canIntroduceElements: true }
     };
   }
   if (mode === "problem") {
@@ -570,8 +569,7 @@ export function legacySystemsFromMode(mode) {
       stageDirections: { enabled: false, intensity: "moderate", maxTokenShare: 0.2 },
       alignment: { strictness: "strict", anchorInPrompt: false, nudgeStyle: "hard-redirect" },
       turnRouting: { strategy: "sequential", allowDirectAddress: true },
-      dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false },
-      document: { schema: "findings" }
+      dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false }
     };
   }
   if (mode === "freeform") {
@@ -579,8 +577,7 @@ export function legacySystemsFromMode(mode) {
       stageDirections: { enabled: false, intensity: "moderate", maxTokenShare: 0.2 },
       alignment: { strictness: "moderate", anchorInPrompt: false, nudgeStyle: "gentle-nudge" },
       turnRouting: { strategy: "sequential", allowDirectAddress: true },
-      dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false },
-      document: { schema: "freeform" }
+      dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false }
     };
   }
   return {};
@@ -591,8 +588,7 @@ function mergeSystemDefaults(base, legacy, raw) {
     stageDirections: { ...base.stageDirections, ...(legacy.stageDirections || {}), ...(raw.stageDirections || {}) },
     alignment: { ...base.alignment, ...(legacy.alignment || {}), ...(raw.alignment || {}) },
     turnRouting: { ...base.turnRouting, ...(legacy.turnRouting || {}), ...(raw.turnRouting || {}) },
-    dmRole: { ...base.dmRole, ...(legacy.dmRole || {}), ...(raw.dmRole || {}) },
-    document: { ...base.document, ...(legacy.document || {}), ...(raw.document || {}) }
+    dmRole: { ...base.dmRole, ...(legacy.dmRole || {}), ...(raw.dmRole || {}) }
   };
 }
 
@@ -630,8 +626,7 @@ export function normalizeQuickStartConfig(config, assignFreshIds = true) {
     stageDirections: normSub(rawSystems.stageDirections, systemDefaults.stageDirections),
     alignment: normSub(rawSystems.alignment, systemDefaults.alignment),
     turnRouting: normSub(rawSystems.turnRouting, systemDefaults.turnRouting),
-    dmRole: normSub(rawSystems.dmRole, systemDefaults.dmRole),
-    document: normSub(rawSystems.document, systemDefaults.document)
+    dmRole: normSub(rawSystems.dmRole, systemDefaults.dmRole)
   };
   systems.turnRouting.strategy = normalizeSpeakingOrderStrategy(systems.turnRouting.strategy);
 

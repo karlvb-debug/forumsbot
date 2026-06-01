@@ -1034,6 +1034,11 @@ input[type="range"]::-webkit-slider-thumb {
   font-size: var(--fs-xs);
   color: var(--fg-mute);
 }
+.doc-row-setting.vertical {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 4px;
+}
 .doc-row-setting label {
   font-size: var(--fs-xs);
   color: var(--fg-mute);
@@ -1048,11 +1053,16 @@ input[type="range"]::-webkit-slider-thumb {
   color: var(--fg);
 }
 .doc-row-setting input[type="text"],
-.doc-row-setting input[type="url"] {
+.doc-row-setting input[type="url"],
+.doc-row-setting textarea {
   font-size: var(--fs-xs);
   padding: 3px 6px;
   flex: 1;
   min-width: 0;
+}
+.doc-row-setting textarea {
+  resize: vertical;
+  min-height: 44px;
 }
 .doc-row-actors {
   display: flex;
@@ -2324,6 +2334,25 @@ button:focus-visible { border-radius: 8px; }
   font-weight: 500;
 }
 
+.doc-writer-toolbar {
+  display: grid;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg-elev);
+}
+.doc-writer-toolbar textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 44px;
+  font-size: var(--fs-sm);
+}
+.doc-writer-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 /* Content area */
 .doc-editor-content {
   flex: 1;
@@ -2405,6 +2434,50 @@ button:focus-visible { border-radius: 8px; }
   border-top: 1px solid var(--border-soft);
   background: var(--bg-elev);
   flex-shrink: 0;
+}
+
+.doc-proposals {
+  flex-shrink: 0;
+  max-height: 38%;
+  overflow-y: auto;
+  border-top: 1px solid var(--border-soft);
+  background: var(--bg);
+  padding: 10px 14px;
+}
+.doc-proposals-title {
+  font-size: var(--fs-xs);
+  color: var(--fg-mute);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 8px;
+}
+.doc-proposal {
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  padding: 10px;
+  background: var(--bg-elev);
+  margin-bottom: 8px;
+}
+.doc-proposal.conflicted {
+  border-color: var(--warn);
+}
+.doc-proposal-meta {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--fg-mute);
+  font-size: var(--fs-sm);
+  margin-bottom: 8px;
+}
+.doc-proposal-meta strong { color: var(--fg); }
+.doc-proposal-preview {
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  background: var(--bg-input);
+  margin-bottom: 8px;
 }
 
 /* ── Transcript pane (right side) ── */

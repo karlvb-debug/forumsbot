@@ -88,6 +88,55 @@ export function splitDocuments(actorId) {
   };
 }
 
+export function actorCanReadDocument(entry, actorId) {
+  return matchesActor(entry, actorId);
+}
+
+export function resolveDesignatedWriter() {
+  const writerId = state.documentWriting?.designatedWriterId || "";
+  const writer = (state.actors || []).find(a => a.id === writerId && a.enabled && a.canWriteDocuments);
+  if (writer) return writer;
+  return (state.actors || []).find(a => a.enabled && a.canWriteDocuments) || null;
+}
+
+export function ensureDefaultWriter() {
+  let writer = resolveDesignatedWriter();
+  if (writer) {
+    if (!state.documentWriting) state.documentWriting = {};
+    state.documentWriting.designatedWriterId = writer.id;
+    return writer;
+  }
+  writer = {
+    id: crypto.randomUUID(),
+    name: "Writer",
+    role: "Document writer",
+    persona: "You synthesize the forum's discussion into clear, useful working documents.",
+    goal: "Turn discussion, decisions, and critique into polished document updates.",
+    voice: "Clear, structured, concise.",
+    thoughts: "",
+    relationships: {},
+    enabled: true,
+    expanded: false,
+    temperature: 0.7,
+    color: "#4a7fd4",
+    canDirect: false,
+    canManageCast: false,
+    canResearch: false,
+    canSeeThoughts: false,
+    canInject: false,
+    canWriteDocuments: true,
+    authority: 50,
+    cadence: { unit: "turn", n: 0 },
+    actorMode: "participant",
+    triggerOn: []
+  };
+  if (!Array.isArray(state.actors)) state.actors = [];
+  state.actors.push(writer);
+  if (!state.documentWriting) state.documentWriting = {};
+  state.documentWriting.designatedWriterId = writer.id;
+  return writer;
+}
+
 export function getDocumentsForActor(actorId) {
   return (state.documents || []).filter(e => matchesActor(e, actorId));
 }
@@ -129,21 +178,26 @@ function allocateChars(needs, budget) {
   return alloc;
 }
 
-// Builds a line-numbered editable document block for actor prompts.
-// Each document shows full content with 1-based line numbers.
-export function buildEditableDocSection(docs) {
+export function buildDocumentManifestSection(docs) {
   if (!docs || !docs.length) return "";
-  const parts = docs.map(doc => {
-    const lines = (doc.content || "").split("\n");
-    const numbered = lines.map((l, i) => `${String(i + 1).padStart(3)} | ${l}`).join("\n");
-    return `#### ${doc.title || "Untitled"}  [id: ${doc.id}]\n${numbered || "(Empty document — start drafting.)"}`;
+  const rows = docs.map(doc => {
+    const status = doc.aiEditable ? "writable by designated writer" : "read-only";
+    const words = doc.wordCount || countWords(doc.content || "");
+    return [
+      `- ${doc.title || "Untitled"} [id: ${doc.id}]`,
+      `  status: ${status}; words: ${words}`,
+      doc.purpose ? `  purpose: ${doc.purpose}` : "",
+      doc.format ? `  format: ${doc.format}` : "",
+      doc.content ? `  excerpt: ${trimWordsLocal(doc.content, 80)}` : ""
+    ].filter(Boolean).join("\n");
   });
-  const editInstructions = [
-    `To edit: add "documentEdits": [{"documentId":"<id>","op":"append|replace|full","content":"...","startLine":N,"endLine":M}]`,
-    `For "replace": startLine/endLine refer to the numbers shown above. For "append": content is added after existing text. For "full": replaces entire content.`,
-    `Omit documentEdits entirely if you have no changes.`
-  ].join("\n");
-  return "### Working Documents\n\n" + parts.join("\n\n") + "\n\n" + editInstructions;
+  return "### Documents\n" + rows.join("\n");
+}
+
+function trimWordsLocal(text, limit) {
+  const words = String(text || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length <= limit) return words.join(" ");
+  return `${words.slice(0, limit).join(" ")}...`;
 }
 
 // Builds a read-only reference section (25% budget, water-fill allocation).
@@ -201,6 +255,9 @@ export function newDocument(overrides = {}) {
     type: "document",
     content: "",
     url: "",
+    purpose: "",
+    format: "",
+    writerId: "",
     target: "all",
     enabled: true,
     createdAt: now,

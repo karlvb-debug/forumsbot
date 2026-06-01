@@ -165,11 +165,6 @@ export function HelpPanel() {
             Agentic makes one small router call per round to pick a short speaker plan from
             eligible actors.
           </li>
-          <li>
-            <strong>Document Schema</strong> — labels the working document type for context:
-            Freeform, Decisions, Story Bible, or Findings. Does not change actor prompts yet, but
-            affects future templates.
-          </li>
         </ul>
         <p style={{ marginBottom: 8 }}>
           <strong>Core Context — Title, Premise, Objective</strong>: injected into every single
@@ -323,17 +318,17 @@ export function HelpPanel() {
       <HelpSection id="documents" title="Documents" openId={openId} setOpenId={setOpenId}>
         <ul style={{ margin: '4px 0 8px 0', paddingLeft: 16, lineHeight: 1.6 }}>
           <li>
-            <strong>Working Documents (AI Editable on)</strong> — actors can propose edits using
-            the <code>documentEdits</code> JSON field. Changes are tracked with version history and
+            <strong>Working Documents</strong> — writable documents are updated by the designated
+            Writer through review-first proposals. Accepting a proposal updates version history and
             per-line authorship.
           </li>
           <li>
-            <strong>Reference Documents (AI Editable off)</strong> — injected into actor prompts as
-            read-only background material. No edit protocol is shown to actors.
+            <strong>Reference Documents</strong> — injected into actor prompts as read-only
+            background material. Normal actor turns do not receive the edit protocol.
           </li>
           <li>
-            <strong>Target</strong> — set "All actors" or restrict a document to specific actors.
-            Useful for private briefings or role-specific context.
+            <strong>Read Visibility</strong> — set "All actors" or restrict a document to specific
+            actors. Write authority comes from the Writer permission and explicit Writer tasks.
           </li>
         </ul>
       </HelpSection>

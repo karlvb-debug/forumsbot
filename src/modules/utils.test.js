@@ -320,7 +320,7 @@ describe('normalizeQuickStartConfig', () => {
     const result = normalizeQuickStartConfig({ scenario: { title: 'No Modes' } });
     expect(result.scenario.mode).toBeUndefined();
     expect(result.scenario.systems.stageDirections.enabled).toBe(false);
-    expect(result.scenario.systems.document.schema).toBe('freeform');
+    expect(result.scenario.systems.document).toBeUndefined();
     expect(result.scenario.systems.turnRouting.strategy).toBe('sequential');
   });
 
@@ -330,6 +330,6 @@ describe('normalizeQuickStartConfig', () => {
     expect(result.scenario.systems.stageDirections.enabled).toBe(true);
     expect(result.scenario.systems.turnRouting.strategy).toBe('agentic');
     expect(result.scenario.systems.dmRole.role).toBe('narrator');
-    expect(result.scenario.systems.document.schema).toBe('story-bible');
+    expect(result.scenario.systems.document).toBeUndefined();
   });
 });

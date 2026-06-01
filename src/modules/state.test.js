@@ -217,7 +217,7 @@ describe('normalizeState — scenario.systems deep-merge', () => {
     expect(result.scenario.systems.alignment.strictness).toBe('loose');
     expect(result.scenario.systems.turnRouting.strategy).toBe('agentic');
     expect(result.scenario.systems.dmRole.role).toBe('narrator');
-    expect(result.scenario.systems.document.schema).toBe('story-bible');
+    expect(result.scenario.systems.document).toBeUndefined();
     expect(result.actors[0].directorMode).toBe('narrator');
   });
 });
@@ -255,5 +255,24 @@ describe('normalizeState — document migration', () => {
     expect(result.documents).toHaveLength(1);
     expect(result.documents[0].id).toBe('doc1');
     expect(result.documents[0].aiEditable).toBe(true);
+  });
+});
+
+describe('normalizeState — document writer migration', () => {
+  it('keeps an active designated writer when valid', () => {
+    const result = normalizeState({
+      documentWriting: { designatedWriterId: 'w1' },
+      actors: [{ id: 'w1', name: 'Writer', enabled: true, canWriteDocuments: true }],
+    });
+    expect(result.actors[0].canWriteDocuments).toBe(true);
+    expect(result.documentWriting.designatedWriterId).toBe('w1');
+  });
+
+  it('falls back to the first active writer when the saved writer is invalid', () => {
+    const result = normalizeState({
+      documentWriting: { designatedWriterId: 'missing' },
+      actors: [{ id: 'w1', name: 'Writer', enabled: true, canWriteDocuments: true }],
+    });
+    expect(result.documentWriting.designatedWriterId).toBe('w1');
   });
 });

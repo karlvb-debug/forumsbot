@@ -168,7 +168,12 @@ export const defaultState = {
     roundsRun: 0,
     status: "Auto-stop ready."
   },
+  documentWriting: {
+    designatedWriterId: ""
+  },
   documents: [],
+  documentTasks: [],
+  pendingDocumentEdits: [],
   pendingInjections: [],     // CAP-1: director prompt injection queue
   pendingPrivateMessages: [], // CAP-2: actor-to-actor private message queue
   scenario: {
@@ -194,9 +199,6 @@ export const defaultState = {
         role: "facilitator",      // "narrator" | "facilitator" | "arbiter" | "observer"
         narrates: false,
         canIntroduceElements: false
-      },
-      document: {
-        schema: "freeform"        // "freeform" | "decisions" | "story-bible" | "findings"
       }
     }
   },
@@ -218,6 +220,7 @@ export const defaultState = {
       canResearch: false,
       canSeeThoughts: false,
       canInject: true,
+      canWriteDocuments: false,
       directorMode: "facilitator",
       authority: 50,
       // Fire once per round, not per turn. A per-turn director re-runs after
@@ -243,6 +246,7 @@ export const defaultState = {
       canResearch: false,
       canSeeThoughts: false,
       canInject: false,
+      canWriteDocuments: false,
       authority: 50,
       cadence: null,
       actorMode: 'participant',
@@ -264,6 +268,7 @@ export const defaultState = {
       canResearch: false,
       canSeeThoughts: false,
       canInject: false,
+      canWriteDocuments: false,
       authority: 50,
       cadence: null,
       actorMode: 'participant',
@@ -285,6 +290,7 @@ export const defaultState = {
       canResearch: false,
       canSeeThoughts: false,
       canInject: false,
+      canWriteDocuments: false,
       authority: 50,
       cadence: null,
       actorMode: 'participant',
