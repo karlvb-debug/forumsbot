@@ -37,6 +37,19 @@ async function readJson(req) {
   return body ? JSON.parse(body) : {};
 }
 
+// Reject cross-origin POST requests to prevent CSRF from other browser tabs.
+// Requests with no Origin header (curl, Electron, server-to-server) are allowed.
+function isCsrfSafe(req) {
+  const origin = req.headers['origin'];
+  if (!origin) return true;
+  try {
+    const { hostname } = new URL(origin);
+    return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '::1' || hostname === '[::1]';
+  } catch {
+    return false;
+  }
+}
+
 function cleanBaseUrl(baseUrl) {
   const rawUrl = String(baseUrl || "http://127.0.0.1:1234").trim();
   const url = new URL(rawUrl.includes("://") ? rawUrl : `http://${rawUrl}`);
@@ -209,8 +222,10 @@ function isBlockedUrl(input) {
   try { url = new URL(input); } catch { return true; }
   if (!["http:", "https:"].includes(url.protocol)) return true;
   const h = url.hostname.toLowerCase();
-  if (h === "localhost" || h === "127.0.0.1" || h === "::1") return true;
+  if (h === "localhost" || h === "127.0.0.1" || h === "::1" || h === "[::1]") return true;
   if (h.endsWith(".local") || h.endsWith(".internal")) return true;
+  // IPv6 link-local (fe80::/10) — URLs encode these as [fe80::...]
+  if (h.startsWith("[fe80:")) return true;
   // Private IPv4 ranges
   const v4 = h.match(/^(\d+)\.(\d+)\./);
   if (v4) {
@@ -364,6 +379,9 @@ async function loadModel(req, res) {
 }
 
 const server = createServer(async (req, res) => {
+  if (req.method === "POST" && !isCsrfSafe(req)) {
+    return sendJson(res, 403, { error: "Forbidden." });
+  }
   if (req.method === "POST" && req.url === "/api/models") return proxyModels(req, res);
   if (req.method === "POST" && req.url === "/api/model-info") return proxyModelInfo(req, res);
   if (req.method === "POST" && req.url === "/api/load-model") return loadModel(req, res);

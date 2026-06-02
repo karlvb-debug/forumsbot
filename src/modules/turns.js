@@ -7,7 +7,8 @@ import { setBusy, getBusy as getIsGenerating } from '../hooks/useActions.js';
 import { showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble } from '../hooks/useStreaming.js';
 import { putMessage, getAllChunks, getActorMemory, putActorMemory } from './db.js';
 import { summarizeMemory, recallRelevantChunks, formatCurrentOutcomes, parseOutcomeJson } from './memory.js';
-import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, checkDrift, normalizeCadence, isQueueActor, shouldFireCadence, appendMemory, normalizeSpeakingOrderStrategy } from './utils.js';
+import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, checkDrift, normalizeCadence, isQueueActor, shouldFireCadence, appendMemory, normalizeSpeakingOrderStrategy, formatTranscript } from './utils.js';
+export { formatTranscript }; // re-export so existing imports from turns.js keep working
 import { updateSemanticAlignment } from './telemetry.js';
 import { preflightSkipCheck } from './preflight.js';
 import { getKbEntriesForDirector, splitDocuments, buildDocumentManifestSection, buildReferenceSection, buildKbSection } from './knowledge.js';
@@ -229,7 +230,7 @@ async function buildAgenticSpeakingPlan(maxSpeakers, signal) {
     'Return {"speakers":[]} only if no actor has a useful reason to speak next.',
     'Do not explain, do not invent names, and do not repeat names.'
   ].join('\n');
-  const lastMessages = formatTranscript(state.messages.slice(-6), 420);
+  const lastMessages = formatTranscript(state.messages.slice(-6), 420, state.actors);
   const user = [
     scenarioBlock(),
     `Eligible speakers:\n${roster}`,
@@ -480,9 +481,9 @@ export async function runNextTurn(options = {}) {
 }
 
 async function _runTurn(options = {}) {
-  console.log('[turns] runNextTurn called', options);
+  console.debug('[turns] runNextTurn called', options);
   if (_stopFlag) {
-    console.log('[turns] runNextTurn blocked by stop flag');
+    console.debug('[turns] runNextTurn blocked by stop flag');
     return false;
   }
   if (!state.settings.model) {
@@ -490,11 +491,11 @@ async function _runTurn(options = {}) {
     return false;
   }
   if (abortController?.signal.aborted && !options.isRoundContinuation) {
-    console.log('[turns] Resetting aborted abortController for new turn');
+    console.debug('[turns] Resetting aborted abortController for new turn');
     abortController = null;
   }
   if (abortController?.signal.aborted) {
-    console.log('[turns] runNextTurn aborted');
+    console.debug('[turns] runNextTurn aborted');
     return false;
   }
   const participant = nextParticipant();
@@ -675,7 +676,7 @@ async function _runTurn(options = {}) {
 }
 
 export async function runRound(options = {}) {
-  console.log('[turns] runRound called', options);
+  console.debug('[turns] runRound called', options);
   // Auto-loop calls pass fromAuto:true and already hold the pipeline lock.
   const ownLock = !options.fromAuto;
   if (ownLock) {
@@ -822,11 +823,13 @@ export async function evaluateAutoStopAfterRound(roundMessages, options = {}) {
     return promptStopOrContinue("Everyone skipped this round. The forum may be out of useful things to add.", options);
   }
 
-  if (state.autoStop.maxRoundsEnabled && state.autoStop.roundsRun >= state.autoStop.maxRounds) {
-    return promptStopOrContinue(`Reached the ${state.autoStop.maxRounds}-round limit.`, options);
-  }
+  // Check the goal BEFORE the round cap so an achieved goal gets a precise
+  // stop message even when both conditions are true simultaneously. The
+  // `|| atMaxRounds` ensures the last round is always judged — without it,
+  // odd-numbered maxRounds settings are never goal-checked before the cap fires.
+  const atMaxRounds = state.autoStop.maxRoundsEnabled && state.autoStop.roundsRun >= state.autoStop.maxRounds;
 
-  if (state.autoStop.goalCheckEnabled && state.autoStop.goal.trim() && state.autoStop.roundsRun % 2 === 0) {
+  if (state.autoStop.goalCheckEnabled && state.autoStop.goal.trim() && (state.autoStop.roundsRun % 2 === 0 || atMaxRounds)) {
     const verdict = await judgeGoal(roundMessages);
     if (verdict.achieved) {
       const confidence = Number.isFinite(verdict.confidence) ? ` (${Math.round(verdict.confidence * 100)}% confidence)` : "";
@@ -836,8 +839,12 @@ export async function evaluateAutoStopAfterRound(roundMessages, options = {}) {
       });
     }
     setAutoStopStatus(`Goal not complete yet: ${verdict.reason || "Needs more discussion."}`);
-  } else {
+  } else if (!atMaxRounds) {
     setAutoStopStatus(`Round ${state.autoStop.roundsRun} complete. Auto-stop is watching for skips and limits.`);
+  }
+
+  if (atMaxRounds) {
+    return promptStopOrContinue(`Reached the ${state.autoStop.maxRounds}-round limit.`, options);
   }
 
   saveState();
@@ -874,8 +881,8 @@ export async function judgeGoal(roundMessages = [], options = {}) {
     `Shared memory summary:\n${state.memory.sharedSummary || "None."}`,
     `Open questions:\n${(Array.isArray(state.memory.openQuestions) ? state.memory.openQuestions.join("\n") : state.memory.openQuestions) || "None."}`,
     `Known outcomes:\n${formatCurrentOutcomes()}`,
-    `Recent transcript:\n${formatTranscript(state.messages.slice(-8), 1200)}`,
-    `Latest round:\n${formatTranscript(roundMessages, 600)}`,
+    `Recent transcript:\n${formatTranscript(state.messages.slice(-8), 1200, state.actors)}`,
+    `Latest round:\n${formatTranscript(roundMessages, 600, state.actors)}`,
     `Recent archive summaries:\n${archiveText || "None."}`
   ].join("\n\n");
 
@@ -1593,7 +1600,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
       kbSection,
       memOverride || participantMemory,
       privateThoughts,
-      `### Recent transcript\n${formatTranscript(msgs, WORD_LIMITS.recentTranscript)}`,
+      `### Recent transcript\n${formatTranscript(msgs, WORD_LIMITS.recentTranscript, state.actors)}`,
       periodicReminder,
       gravityWarning,
       nudgeReminder,
@@ -1720,7 +1727,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
     scenario: scenarioBlock(),
     proceduralMemory: state.memory.enabled ? memoryBlock(recallChunks) : "",
     workMemory: participantMemory,
-    recentMessages: formatTranscript(recentMessages, WORD_LIMITS.recentTranscript)
+    recentMessages: formatTranscript(recentMessages, WORD_LIMITS.recentTranscript, state.actors)
   };
 
   return assembled;
@@ -1753,22 +1760,6 @@ export function memoryBlock(recallChunks) {
   ].filter(Boolean).join("\n");
 }
 
-export function formatTranscript(messages, wordLimit = WORD_LIMITS.recentTranscript) {
-  if (!messages.length) return "No public messages yet.";
-  const text = messages
-    .filter((m) => (m.type !== "system" || m.speaker === "Moderator") && m.type !== "management") // system/management notices aren't part of the conversation, but Moderator notes are
-    .map((message) => {
-      const name = message.speaker || state.actors.find((a) => a.id === message.actorId)?.name || "Forum";
-      if (message.type === "user" || (message.type === "system" && message.speaker === "Moderator")) {
-        return `[USER] ${name}: ${publicMessageContent(message)}`;
-      }
-      if (message.type === "dm")     return `[DIRECTOR] ${name}: ${publicMessageContent(message)}`;
-      if (message.type === "skip")   return `[${name} skipped]`;
-      return `${name}: ${publicMessageContent(message)}`;
-    }).join("\n");
-  return trimWords(text, wordLimit);
-}
-
 function applyActorManagement(spec, managerName, managerColor) {
   const log = [];
   // Cannot silence any actor with canDirect (protect directors)
@@ -1787,12 +1778,18 @@ function applyActorManagement(spec, managerName, managerColor) {
       thoughts: "",
       relationships: {},
       enabled: s.enabled !== false,
-      canDirect: !!s.canDirect || !!s.isDirector,
-      canManageCast: !!s.canManageCast || !!s.isManager,
-      canResearch: !!s.canResearch || !!s.isResearcher,
+      canDirect: !!s.canDirect,
+      canManageCast: !!s.canManageCast,
+      canResearch: !!s.canResearch,
       canSeeThoughts: !!s.canSeeThoughts,
+      canWriteDocuments: !!s.canWriteDocuments,
       authority: typeof s.authority === "number" ? s.authority : 50,
       temperature: typeof s.temperature === "number" ? s.temperature : 0.8,
+      // Scheduling defaults — keeps runtime shape consistent with load-time normalizeState.
+      // Without these, a mid-session actor has no cadence/mode until the next page reload.
+      cadence: null,
+      actorMode: 'participant',
+      triggerOn: [],
       expanded: false,
       color: colors[state.actors.length % colors.length]
     });
@@ -1903,7 +1900,7 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
   if (result.pinFact) {
     const fact = String(result.pinFact).trim();
     const duped = (state.memory.pinnedFacts || []).some(f =>
-      (typeof f === "string" ? f : f.text || "").toLowerCase() === fact.toLowerCase());
+      f.toLowerCase() === fact.toLowerCase());
     if (!duped && fact) {
       if (!Array.isArray(state.memory.pinnedFacts)) state.memory.pinnedFacts = [];
       state.memory.pinnedFacts.push(fact);
@@ -2070,7 +2067,7 @@ export function scenarioBlock() {
 }
 
 export function publicTranscript() {
-  return formatTranscript(state.messages.slice(-PROMPT_MESSAGE_LIMIT), WORD_LIMITS.recentTranscript);
+  return formatTranscript(state.messages.slice(-PROMPT_MESSAGE_LIMIT), WORD_LIMITS.recentTranscript, state.actors);
 }
 
 export function privateThoughtDigest() {

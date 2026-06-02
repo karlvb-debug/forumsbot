@@ -519,6 +519,7 @@ export async function chatJson(system, user, temperature, signal, onStream = nul
 ${result}
 --- end ---`;
         }
+        const toolCallsSnapshot = [..._lastToolCalls]; // snapshot before follow-up resets it
         const cleanedContent = stripTextToolCalls(content);
         const followUpUser = [
           `Here are the tool results you requested:${toolResults}`,
@@ -533,6 +534,7 @@ ${result}
           jsonSchema,
           toolsAllowed: callAllowsTools,
         });
+        _lastToolCalls = toolCallsSnapshot; // restore: follow-up is synthesis, not a new search
       }
     }
   } else {
@@ -885,7 +887,7 @@ export async function loadLmStudioModel(identifier) {
 
 let _pingInterval = null;
 export function startConnectionPing() {
-  if (_pingInterval) clearInterval(_pingInterval);
+  if (_pingInterval) return; // already running — prevent duplicates on HMR / double-mount
   pingConnection(true);
   _pingInterval = setInterval(() => {
     if (!document.hidden) pingConnection(true);

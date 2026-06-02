@@ -7,7 +7,9 @@ marked.use({
   renderer: {
     link(token) {
       const text = this.parser.parseInline(token.tokens);
-      return `<a href="${token.href}"${token.title ? ` title="${token.title}"` : ''} target="_blank" rel="noopener noreferrer">${text}</a>`;
+      const href = (token.href || '').replace(/"/g, '&quot;');
+      const title = token.title ? ` title="${token.title.replace(/"/g, '&quot;')}"` : '';
+      return `<a href="${href}"${title} target="_blank" rel="noopener noreferrer">${text}</a>`;
     },
     html(token) {
       return (token.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');

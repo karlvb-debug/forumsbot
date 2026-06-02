@@ -116,6 +116,29 @@ export async function getAllMessages() {
 }
 
 export async function getRecentMessages(limit) {
+  // Fast path: walk the createdAt index backwards (O(limit)) instead of
+  // fetching the entire store and slicing (O(N)). Falls back to the full
+  // scan when IndexedDB is unavailable or the index doesn't exist.
+  if (storageAvailable && db) {
+    try {
+      const tx = db.transaction(MESSAGE_STORE, "readonly");
+      const index = tx.objectStore(MESSAGE_STORE).index("createdAt");
+      const results = [];
+      await new Promise((resolve, reject) => {
+        const req = index.openCursor(null, "prev");
+        req.addEventListener("success", () => {
+          const cursor = req.result;
+          if (!cursor || results.length >= limit) { resolve(); return; }
+          results.push(cleanStoredMessage(cursor.value));
+          cursor.continue();
+        });
+        req.addEventListener("error", () => reject(req.error || new Error("cursor failed")));
+      });
+      return results.reverse(); // cursor walked newest-first; restore chronological order
+    } catch {
+      // Fall through to the full-scan path if the cursor fails for any reason
+    }
+  }
   const messages = await getAllMessages();
   return messages.slice(-limit);
 }

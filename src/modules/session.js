@@ -189,8 +189,12 @@ export async function exportSession(mode = 'debug') {
 
     // Audit for sensitive fields and add warnings
     const exportWarnings = [];
-    if (cleanState.settings?.apiKey) {
-      exportWarnings.push("API key included in export — remove before sharing");
+    if (cleanState.settings) {
+      cleanState.settings = { ...cleanState.settings };
+      if (cleanState.settings.apiKey) {
+        exportWarnings.push("API key was stripped from this export.");
+        delete cleanState.settings.apiKey;
+      }
     }
     const baseUrl = cleanState.settings?.baseUrl || '';
     const isDefaultOrLocal = !baseUrl || baseUrl.includes('127.0.0.1') || baseUrl.includes('localhost') || baseUrl === 'http://127.0.0.1:1234';
@@ -554,7 +558,7 @@ export async function generateQuickStart(promptOverride = "") {
 
     const type = parsed.type || "fullSetup";
     const message = parsed.message || "";
-    console.log('[generateQuickStart] LLM response type:', type, 'hasChanges:', !!parsed.changes, 'topLevelKeys:', Object.keys(parsed).join(','));
+    console.debug('[generateQuickStart] LLM response type:', type, 'hasChanges:', !!parsed.changes, 'topLevelKeys:', Object.keys(parsed).join(','));
 
     if (type === "patch") {
       // The LLM may put patch fields at the top level or nested under "changes"
@@ -564,7 +568,7 @@ export async function generateQuickStart(promptOverride = "") {
         const patchKeys = ["addActors", "removeActors", "modifyActors", "scenario", "dm", "settings", "memory", "autoStop", "userContext"];
         const found = patchKeys.filter(k => parsed[k] !== undefined);
         if (found.length > 0) {
-          console.log('[generateQuickStart] Auto-wrapping top-level patch keys:', found);
+          console.debug('[generateQuickStart] Auto-wrapping top-level patch keys:', found);
           changes = {};
           for (const k of found) { changes[k] = parsed[k]; }
         }
@@ -586,11 +590,11 @@ export async function generateQuickStart(promptOverride = "") {
       // fullSetup — fields should be at top level, but handle LLM nesting under "changes"
       let setupSource = parsed;
       if (parsed.changes && typeof parsed.changes === "object" && parsed.changes.scenario) {
-        console.log('[generateQuickStart] Unwrapping fullSetup fields from changes wrapper');
+        console.debug('[generateQuickStart] Unwrapping fullSetup fields from changes wrapper');
         setupSource = { ...parsed, ...parsed.changes };
         delete setupSource.changes;
       }
-      console.log('[generateQuickStart] fullSetup source keys:', Object.keys(setupSource).join(','), 'actors:', Array.isArray(setupSource.actors) ? setupSource.actors.length : 'NONE');
+      console.debug('[generateQuickStart] fullSetup source keys:', Object.keys(setupSource).join(','), 'actors:', Array.isArray(setupSource.actors) ? setupSource.actors.length : 'NONE');
       state.ui.quickStartDraft = normalizeQuickStartConfig(setupSource);
       state.ui.quickStartHistory.push({ role: "assistant", content: raw, type: "fullSetup", message, draft: state.ui.quickStartDraft });
       setQuickStartStatus("Full setup ready — click Apply to replace current scenario.");
@@ -645,10 +649,10 @@ export async function applyQuickStartConfig() {
 }
 
 export async function applyQuickStartAtIndex(index) {
-  console.log('[applyQuickStartAtIndex] called with index:', index);
+  console.debug('[applyQuickStartAtIndex] called with index:', index);
   const history = state.ui.quickStartHistory || [];
   const entry = history[index];
-  console.log('[applyQuickStartAtIndex] entry:', entry ? { type: entry.type, hasDraft: !!entry.draft, applied: entry.applied, draftType: entry.draft?.type, draftKeys: entry.draft ? Object.keys(entry.draft) : null } : 'NOT FOUND');
+  console.debug('[applyQuickStartAtIndex] entry:', entry ? { type: entry.type, hasDraft: !!entry.draft, applied: entry.applied, draftType: entry.draft?.type, draftKeys: entry.draft ? Object.keys(entry.draft) : null } : 'NOT FOUND');
   if (!entry || !entry.draft) {
     console.warn('[applyQuickStartAtIndex] BAIL: no entry or no draft');
     setQuickStartStatus("Nothing to apply for that message.", "warn");
@@ -659,10 +663,10 @@ export async function applyQuickStartAtIndex(index) {
     setQuickStartStatus("Already applied.", "warn");
     return;
   }
-  console.log('[applyQuickStartAtIndex] PRE-APPLY state snapshot:', { actorCount: state.actors.length, actorNames: state.actors.map(a => a.name) });
+  console.debug('[applyQuickStartAtIndex] PRE-APPLY state snapshot:', { actorCount: state.actors.length, actorNames: state.actors.map(a => a.name) });
   await _applyDraft(entry.draft);
   entry.applied = true;
-  console.log('[applyQuickStartAtIndex] POST-APPLY state snapshot:', { actorCount: state.actors.length, actorNames: state.actors.map(a => a.name), title: state.scenario.title });
+  console.debug('[applyQuickStartAtIndex] POST-APPLY state snapshot:', { actorCount: state.actors.length, actorNames: state.actors.map(a => a.name), title: state.scenario.title });
   // Also clear global draft if it matches
   state.ui.quickStartDraft = null;
   updateAiAssistantApplyButton();
@@ -670,9 +674,9 @@ export async function applyQuickStartAtIndex(index) {
 }
 
 async function _applyDraft(draft) {
-  console.log('[_applyDraft] draft.type:', draft.type, 'keys:', Object.keys(draft));
+  console.debug('[_applyDraft] draft.type:', draft.type, 'keys:', Object.keys(draft));
   if (draft.type === "patch") {
-    console.log('[_applyDraft] PATCH branch — changes keys:', draft.changes ? Object.keys(draft.changes) : 'NO CHANGES');
+    console.debug('[_applyDraft] PATCH branch — changes keys:', draft.changes ? Object.keys(draft.changes) : 'NO CHANGES');
     const hadConversation = state.messages.length > 0;
     applyAssistantPatch(draft.changes);
     state.ui.quickStartStatus = "Changes applied.";
@@ -688,9 +692,9 @@ async function _applyDraft(draft) {
     }
     return;
   }
-  console.log('[_applyDraft] FULL SETUP branch — normalizing draft with keys:', Object.keys(draft));
+  console.debug('[_applyDraft] FULL SETUP branch — normalizing draft with keys:', Object.keys(draft));
   const normalized = normalizeQuickStartConfig(draft);
-  console.log('[_applyDraft] normalized result:', { systems: normalized.scenario?.systems ? Object.keys(normalized.scenario.systems) : 'NONE', actorCount: normalized.actors?.length, dmEnabled: normalized.dm?.enabled, hasSettings: !!normalized.settings, hasAutoStop: !!normalized.autoStop });
+  console.debug('[_applyDraft] normalized result:', { systems: normalized.scenario?.systems ? Object.keys(normalized.scenario.systems) : 'NONE', actorCount: normalized.actors?.length, dmEnabled: normalized.dm?.enabled, hasSettings: !!normalized.settings, hasAutoStop: !!normalized.autoStop });
   const hadConversation = state.messages.length > 0;
   state.scenario = normalized.scenario;
   state.actors = normalized.actors;
@@ -808,12 +812,12 @@ export function openAiAssistantPanel() {
 }
 
 export function applyAssistantPatch(changes) {
-  console.log('[applyAssistantPatch] changes:', JSON.stringify(changes, null, 2).slice(0, 500));
+  console.debug('[applyAssistantPatch] changes:', JSON.stringify(changes, null, 2).slice(0, 500));
   const c = changes;
 
   // Actors — add
   for (const a of (c.addActors || [])) {
-    const canDirect = !!a.isDirector || !!a.canDirect;
+    const canDirect = !!a.canDirect;
     const actor = {
       id: crypto.randomUUID(),
       name: a.name || "New Actor",
@@ -824,9 +828,9 @@ export function applyAssistantPatch(changes) {
       temperature: typeof a.temperature === "number" ? a.temperature : 0.8,
       authority: typeof a.authority === "number" ? a.authority : 50,
       canDirect,
-      canManageCast: !!a.isManager || !!a.canManageCast,
-      canResearch: !!a.isResearcher || !!a.canResearch,
-      canWriteDocuments: !!a.isWriter || !!a.canWriteDocuments,
+      canManageCast: !!a.canManageCast,
+      canResearch: !!a.canResearch,
+      canWriteDocuments: !!a.canWriteDocuments,
       canSeeThoughts: !!a.canSeeThoughts,
       directorMode: a.directorMode || (canDirect ? state.scenario?.systems?.dmRole?.role || 'facilitator' : undefined),
       enabled: true,
@@ -852,10 +856,6 @@ export function applyAssistantPatch(changes) {
     if (target) {
       const { find: _find, ...rest } = mod;
       Object.assign(target, rest);
-      if (rest.isDirector !== undefined) target.canDirect = !!rest.isDirector;
-      if (rest.isManager !== undefined) target.canManageCast = !!rest.isManager;
-      if (rest.isResearcher !== undefined) target.canResearch = !!rest.isResearcher;
-      if (rest.isWriter !== undefined) target.canWriteDocuments = !!rest.isWriter;
       if (target.canWriteDocuments && !state.documentWriting?.designatedWriterId) {
         if (!state.documentWriting) state.documentWriting = {};
         state.documentWriting.designatedWriterId = target.id;
@@ -987,46 +987,57 @@ export function applyAssistantPatch(changes) {
 
 // ─── Session History ────────────────────────────────────────────────────────
 
+// Serializes concurrent saves: auto-loop fires saveCurrentSession every round,
+// and a manual save can overlap. Two simultaneous reads of getAllSessions() would
+// both see the pre-prune list and race to delete the same old entries.
+let _savingSession = false;
+
 export async function saveCurrentSession() {
   if (!state.scenario?.title && !state.messages.length) return; // nothing worth saving
+  if (_savingSession) return; // in-flight save will include current state
+  _savingSession = true;
 
-  if (!state._currentSessionId) {
-    state._currentSessionId = crypto.randomUUID();
-  }
-
-  // Snapshot messages and actors by VALUE — callers (e.g. forkSessionAtMessage)
-  // mutate state.actors/state.messages immediately after saving, which would
-  // otherwise corrupt the just-saved session through the shared reference.
-  const session = {
-    id: state._currentSessionId,
-    timestamp: new Date().toISOString(),
-    scenarioTitle: state.scenario.title || 'Untitled',
-    actorCount: state.actors.filter(a => a.enabled).length,
-    messageCount: state.messages.length,
-    messages: state.messages.map(m => ({ ...m })),
-    scenario: scenarioWithoutMode(state.scenario),
-    memory: { ...state.memory },
-    actors: state.actors.map(a => ({ ...a })),
-    documentWriting: { ...(state.documentWriting || {}) },
-    documents: (state.documents || []).map(d => ({ ...d })),
-    documentTasks: (state.documentTasks || []).map(t => ({ ...t })),
-    pendingDocumentEdits: (state.pendingDocumentEdits || []).map(p => ({ ...p })),
-  };
-
-  // Keep at most 20 sessions; remove oldest others if over limit. Guard each
-  // delete so one failure doesn't abort the whole save (the session itself
-  // still needs to be written below).
-  const existing = await getAllSessions();
-  const others = existing.filter(s => s.id !== state._currentSessionId);
-  for (const old of others.slice(19)) {
-    try {
-      await deleteSession(old.id);
-    } catch (err) {
-      console.warn('[sessions] prune failed:', err.message);
+  try {
+    if (!state._currentSessionId) {
+      state._currentSessionId = crypto.randomUUID();
     }
-  }
 
-  await putSession(session);
+    // Snapshot messages and actors by VALUE — callers (e.g. forkSessionAtMessage)
+    // mutate state.actors/state.messages immediately after saving, which would
+    // otherwise corrupt the just-saved session through the shared reference.
+    const session = {
+      id: state._currentSessionId,
+      timestamp: new Date().toISOString(),
+      scenarioTitle: state.scenario.title || 'Untitled',
+      actorCount: state.actors.filter(a => a.enabled).length,
+      messageCount: state.messages.length,
+      messages: state.messages.map(m => ({ ...m })),
+      scenario: scenarioWithoutMode(state.scenario),
+      memory: { ...state.memory },
+      actors: state.actors.map(a => ({ ...a })),
+      documentWriting: { ...(state.documentWriting || {}) },
+      documents: (state.documents || []).map(d => ({ ...d })),
+      documentTasks: (state.documentTasks || []).map(t => ({ ...t })),
+      pendingDocumentEdits: (state.pendingDocumentEdits || []).map(p => ({ ...p })),
+    };
+
+    // Keep at most 20 sessions; remove oldest others if over limit. Guard each
+    // delete so one failure doesn't abort the whole save (the session itself
+    // still needs to be written below).
+    const existing = await getAllSessions();
+    const others = existing.filter(s => s.id !== state._currentSessionId);
+    for (const old of others.slice(19)) {
+      try {
+        await deleteSession(old.id);
+      } catch (err) {
+        console.warn('[sessions] prune failed:', err.message);
+      }
+    }
+
+    await putSession(session);
+  } finally {
+    _savingSession = false;
+  }
 }
 
 export async function loadSession(session) {

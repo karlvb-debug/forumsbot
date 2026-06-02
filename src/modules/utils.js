@@ -403,6 +403,31 @@ export function publicMessageContent(message) {
   return cleaned?.content || cleaned?.text || cleaned?.message || "";
 }
 
+/**
+ * Format a message array as a plain-text transcript string for use in prompts.
+ * Canonical version shared by turns.js (re-exported) and memory.js.
+ *
+ * @param {object[]} messages  - array of message objects
+ * @param {number}   wordLimit - max word count (trimWords applied)
+ * @param {object[]} actors    - optional roster for actorId→name fallback;
+ *                               defaults to [] (uses "Forum" for ID-only messages)
+ */
+export function formatTranscript(messages, wordLimit = 2600, actors = []) {
+  if (!messages.length) return "No public messages yet.";
+  const text = messages
+    .filter((m) => (m.type !== "system" || m.speaker === "Moderator") && m.type !== "management")
+    .map((message) => {
+      const name = message.speaker || actors.find((a) => a.id === message.actorId)?.name || "Forum";
+      if (message.type === "user" || (message.type === "system" && message.speaker === "Moderator")) {
+        return `[USER] ${name}: ${publicMessageContent(message)}`;
+      }
+      if (message.type === "dm")     return `[DIRECTOR] ${name}: ${publicMessageContent(message)}`;
+      if (message.type === "skip")   return `[${name} skipped]`;
+      return `${name}: ${publicMessageContent(message)}`;
+    }).join("\n");
+  return trimWords(text, wordLimit);
+}
+
 export function stringifyList(value) {
   if (Array.isArray(value)) return value.filter(Boolean).join("\n");
   if (value && typeof value === "object") return Object.entries(value).map(([key, item]) => `${key}: ${stringifyList(item)}`).join("\n");

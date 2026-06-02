@@ -4,7 +4,7 @@ import { chatCompletion, getEmbedding, getEmbeddingsBatch, setStatus } from './a
 import { saveState as _hookSaveState } from '../hooks/useForumState.js';
 import { setBusy, getBusy as getIsGenerating } from '../hooks/useActions.js';
 import { getAllChunks, putChunk, clearChunks, countChunks, getAllMessages } from './db.js';
-import { trimWords, stringifyList, normalizeStringArray, extractKeywords, stringifyBullets, stripCodeFence, extractBalancedObjects, sanitizeJsonString, cosineSimilarity, appendMemory } from './utils.js';
+import { trimWords, stringifyList, normalizeStringArray, extractKeywords, stringifyBullets, stripCodeFence, extractBalancedObjects, sanitizeJsonString, cosineSimilarity, appendMemory, formatTranscript } from './utils.js';
 
 // Minimum cosine similarity for a chunk to be injected into a prompt.
 // Chunks scoring below this are noise, not signal. Only applies when
@@ -13,6 +13,12 @@ const MIN_RECALL_SIMILARITY = 0.20;
 
 // Re-exported from utils so existing import paths keep working.
 export { cosineSimilarity };
+
+// Per-session query-vector cache for recallRelevantChunks.
+// Key: `${actorId}:${chunkCount}:${lastMessageId}` — invalidates automatically
+// when the archive grows or the transcript advances, with no manual bookkeeping.
+const _recallVectorCache = new Map();
+const RECALL_CACHE_MAX = 16; // cap so it doesn't grow unboundedly in very long sessions
 
 export async function recallRelevantChunks(actor) {
   const chunks = await getAllChunks();
@@ -50,10 +56,23 @@ export async function recallRelevantChunks(actor) {
   let queryVector = null;
   const hasVectors = !modelMismatch && chunks.some(c => Array.isArray(c.vector));
   if (hasVectors) {
-    try {
-      queryVector = await getEmbedding(queryText);
-    } catch (err) {
-      console.warn("Embeddings API not available or failed; falling back to keywords.", err);
+    // Cache key invalidates when the archive grows (chunkCount) or transcript advances
+    // (lastMessageId), so stale vectors are never returned.
+    const lastMsgId = state.messages[state.messages.length - 1]?.id ?? "";
+    const cacheKey = `${actor?.id ?? ""}:${chunks.length}:${lastMsgId}`;
+    if (_recallVectorCache.has(cacheKey)) {
+      queryVector = _recallVectorCache.get(cacheKey);
+    } else {
+      try {
+        queryVector = await getEmbedding(queryText);
+        if (_recallVectorCache.size >= RECALL_CACHE_MAX) {
+          // Evict oldest entry (Map iteration order is insertion order)
+          _recallVectorCache.delete(_recallVectorCache.keys().next().value);
+        }
+        _recallVectorCache.set(cacheKey, queryVector);
+      } catch (err) {
+        console.warn("Embeddings API not available or failed; falling back to keywords.", err);
+      }
     }
   }
 
@@ -83,30 +102,6 @@ export async function recallRelevantChunks(actor) {
     .filter((chunk, index, list) => chunk && list.findIndex((item) => item.id === chunk.id) === index)
     .slice(0, RECALLED_CHUNK_LIMIT);
   return selected.sort((left, right) => new Date(left.createdAt || 0) - new Date(right.createdAt || 0));
-}
-
-// formatTranscript is duplicated here from turns.js to avoid a circular dep
-// (memory.js needs it, and turns.js imports memory.js)
-function formatTranscript(messages, wordLimit = WORD_LIMITS.recentTranscript) {
-  if (!messages.length) return "No public messages yet.";
-  const text = messages
-    .filter((m) => (m.type !== "system" || m.speaker === "Moderator") && m.type !== "management")
-    .map((message) => {
-      const name = message.speaker || state.actors.find((actor) => actor.id === message.actorId)?.name || "Forum";
-      if (message.type === "user" || (message.type === "system" && message.speaker === "Moderator")) {
-        return `[USER] ${name}: ${publicMsgContent(message)}`;
-      }
-      if (message.type === "dm") {
-        return `[DIRECTOR] ${name}: ${publicMsgContent(message)}`;
-      }
-      return `${name}: ${publicMsgContent(message)}`;
-    }).join("\n");
-  return trimWords(text, wordLimit);
-}
-
-function publicMsgContent(message) {
-  if (!message) return "";
-  return message.content || "";
 }
 
 function scenarioBlock() {
@@ -201,6 +196,9 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
     || (state.memory.cycleCount > 0 && state.memory.cycleCount % DELTA_REWRITE_EVERY === 0)
     || !state.memory.sharedSummary; // always do full rewrite if no summary yet
 
+  let cycleSucceeded = false;
+
+  let cycleSucceeded = false;
   try {
     if (isBackground && !needsFullRewrite) {
       // ── DELTA path: short bullet update only ─────────────────────────────────
@@ -219,29 +217,34 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
 
       const content = await chatCompletion(deltaSystem, deltaUser, { temperature: 0.2, maxTokens: 400 });
       const raw = parseMemoryJson(content);
-      const delta = trimWords(stringifyList(raw.delta), WORD_LIMITS.cycleDelta);
+      if (!raw) {
+        console.warn('[memory] Delta parse failed — skipping cycle update');
+      } else {
+        const delta = trimWords(stringifyList(raw.delta), WORD_LIMITS.cycleDelta);
 
-      if (delta) {
-        state.memory.recentDeltas.push(`[${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}] ${delta}`);
-        // Keep only the last 8 deltas to cap memory
-        if (state.memory.recentDeltas.length > 8) {
-          state.memory.recentDeltas = state.memory.recentDeltas.slice(-8);
+        if (delta) {
+          state.memory.recentDeltas.push(`[${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}] ${delta}`);
+          // Keep only the last 8 deltas to cap memory
+          if (state.memory.recentDeltas.length > 8) {
+            state.memory.recentDeltas = state.memory.recentDeltas.slice(-8);
+          }
         }
+        // Still update actor memories and pinned fact suggestions from the delta
+        const keywords = normalizeStringArray(raw.keywords, true).map(k => k.toLowerCase()).filter(Boolean);
+        const deltaUpdate = {
+          ...raw,
+          actorMemoryUpdates: raw.actorMemoryUpdates || {},
+          actorRelationshipUpdates: raw.actorRelationshipUpdates || {},
+          pinnedFactSuggestions: normalizeStringArray(raw.pinnedFactSuggestions).slice(0, 4),
+          chunkSummary: delta,
+          keywords
+        };
+        applyActorMemoryUpdates(deltaUpdate.actorMemoryUpdates);
+        if (storyMode) applyActorRelationshipUpdates(deltaUpdate.actorRelationshipUpdates);
+        await applyPinnedFactSuggestions(deltaUpdate.pinnedFactSuggestions);
+        await archiveMemoryChunk(deltaUpdate, usableMessages);
+        cycleSucceeded = true;
       }
-      // Still update actor memories and pinned fact suggestions from the delta
-      const keywords = normalizeStringArray(raw.keywords, true).map(k => k.toLowerCase()).filter(Boolean);
-      const deltaUpdate = {
-        ...raw,
-        actorMemoryUpdates: raw.actorMemoryUpdates || {},
-        actorRelationshipUpdates: raw.actorRelationshipUpdates || {},
-        pinnedFactSuggestions: normalizeStringArray(raw.pinnedFactSuggestions).slice(0, 4),
-        chunkSummary: delta,
-        keywords
-      };
-      applyActorMemoryUpdates(deltaUpdate.actorMemoryUpdates);
-      if (storyMode) applyActorRelationshipUpdates(deltaUpdate.actorRelationshipUpdates);
-      await applyPinnedFactSuggestions(deltaUpdate.pinnedFactSuggestions);
-      await archiveMemoryChunk(deltaUpdate, usableMessages);
 
     } else {
       // ── FULL REWRITE path: rebuild from deltas + archive ─────────────────────
@@ -280,16 +283,21 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
 
       const content = await chatCompletion(system, user, { temperature: 0.2, maxTokens: 1600 });
       const parsed = parseMemoryJson(content);
-      console.debug('[memory] Parsed keys:', Object.keys(parsed), 'sharedSummary type:', typeof parsed.sharedSummary, 'openQ type:', typeof parsed.openQuestions);
-      const memoryUpdate = normalizeMemoryUpdate(parsed, usableMessages);
-      await applyMemoryUpdate(memoryUpdate);
-      if (storyMode) applyActorRelationshipUpdates(memoryUpdate.actorRelationshipUpdates || {});
-      await archiveMemoryChunk(memoryUpdate, usableMessages);
-      // Clear accumulated deltas after full rewrite
-      state.memory.recentDeltas = [];
+      if (!parsed) {
+        console.warn('[memory] Full rewrite parse failed — preserving existing memory');
+      } else {
+        console.debug('[memory] Parsed keys:', Object.keys(parsed), 'sharedSummary type:', typeof parsed.sharedSummary, 'openQ type:', typeof parsed.openQuestions);
+        const memoryUpdate = normalizeMemoryUpdate(parsed, usableMessages);
+        await applyMemoryUpdate(memoryUpdate);
+        if (storyMode) applyActorRelationshipUpdates(memoryUpdate.actorRelationshipUpdates || {});
+        await archiveMemoryChunk(memoryUpdate, usableMessages);
+        // Clear accumulated deltas after full rewrite
+        state.memory.recentDeltas = [];
+        cycleSucceeded = true;
+      }
     }
 
-    state.memory.cycleCount += 1;
+    if (cycleSucceeded) state.memory.cycleCount += 1;
     state.memory.lastSummaryMessageId = usableMessages[usableMessages.length - 1]?.id || state.memory.lastSummaryMessageId;
     state.memory.turnsSinceSummary = 0;
     saveState();
@@ -327,8 +335,8 @@ export function parseMemoryJson(content) {
     return repaired;
   }
 
-  console.warn('[memory] Could not parse memory JSON, treating as raw summary');
-  return { sharedSummary: cleaned };
+  console.warn('[memory] Could not parse memory JSON — skipping memory update');
+  return null;
 }
 
 function tryParseJson(text) {

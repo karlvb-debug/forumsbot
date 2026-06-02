@@ -182,10 +182,6 @@ function normalizeState(value = {}) {
   if (!value.settings?.baseUrl || value.settings.baseUrl === "http://localhost:1234/v1") {
     merged.settings.baseUrl = defaultState.settings.baseUrl;
   }
-  // Migrate old maxTokens default (700) to new default (1200)
-  if (value.settings?.maxTokens === 700) {
-    merged.settings.maxTokens = defaultState.settings.maxTokens;
-  }
   // toolsEnabled didn't exist in early versions. Default missing values to false:
   // web tools are expensive on local models and researcher-scoped when enabled.
   if (value.settings && typeof value.settings.toolsEnabled === "undefined") {

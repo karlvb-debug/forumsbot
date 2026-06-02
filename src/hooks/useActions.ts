@@ -138,7 +138,7 @@ export function useActions() {
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim()) return;
     const message = {
-      id: 'user-' + Date.now(),
+      id: crypto.randomUUID(),
       speaker: 'You',
       color: 'var(--fg-dim)',
       text: text.trim(),
