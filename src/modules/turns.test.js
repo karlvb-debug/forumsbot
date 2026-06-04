@@ -71,6 +71,7 @@ vi.mock('../hooks/useForumState.js', () => ({
 vi.mock('../hooks/useActions.js', () => ({
   setBusy: vi.fn(),
   getBusy: vi.fn(() => false),
+  showToast: vi.fn(),
 }));
 
 vi.mock('../hooks/useStreaming.js', () => ({

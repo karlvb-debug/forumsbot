@@ -36,6 +36,10 @@ vi.mock('./turns.js', () => ({
   addMessage: vi.fn(async () => {}),
 }));
 
+vi.mock('../hooks/useActions.js', () => ({
+  showToast: vi.fn(),
+}));
+
 import {
   acceptDocumentProposal,
   acceptScribeSuggestion,

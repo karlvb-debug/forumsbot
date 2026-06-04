@@ -107,8 +107,20 @@ export function showToast(message: string, type: Toast['type'] = 'info', duratio
   return id;
 }
 
+export function dismissToast(id: number): void {
+  const next = _toasts.filter(t => t.id !== id);
+  if (next.length === _toasts.length) return;
+  _toasts = next;
+  _toastVersion++;
+  _toastListeners.forEach(fn => fn());
+}
+
 export function getToasts(): Toast[] {
   return _toasts;
+}
+
+export function getToastsVersion(): number {
+  return _toastVersion;
 }
 
 export function subscribeToasts(cb: () => void): () => void {

@@ -3,7 +3,7 @@ import { buildActorSchema, buildSchemaPromptLine } from './schemas.js';
 import { state, saveState, logTransition, logWarning } from './state.js';
 import { chatCompletion, chatJson, chatStructured, setStatus, setCurrentSpeaker, getLastToolCalls, isJsonSchemaSupported } from './api.js';
 import { saveState as _hookSaveState, mutateState } from '../hooks/useForumState.js';
-import { setBusy, getBusy as getIsGenerating } from '../hooks/useActions.js';
+import { setBusy, getBusy as getIsGenerating, showToast } from '../hooks/useActions.js';
 import { showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble, showBackgroundActivity, updateBackgroundActivity, hideBackgroundActivity, clearBackgroundActivities } from '../hooks/useStreaming.js';
 import { putMessage, getAllChunks, getActorMemory, putActorMemory } from './db.js';
 import { summarizeMemory, recallRelevantChunks, formatCurrentOutcomes, parseOutcomeJson } from './memory.js';
@@ -738,6 +738,7 @@ async function _runTurn(options = {}) {
       const msg = lastError.message || "Generation failed.";
       const label = attempt > 1 ? `${msg} (failed after ${attempt} attempts)` : msg;
       setStatus(label, "error");
+      showToast(label, "error");
       await addMessage({
         type: "system",
         speaker: "System",
@@ -879,6 +880,7 @@ export async function runAutoLoop() {
     state.autoRunning = false;
     const msg = err instanceof Error ? err.message : String(err);
     setStatus(`Auto-run error: ${msg}`, 'error');
+    showToast(`Auto-run error: ${msg}`, 'error');
   } finally {
     clearBackgroundActivities();
     if (starting) _pipelineActive = false;
@@ -1040,6 +1042,9 @@ export function resolveStopOrContinue(shouldStop, newGoal = "") {
 export async function promptStopOrContinue(reason, options = {}) {
   state.autoRunning = false;
   setAutoStopStatus(reason);
+  // Headline notification for the auto-stop event (the modal handles the choice);
+  // visible even if the user has scrolled away from the transport controls.
+  showToast(reason, "warn");
   saveState();
 
   const { shouldStop, newGoal } = await new Promise(resolve => {

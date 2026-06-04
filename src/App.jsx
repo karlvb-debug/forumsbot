@@ -9,6 +9,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { StopModal } from './components/StopModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { PauseCard } from './components/PauseCard';
+import { Toaster } from './components/Toaster';
 import { AiAssistant } from './components/AiAssistant';
 import { ReadinessStrip } from './components/ReadinessStrip';
 import { DocEditorStage } from './components/DocEditorStage';
@@ -395,6 +396,7 @@ export default function App() {
         onSelect={handleCommand}
       />
       <AiAssistant />
+      <Toaster />
       {confirmModal && (
         <ConfirmModal
           message={confirmModal.message}

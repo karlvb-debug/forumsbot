@@ -1,5 +1,6 @@
 import { state, saveState, logTransition } from './state.js';
 import { chatStructured, setStatus } from './api.js';
+import { showToast } from '../hooks/useActions.js';
 import { WORD_LIMITS } from './constants.js';
 import { trimWords } from './utils.js';
 import { buildDocumentWriterPromptLine, buildDocumentWriterSchema } from './schemas.js';
@@ -369,6 +370,9 @@ export async function runScribePass(signal = null, { instruction = null } = {}) 
     state.pendingScribeSuggestions.unshift(suggestion);
     saveState();
     logTransition("scribe_suggestion_offered", { documentId: doc.id, writer: writer.name });
+    // Notify regardless of which panel is open — the suggestion UI only lives in
+    // the Doc Editor, so without this the user would miss it while watching the chat.
+    showToast(`${writer.name} suggests updating "${doc.title || 'a document'}" — review in the Doc Editor.`, "info");
     return suggestion;
   }
 

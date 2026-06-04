@@ -2559,3 +2559,54 @@ button:focus-visible { border-radius: 8px; }
   .doc-editor-history { grid-template-columns: 1fr; }
   .history-list { max-height: 200px; }
 }
+
+/* ── Toast notifications ─────────────────────────────────────────────
+   App-wide ephemeral notices (errors, auto-stop, scribe suggestions).
+   Rendered by components/Toaster.jsx, driven by useActions toast store. */
+.toaster {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--accent);
+  box-shadow: var(--shadow-2);
+  color: var(--fg);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  cursor: pointer;
+  animation: toast-in 0.18s ease-out;
+}
+.toast--info  { border-left-color: var(--accent); }
+.toast--warn  { border-left-color: var(--warn); }
+.toast--error { border-left-color: var(--danger); }
+.toast-msg { flex: 1; word-break: break-word; }
+.toast-close {
+  flex: none;
+  background: none;
+  border: none;
+  color: var(--fg-mute);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.toast-close:hover { color: var(--fg); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
