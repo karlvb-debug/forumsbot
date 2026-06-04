@@ -25,8 +25,10 @@ export function resolveSystemSettings() {
     alignmentNudgeStyle:      sys.alignment?.nudgeStyle                ?? 'gentle-nudge',
     turnStrategy:             normalizeSpeakingOrderStrategy(sys.turnRouting?.strategy),
     allowDirectAddress:       sys.turnRouting?.allowDirectAddress     ?? true,
-    // Director mode comes from the director actor's directorMode field.
-    // Fall back to legacy sys.dmRole for sessions saved before this change.
+    // Single source of truth: the director actor's directorMode field.
+    // sys.dmRole is a legacy seed only — normalizeState copies it into the
+    // director's directorMode, after which directorMode is authoritative. The
+    // fallback here just covers sessions saved before that seeding existed.
     dmRole: (() => {
       const director = state.actors?.find(a => a.canDirect && a.enabled);
       return director?.directorMode
@@ -35,7 +37,6 @@ export function resolveSystemSettings() {
     })(),
     // dmNarrates is derived — no longer a separate toggle.
     get dmNarrates() { return this.dmRole === 'narrator'; },
-    dmCanIntroduceElements:   sys.dmRole?.canIntroduceElements         ?? false,
   };
 }
 

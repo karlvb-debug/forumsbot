@@ -22,15 +22,13 @@ export function ScenarioPanel() {
     });
   };
   const updateDirectorMode = (role) => {
+    // Director mode lives on the director actor (single source of truth). The
+    // engine derives narration etc. from it; the legacy scenario.systems.dmRole
+    // copy is seed-only and no longer written here.
     mutateState(s => {
       const director = (s.actors || []).find(a => a.canDirect && a.enabled)
         || (s.actors || []).find(a => a.canDirect);
       if (director) director.directorMode = role;
-      if (!s.scenario.systems) s.scenario.systems = {};
-      if (!s.scenario.systems.dmRole) s.scenario.systems.dmRole = {};
-      s.scenario.systems.dmRole.role = role;
-      s.scenario.systems.dmRole.narrates = role === 'narrator';
-      s.scenario.systems.dmRole.canIntroduceElements = role === 'narrator';
     });
   };
 

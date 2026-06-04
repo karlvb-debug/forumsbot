@@ -88,14 +88,6 @@ export function ActorsPanel() {
           const nextWriter = s.actors.find(x => x.id !== a.id && x.enabled && x.canWriteDocuments);
           s.documentWriting.designatedWriterId = nextWriter?.id || "";
         }
-        if ((key === 'directorMode' && a.canDirect) || (key === 'canDirect' && val)) {
-          const role = key === 'directorMode' ? val : (a.directorMode || 'facilitator');
-          if (!s.scenario.systems) s.scenario.systems = {};
-          if (!s.scenario.systems.dmRole) s.scenario.systems.dmRole = {};
-          s.scenario.systems.dmRole.role = role;
-          s.scenario.systems.dmRole.narrates = role === 'narrator';
-          s.scenario.systems.dmRole.canIntroduceElements = role === 'narrator';
-        }
       }
     });
   }, []);
