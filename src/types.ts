@@ -79,7 +79,6 @@ export interface Settings {
   enableCrossSessionMemory: boolean;
   streamingEnabled: boolean;
   turboMode: boolean;
-  enableAdaptiveCompression: boolean;
   roundSnapshotEnabled: boolean;
   turnDelay: number;
 }

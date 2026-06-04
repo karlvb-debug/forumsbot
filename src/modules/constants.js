@@ -84,15 +84,13 @@ export const defaultState = {
     // before every actor turn, and the main actor prompt already enforces skipping.
     enablePreflightRouter: false,
     preflightThreshold: 0.35,
-    // Sprint 6: Cross-Session Actor Memory. Default OFF: when on, it distills the
-    // actor's thought via a separate LLM call every turn (per actor).
+    // Cross-Session Actor Memory. Default OFF: when on, each actor's accumulated
+    // memory is distilled once at session end (not per turn).
     enableCrossSessionMemory: false,
     // Streaming: show tokens as they arrive for actor/DM turns
     streamingEnabled: true,
     // Turbo Mode: skip memory cycles, thoughts, alignment, and cross-session memory
     turboMode: false,
-    // Adaptive compression: LLM micro-summarize private memory when prompt is over budget
-    enableAdaptiveCompression: true,
     // KV cache: freeze transcript at round start so all actors share a byte-identical prefix
     roundSnapshotEnabled: true,
     // Pause between turns when auto-running (seconds, 0 = instant)

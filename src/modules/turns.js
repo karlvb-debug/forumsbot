@@ -694,13 +694,6 @@ async function _runTurn(options = {}) {
         console.warn('[scribe] pass failed:', err?.message || err);
       }
 
-      // Sprint 6: Distill cross-session actor memory (fire-and-forget)
-      if (result.thought && state.settings.enableCrossSessionMemory !== false && !state.settings.turboMode) {
-        distillActorMemory(participant.data.name, result.thought).catch(err =>
-          console.warn('[cross-session-memory] distill failed:', err.message)
-        );
-      }
-
       if (!state.settings.turboMode && ++_turnsSinceAlignment >= ALIGNMENT_EVERY_N_TURNS) {
         _turnsSinceAlignment = 0;
         await updateSemanticAlignment();
@@ -889,6 +882,11 @@ export async function runAutoLoop() {
     clearBackgroundActivities();
     if (starting) _pipelineActive = false;
     saveState();
+    // Cross-session memory: distill once at session end (opt-in, best-effort).
+    if (starting) {
+      await distillAllActorsMemory().catch(err =>
+        console.warn('[cross-session-memory] session-end pass failed:', err?.message || err));
+    }
   }
 }
 
@@ -1078,15 +1076,17 @@ export function wait(ms) {
 }
 
 /**
- * Sprint 6 — Cross-Session Actor Memory.
+ * Cross-Session Actor Memory.
  *
- * Distills the actor's private thought into one persistent memory sentence and
- * upserts it into IndexedDB. Runs async (fire-and-forget) — never blocks a turn.
+ * Distills an actor's accumulated private memory into one persistent sentence and
+ * upserts it into IndexedDB. Runs once per actor at session end (see
+ * distillAllActorsMemory) rather than every turn — the per-turn variant cost an
+ * extra LLM call per actor per turn for a single sentence of low marginal value.
  *
  * Memory format: up to 10 sentences, newest last, word-capped at 200.
  *
  * @param {string} actorName
- * @param {string} thought  - the actor's private thought from this turn
+ * @param {string} thought  - the actor's private thought/memory to distill
  */
 export async function distillActorMemory(actorName, thought) {
   if (!thought?.trim() || !actorName) return;
@@ -1124,6 +1124,23 @@ export async function distillActorMemory(actorName, thought) {
     state.memory.distillingActor = '';
     saveState();
     hideBackgroundActivity(activityId);
+  }
+}
+
+/**
+ * Session-end cross-session memory pass. Distills each enabled actor's accumulated
+ * private memory once, instead of once per turn. Opt-in (enableCrossSessionMemory)
+ * and best-effort — never throws into the caller.
+ */
+export async function distillAllActorsMemory() {
+  if (state.settings.enableCrossSessionMemory === false) return;
+  for (const actor of (state.actors || []).filter(a => a.enabled)) {
+    if (!actor.thoughts?.trim()) continue;
+    try {
+      await distillActorMemory(actor.name, actor.thoughts);
+    } catch (err) {
+      console.warn('[cross-session-memory] session-end distill failed:', err.message);
+    }
   }
 }
 
@@ -1779,32 +1796,6 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   if (estimateTokens(assembled) > PROMPT_TOKEN_BUDGET && recallChunks.length > 0) {
     recallChunks = [];
     assembled = buildSections(recallChunks, recentMessages);
-  }
-
-  // Stage 4: LLM micro-compress private actor memory (never mutates state)
-  if (
-    estimateTokens(assembled) > PROMPT_TOKEN_BUDGET &&
-    kind === "actor" &&
-    state.settings.enableAdaptiveCompression !== false &&
-    !state.settings.turboMode
-  ) {
-    const rawThoughts = actor.thoughts || "";
-    if (rawThoughts.split(/\s+/).length > 30) {
-      try {
-        const compressed = await chatCompletion(
-          "Compress character memory. Output ONLY the compressed text, nothing else. Maximum 80 words.",
-          rawThoughts.slice(0, 800),
-          { temperature: 0.1, maxTokens: 130 }
-        );
-        if (compressed?.trim()) {
-          const compressedMem = `Your private actor memory (compressed):\n${compressed.trim()}`;
-          assembled = buildSections([], recentMessages, compressedMem);
-          logTransition("adaptive_compression", { actor: actor.name, before: rawThoughts.length, after: compressed.length });
-        }
-      } catch {
-        // Silently continue with existing prompt
-      }
-    }
   }
 
   const finalTokens = estimateTokens(assembled);
