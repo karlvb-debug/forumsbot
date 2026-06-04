@@ -1646,6 +1646,17 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
     }
   }
 
+  // Style reminder re-stated at the tail of the prompt. The global style lives high
+  // in the system prompt, but small models attend most to the *end* of the context and
+  // imitate the recent transcript (their own prior verbose turns) as few-shot examples.
+  // Restating the user's style contract right before generation keeps it from decaying
+  // over a long conversation. Costs nothing for KV-cache: the user prompt changes anyway.
+  const styleReminder = (() => {
+    if (state.settings?.globalStyleEnabled === false) return "";
+    const prompt = String(state.settings?.globalStylePrompt || "").trim();
+    return prompt ? `STYLE — applies to your message this turn: ${prompt}` : "";
+  })();
+
   // Build sections and enforce token budget with graceful degradation.
   const buildSections = (chunks, msgs, memOverride = null) => {
     // Scan for unanswered user/moderator messages in the recent window.
@@ -1697,6 +1708,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
       directAddressNote,
       authorityBlock,
       roleReminder,
+      styleReminder,
       kind === "actor"
         ? (actor.canResearch
             ? "You are the Researcher. Analyze the open questions, run a web search using `[SEARCH: query]` in your thought field if facts are needed, cite your sources, and skip your turn if no further research is required right now."

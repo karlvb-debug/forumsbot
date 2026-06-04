@@ -473,6 +473,30 @@ describe('askActor style defaults', () => {
     const system = chatJson.mock.calls[0][0];
     expect(system).not.toContain('GLOBAL STYLE:');
   });
+
+  it('restates the style at the tail of the user prompt so it survives long conversations', async () => {
+    const actor = { id: 'a1', name: 'Alex', role: 'Analyst', persona: '', goal: '', voice: '', enabled: true, color: '#18726d' };
+    mockState.actors = [actor];
+
+    await askActor(actor);
+
+    // The user prompt is the second argument to chatJson.
+    const user = chatJson.mock.calls[0][1];
+    expect(user).toContain('STYLE — applies to your message this turn: Use plain everyday language');
+    // It must land near the end (after the transcript), where the model attends most.
+    expect(user.indexOf('STYLE — applies to your message this turn')).toBeGreaterThan(user.indexOf('Recent transcript'));
+  });
+
+  it('omits the tail style reminder when global style is disabled', async () => {
+    mockState.settings.globalStyleEnabled = false;
+    const actor = { id: 'a1', name: 'Alex', role: 'Analyst', persona: '', goal: '', voice: '', enabled: true, color: '#18726d' };
+    mockState.actors = [actor];
+
+    await askActor(actor);
+
+    const user = chatJson.mock.calls[0][1];
+    expect(user).not.toContain('STYLE — applies to your message this turn');
+  });
 });
 
 describe('outcome extraction trigger policy', () => {
