@@ -1,4 +1,4 @@
-import { WORD_LIMITS, PROMPT_MESSAGE_LIMIT, RECALLED_CHUNK_LIMIT, PINNED_FACTS_WORD_CAP, DELTA_REWRITE_EVERY } from './constants.js';
+import { WORD_LIMITS, PROMPT_MESSAGE_LIMIT, RECALLED_CHUNK_LIMIT, PINNED_FACTS_WORD_CAP } from './constants.js';
 import { state, saveState, logTransition } from './state.js';
 import { chatCompletion, getEmbedding, getEmbeddingsBatch, setStatus } from './api.js';
 import { saveState as _hookSaveState } from '../hooks/useForumState.js';
@@ -156,7 +156,6 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
     state.memory.pinnedFacts = [];
     state.memory.openQuestions = [];
     state.memory.dmState = "";
-    state.memory.recentDeltas = [];
     state.memory.cycleCount = 0;
   }
 
@@ -186,118 +185,53 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
   // small models) for no value. Gate it behind Stage Directions. Relationships remain
   // user-editable in the Actors panel regardless.
   const storyMode = state.scenario?.systems?.stageDirections?.enabled === true;
-  const relShapeDelta = storyMode
+  const relShape = storyMode
     ? ',"actorRelationshipUpdates":{"Actor A":{"Actor B":"how A now sees B, max 25 words, or null if unchanged"}}'
     : "";
+  const relObjNote = storyMode ? " and actorRelationshipUpdates" : "";
 
-  // ── Append-then-compress strategy ────────────────────────────────────────────
-  // Background cycles: generate a short delta bullet summary and append it.
-  // Every DELTA_REWRITE_EVERY cycles (or on manual/rebuild), do a full rewrite
-  // anchored by pinned facts to prevent telephone-game drift.
-  const needsFullRewrite = !isBackground
-    || reason === "rebuild"
-    || (state.memory.cycleCount > 0 && state.memory.cycleCount % DELTA_REWRITE_EVERY === 0)
-    || !state.memory.sharedSummary; // always do full rewrite if no summary yet
-
+  // ── Single incremental-summary path ──────────────────────────────────────────
+  // Every pass (manual or background cycle) folds the new turns into the durable
+  // shared summary, anchored by pinned facts. This replaced a two-path scheme — a
+  // cheap "delta" append plus a periodic heavy "full rewrite" — whose only benefit
+  // was token savings; grounding every pass in pinned facts gives the same
+  // drift-resistance with one prompt and no delta-buffer bookkeeping.
   let cycleSucceeded = false;
   try {
-    if (isBackground && !needsFullRewrite) {
-      updateBackgroundActivity(activityId, { detail: 'Writing a short memory delta from recent turns.' });
-      // ── DELTA path: short bullet update only ─────────────────────────────────
-      const deltaSystem = [
-        "You write a SHORT bullet-point update (3-5 bullets, max 120 words) summarising ONLY what just happened in these turns.",
-        "Do NOT rewrite or repeat the existing summary. Only capture NEW information.",
-        silentActorNote,
-        `Return only valid JSON: {"delta":"bullet summary of new events","actorMemoryUpdates":{"Actor Name":"short update or null"}${relShapeDelta},"pinnedFactSuggestions":["any critical new facts"],"keywords":["lowercase","keywords"]}`
-      ].join("\n");
-      const deltaUser = [
-        scenarioBlock(),
-        `Existing pinned facts:\n${normalizeStringArray(state.memory.pinnedFacts).join("\n") || "None."}`,
-        `Existing summary (do NOT repeat this):\n${trimWords(state.memory.sharedSummary, 160) || "None."}`,
-        `New turns to summarise:\n${formatTranscript(usableMessages, 900)}`
-      ].join("\n\n");
+    updateBackgroundActivity(activityId, { detail: 'Folding recent turns into the session summary.' });
+    const system = [
+      "You maintain compact long-term memory for a local multi-actor AI forum.",
+      "Update the existing summary by folding in the new turns. Be ruthless about compression — the next model may have a small context window.",
+      "IMPORTANT: The pinned facts below are ground truth. Build your summary around them, never contradict them.",
+      "For 'actorMemoryUpdates', summarize what each actor learned, their perspective, and trust changes.",
+      storyMode
+        ? "For 'actorRelationshipUpdates', update each actor's opinion of every OTHER actor they interacted with this session. Each entry is max 25 words. Only include actors who showed meaningful relationship change."
+        : "",
+      silentActorNote,
+      `Return only valid JSON with this exact shape (ALL values must be strings, not arrays or objects, EXCEPT actorMemoryUpdates${relObjNote} which are objects):`,
+      `{"sharedSummary":"300-500 word durable summary","openQuestions":"unresolved questions, one per line","dmState":"scenario state, empty string if none","chunkSummary":"100-150 word summary of the source turns","actorMemoryUpdates":{"Actor Name":"short private memory update"}${relShape},"pinnedFactSuggestions":["facts to pin"],"keywords":["lowercase keywords"]}`,
+      `CRITICAL: openQuestions, dmState, sharedSummary, and chunkSummary MUST be plain strings, never arrays or objects. actorMemoryUpdates${relObjNote} MUST be objects.`
+    ].filter(Boolean).join("\n");
+    const user = [
+      `Reason: ${reason}`,
+      scenarioBlock(),
+      `Pinned facts (ground truth — anchor your summary around these):\n${normalizeStringArray(state.memory.pinnedFacts).join("\n") || "None."}`,
+      `Existing shared summary:\n${state.memory.sharedSummary || "None."}`,
+      `Existing open questions:\n${normalizeStringArray(state.memory.openQuestions).join("\n") || "None."}`,
+      `Existing DM state:\n${state.memory.dmState || "None."}`,
+      `Source turns:\n${formatTranscript(usableMessages, 1600)}`
+    ].filter(Boolean).join("\n\n");
 
-      const content = await chatCompletion(deltaSystem, deltaUser, { temperature: 0.2, maxTokens: 400 });
-      const raw = parseMemoryJson(content);
-      if (!raw) {
-        console.warn('[memory] Delta parse failed — skipping cycle update');
-      } else {
-        const delta = trimWords(stringifyList(raw.delta), WORD_LIMITS.cycleDelta);
-
-        if (delta) {
-          state.memory.recentDeltas.push(`[${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}] ${delta}`);
-          // Keep only the last 8 deltas to cap memory
-          if (state.memory.recentDeltas.length > 8) {
-            state.memory.recentDeltas = state.memory.recentDeltas.slice(-8);
-          }
-        }
-        // Still update actor memories and pinned fact suggestions from the delta
-        const keywords = normalizeStringArray(raw.keywords, true).map(k => k.toLowerCase()).filter(Boolean);
-        const deltaUpdate = {
-          ...raw,
-          actorMemoryUpdates: raw.actorMemoryUpdates || {},
-          actorRelationshipUpdates: raw.actorRelationshipUpdates || {},
-          pinnedFactSuggestions: normalizeStringArray(raw.pinnedFactSuggestions).slice(0, 4),
-          chunkSummary: delta,
-          keywords
-        };
-        applyActorMemoryUpdates(deltaUpdate.actorMemoryUpdates);
-        if (storyMode) applyActorRelationshipUpdates(deltaUpdate.actorRelationshipUpdates);
-        await applyPinnedFactSuggestions(deltaUpdate.pinnedFactSuggestions);
-        await archiveMemoryChunk(deltaUpdate, usableMessages);
-        cycleSucceeded = true;
-      }
-
+    const content = await chatCompletion(system, user, { temperature: 0.2, maxTokens: 1600 });
+    const parsed = parseMemoryJson(content);
+    if (!parsed) {
+      console.warn('[memory] Summary parse failed — preserving existing memory');
     } else {
-      updateBackgroundActivity(activityId, { detail: 'Rebuilding the compact long-term session summary.' });
-      // ── FULL REWRITE path: rebuild from deltas + archive ─────────────────────
-      // Anchor the rewrite with pinned facts to prevent drift.
-      const deltaContext = state.memory.recentDeltas.length
-        ? `Recent cycle updates (newest last):\n${state.memory.recentDeltas.join("\n")}`
-        : "";
-
-      const relShapeFull = storyMode
-        ? ',"actorRelationshipUpdates":{"Actor A":{"Actor B":"how A now sees B, max 25 words, or null if unchanged"}}'
-        : "";
-      const relObjNote = storyMode ? " and actorRelationshipUpdates" : "";
-      const system = [
-        "You update compact long-term memory for a local multi-actor AI forum.",
-        "Be ruthless about compression — the next model may have a small context window.",
-        "IMPORTANT: The pinned facts below are ground truth. Build your summary around them, never contradict them.",
-        "For 'actorMemoryUpdates', summarize what each actor learned, their relationship changes, trust, and perspective of other actors.",
-        storyMode
-          ? "For 'actorRelationshipUpdates', update each actor's opinion of every OTHER actor they interacted with this session. Each entry is max 25 words. Only include actors who showed meaningful relationship change."
-          : "",
-        silentActorNote,
-        `Return only valid JSON with this exact shape (ALL values must be strings, not arrays or objects, EXCEPT actorMemoryUpdates${relObjNote} which are objects):`,
-        `{"sharedSummary":"300-500 word durable summary","openQuestions":"unresolved questions, one per line","dmState":"scenario state, empty string if none","chunkSummary":"100-150 word summary of the source turns","actorMemoryUpdates":{"Actor Name":"short private memory update"}${relShapeFull},"pinnedFactSuggestions":["facts to pin"],"keywords":["lowercase keywords"]}`,
-        `CRITICAL: openQuestions, dmState, sharedSummary, and chunkSummary MUST be plain strings, never arrays or objects. actorMemoryUpdates${relObjNote} MUST be objects.`
-      ].filter(Boolean).join("\n");
-      const user = [
-        `Reason: ${reason}`,
-        scenarioBlock(),
-        `Pinned facts (ground truth — anchor your summary around these):\n${normalizeStringArray(state.memory.pinnedFacts).join("\n") || "None."}`,
-        `Existing shared summary:\n${state.memory.sharedSummary || "None."}`,
-        deltaContext,
-        `Existing open questions:\n${normalizeStringArray(state.memory.openQuestions).join("\n") || "None."}`,
-        `Existing DM state:\n${state.memory.dmState || "None."}`,
-        `Source turns:\n${formatTranscript(usableMessages, 1600)}`
-      ].filter(Boolean).join("\n\n");
-
-      const content = await chatCompletion(system, user, { temperature: 0.2, maxTokens: 1600 });
-      const parsed = parseMemoryJson(content);
-      if (!parsed) {
-        console.warn('[memory] Full rewrite parse failed — preserving existing memory');
-      } else {
-        console.debug('[memory] Parsed keys:', Object.keys(parsed), 'sharedSummary type:', typeof parsed.sharedSummary, 'openQ type:', typeof parsed.openQuestions);
-        const memoryUpdate = normalizeMemoryUpdate(parsed, usableMessages);
-        await applyMemoryUpdate(memoryUpdate);
-        if (storyMode) applyActorRelationshipUpdates(memoryUpdate.actorRelationshipUpdates || {});
-        await archiveMemoryChunk(memoryUpdate, usableMessages);
-        // Clear accumulated deltas after full rewrite
-        state.memory.recentDeltas = [];
-        cycleSucceeded = true;
-      }
+      const memoryUpdate = normalizeMemoryUpdate(parsed, usableMessages);
+      await applyMemoryUpdate(memoryUpdate);
+      if (storyMode) applyActorRelationshipUpdates(memoryUpdate.actorRelationshipUpdates || {});
+      await archiveMemoryChunk(memoryUpdate, usableMessages);
+      cycleSucceeded = true;
     }
 
     if (cycleSucceeded) state.memory.cycleCount += 1;

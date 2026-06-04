@@ -1109,7 +1109,6 @@ export async function forkSessionAtMessage(messageId) {
   // Reset memory state so summarizer starts fresh from the truncated transcript
   state.memory.sharedSummary = "";
   state.memory.openQuestions = [];
-  state.memory.recentDeltas = [];
   state.memory.cycleCount = 0;
   state.memory.turnsSinceSummary = 0;
   state.memory.lastSummaryMessageId = "";

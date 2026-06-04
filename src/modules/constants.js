@@ -12,7 +12,6 @@ export const PROMPT_MESSAGE_LIMIT = 20;
 export const RECALLED_CHUNK_LIMIT = 6;
 export const PINNED_FACTS_WORD_CAP = 300; // ~40 facts; above this, offer compaction
 export const ANCHOR_WORD_CAP = 400;       // Sprint 7: max words injected from anchors
-export const DELTA_REWRITE_EVERY = 4;   // full summary rewrite every N delta cycles
 export const WORD_LIMITS = {
   sharedSummary: 520,
   openQuestions: 260,
@@ -20,8 +19,7 @@ export const WORD_LIMITS = {
   actorMemory: 260,
   relationship: 30,   // per-actor relationship note (short — injected into every prompt)
   chunk: 180,
-  recentTranscript: 2600,
-  cycleDelta: 120
+  recentTranscript: 2600
 };
 export const VALID_TABS = ["setup", "conversation", "memory"];
 
@@ -121,8 +119,7 @@ export const defaultState = {
     dmState: "",
     pendingPinnedFacts: [],
     pendingAnchors: [],    // anchor suggestions from DM, pending user approval
-    recentDeltas: [],      // short bullet summaries appended each cycle
-    cycleCount: 0,         // total cycles since last full summary rewrite
+    cycleCount: 0,         // total summarization cycles run
     turnsSinceSummary: 0,
     lastSummaryMessageId: "",
     migratedLegacyMessages: false,

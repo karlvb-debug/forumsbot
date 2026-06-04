@@ -1856,9 +1856,6 @@ export function memoryBlock(recallChunks) {
   const chunkText = recallChunks.length
     ? recallChunks.map((chunk, index) => `${index + 1}. ${trimWords(chunk.text || chunk.summary || "", WORD_LIMITS.chunk)}`).join("\n")
     : "No older archived memory recalled.";
-  const deltaText = state.memory.recentDeltas?.length
-    ? state.memory.recentDeltas.join("\n")
-    : "";
   const pinnedStr = Array.isArray(state.memory.pinnedFacts) ? state.memory.pinnedFacts.join("\n") : (state.memory.pinnedFacts || "");
   const questionsStr = Array.isArray(state.memory.openQuestions) ? state.memory.openQuestions.join("\n") : (state.memory.openQuestions || "");
 
@@ -1872,7 +1869,6 @@ export function memoryBlock(recallChunks) {
     pinnedStr ? `**Pinned facts:**\n${trimWords(pinnedStr, WORD_LIMITS.sharedSummary)}` : "Pinned facts: none.",
     anchorLines ? `**Anchored agreements (settled — do not re-argue these):**\n${trimWords(anchorLines, ANCHOR_WORD_CAP)}` : "",
     state.memory.sharedSummary ? `**Shared summary:**\n${trimWords(state.memory.sharedSummary, WORD_LIMITS.sharedSummary)}` : "Shared summary: none yet.",
-    deltaText ? `**Recent updates (since last full summary):**\n${deltaText}` : "",
     questionsStr ? `**Open questions:**\n${trimWords(questionsStr, WORD_LIMITS.openQuestions)}` : "Open questions: none recorded.",
     state.memory.dmState ? `**DM state:**\n${trimWords(state.memory.dmState, WORD_LIMITS.dmState)}` : "",
     `**Relevant archived memory:**\n${chunkText}`

@@ -204,9 +204,6 @@ function normalizeState(value = {}) {
   if (!Array.isArray(merged.memory.pendingAnchors)) {
     merged.memory.pendingAnchors = [];
   }
-  if (!Array.isArray(merged.memory.recentDeltas)) {
-    merged.memory.recentDeltas = [];
-  }
   
   // Ensure memory array fields are clean arrays (excluding single characters or empty strings)
   for (const key of ["pinnedFacts", "openQuestions"]) {

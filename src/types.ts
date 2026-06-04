@@ -125,7 +125,6 @@ export interface Memory {
   dmState: string;
   pendingPinnedFacts: string[];
   pendingAnchors: Anchor[];
-  recentDeltas: string[];
   cycleCount: number;
   turnsSinceSummary: number;
   lastSummaryMessageId: string;

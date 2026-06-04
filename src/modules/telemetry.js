@@ -141,27 +141,6 @@ export function calculateSessionMetrics(messages) {
     skipRateByActor[actorName] = Number((skips / totalByActor[actorName]).toFixed(2));
   });
 
-  // Calculate memory duplication score (approx based on delta overlap)
-  const deltas = state.memory?.recentDeltas || [];
-  let deltaDuplication = 0.0;
-  if (deltas.length > 1) {
-    let matches = 0;
-    let comparisons = 0;
-    for (let i = 0; i < deltas.length; i++) {
-      for (let j = i + 1; j < deltas.length; j++) {
-        comparisons++;
-        const setA = getWordSet(deltas[i]);
-        const setB = getWordSet(deltas[j]);
-        let intersect = 0;
-        for (const item of setA) {
-          if (setB.has(item)) intersect++;
-        }
-        if (setA.size && intersect / setA.size > 0.4) matches++;
-      }
-    }
-    deltaDuplication = comparisons ? matches / comparisons : 0.0;
-  }
-
   // Calculate total latency
   let totalLatencyMs = 0;
   messages.forEach(m => {
@@ -174,7 +153,6 @@ export function calculateSessionMetrics(messages) {
     chunkCoveragePct: totalCompleted ? Math.round((state.memory.archivedCount || 0) * 10) : 0,
     skipRateOverall: Number(skipRateOverall.toFixed(2)),
     skipRateByActor,
-    memoryDuplicationScore: Number(deltaDuplication.toFixed(2)),
     premiseDriftFinal: state.telemetry?.currentAlignmentScore ? Number((1 - state.telemetry.currentAlignmentScore / 100).toFixed(2)) : 0.0,
     outcomesPopulated: !!state.outcomes.finalRecommendation,
     totalLatencyMs
