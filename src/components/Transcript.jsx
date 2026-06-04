@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useMemo, useState, useCallback } from 'react';
 import * as Ic from './Icons';
 import { useForumState, mutateState } from '../hooks/useForumState';
-import { useStreaming } from '../hooks/useStreaming';
+import { useBackgroundActivities, useStreaming } from '../hooks/useStreaming';
 import { renderMarkdown } from '../modules/markdown.js';
 import { PauseCard } from './PauseCard';
 
@@ -216,6 +216,27 @@ function StreamingBubble({ streaming, showThoughts }) {
   );
 }
 
+function BackgroundActivityBubble({ activity }) {
+  if (!activity) return null;
+  return (
+    <article className="msg streaming background-activity">
+      <span className="swatch background-activity-swatch" style={{ background: activity.color || 'var(--accent)' }}>
+        <span className="background-activity-spinner" />
+      </span>
+      <div className="msg-body">
+        <div className="msg-head">
+          <span className="msg-name">{activity.label || 'Working in background'}</span>
+          <span className="msg-role streaming-status-label">working…</span>
+        </div>
+        <div className="streaming-thinking-pill background-activity-detail">
+          <span className="streaming-thinking-dot" />
+          {activity.detail || 'Running a silent system task…'}
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function RoundDivider({ round, time }) {
   return (
     <div className="round-divider">
@@ -234,6 +255,7 @@ export function Transcript({ showThoughts }) {
   const autoRunning = useForumState(s => s.autoRunning);
   const contextInfo = useForumState(s => s.contextInfo || {});
   const streaming = useStreaming();
+  const backgroundActivities = useBackgroundActivities();
 
   // Context-window usage meter (moved here from the composer)
   const promptTokens = contextInfo.lastPromptTokens || 0;
@@ -292,7 +314,7 @@ export function Transcript({ showThoughts }) {
     if (el && wasAtBottomRef.current) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [messages.length, streaming?.text]);
+  }, [messages.length, streaming?.thought, streaming?.message, backgroundActivities.length]);
 
   // Memoized so high-frequency streaming re-renders don't re-scan all messages.
   const turnCount = useMemo(() => messages.filter(m => m.type !== 'skip' && m.type !== 'system').length, [messages]);
@@ -447,9 +469,13 @@ export function Transcript({ showThoughts }) {
         );
       })}
 
+      {backgroundActivities.map(activity => (
+        <BackgroundActivityBubble key={activity.id} activity={activity} />
+      ))}
+
       <StreamingBubble streaming={streaming} showThoughts={showThoughts} />
 
-      {!messages.length && !streaming && (
+      {!messages.length && !streaming && !backgroundActivities.length && (
         <div className="empty-transcript">
           <div className="empty-transcript-icon">💬</div>
           <div className="empty-transcript-text">No messages yet</div>

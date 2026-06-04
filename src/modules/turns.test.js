@@ -79,6 +79,10 @@ vi.mock('../hooks/useStreaming.js', () => ({
   updateStreamingBubble: vi.fn(),
   removeStreamingBubble: vi.fn(),
   forceRemoveStreamingBubble: vi.fn(),
+  showBackgroundActivity: vi.fn(() => 'activity-id'),
+  updateBackgroundActivity: vi.fn(),
+  hideBackgroundActivity: vi.fn(),
+  clearBackgroundActivities: vi.fn(),
 }));
 
 vi.mock('./db.js', () => ({
@@ -308,7 +312,7 @@ describe('scenarioBlock', () => {
 });
 
 // ── applyAiResult ─────────────────────────────────────────────────────────────
-import { applyAiResult, fireUserMessageTriggers, runRound, stopGeneration } from './turns.js';
+import { applyAiResult, askActor, fireUserMessageTriggers, runRound, stopGeneration } from './turns.js';
 import { chatJson } from './api.js';
 
 describe('applyAiResult', () => {
@@ -431,6 +435,43 @@ describe('applyAiResult', () => {
 
     expect(chatJson).toHaveBeenCalledTimes(2);
     expect(mockState.messages.some(m => m.speaker === 'Concept Developer')).toBe(true);
+  });
+});
+
+describe('askActor style defaults', () => {
+  beforeEach(() => {
+    chatJson.mockReset();
+    chatJson.mockResolvedValue({ action: 'speak', thought: '', message: 'ok' });
+    mockState.settings.globalStyleEnabled = true;
+    mockState.settings.globalStylePrompt = 'Use plain everyday language. Avoid ornate wording.';
+    mockState.settings.turboMode = false;
+    mockState.scenario = { title: 'Test Forum', premise: 'Premise', objective: 'Objective', systems: {} };
+    mockState.messages = [];
+    mockState.memory = { pinnedFacts: [], sharedSummary: '', openQuestions: [], dmState: '', pendingAnchors: [] };
+    mockState.documents = [];
+  });
+
+  it('adds the global style contract and avoids high-density wording by default', async () => {
+    const actor = { id: 'a1', name: 'Alex', role: 'Analyst', persona: '', goal: '', voice: '', enabled: true, color: '#18726d' };
+    mockState.actors = [actor];
+
+    await askActor(actor);
+
+    const system = chatJson.mock.calls[0][0];
+    expect(system).toContain('GLOBAL STYLE: Use plain everyday language');
+    expect(system).toContain('brief, direct, and useful');
+    expect(system).not.toContain('high-density');
+  });
+
+  it('omits the global style contract when disabled', async () => {
+    mockState.settings.globalStyleEnabled = false;
+    const actor = { id: 'a1', name: 'Alex', role: 'Analyst', persona: '', goal: '', voice: '', enabled: true, color: '#18726d' };
+    mockState.actors = [actor];
+
+    await askActor(actor);
+
+    const system = chatJson.mock.calls[0][0];
+    expect(system).not.toContain('GLOBAL STYLE:');
   });
 });
 

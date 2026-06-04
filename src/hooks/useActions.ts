@@ -23,6 +23,8 @@ let _session: ModuleRefs['session'] = null;
 let _memory: ModuleRefs['memory'] = null;
 let _db: ModuleRefs['db'] = null;
 
+type ContinueMode = 'next' | 'round' | 'auto';
+
 export function setModuleRefs({ turns, api, session, memory, db }: ModuleRefs): void {
   _turns = turns;
   _api = api;
@@ -125,6 +127,28 @@ export function useActions() {
     if (_turns) await (_turns.runRound as () => Promise<void>)();
   }, []);
 
+  const singleResponse = useCallback(async () => {
+    if (_turns) await (_turns.runSingleResponse as () => Promise<void>)();
+  }, []);
+
+  const setContinueMode = useCallback((mode: ContinueMode) => {
+    (state as { ui: { continueMode?: ContinueMode } }).ui.continueMode = mode;
+    saveState();
+  }, []);
+
+  const continueConversation = useCallback(async () => {
+    const mode = ((state as { ui?: { continueMode?: ContinueMode } }).ui?.continueMode || 'next') as ContinueMode;
+    if (mode === 'round') {
+      if (_turns) await (_turns.runRound as () => Promise<void>)();
+      return;
+    }
+    if (mode === 'auto') {
+      if (_turns) await (_turns.runAutoLoop as () => Promise<void>)();
+      return;
+    }
+    if (_turns) await (_turns.runSingleResponse as () => Promise<void>)();
+  }, []);
+
   const startAuto = useCallback(async () => {
     if (_turns) await (_turns.runAutoLoop as () => Promise<void>)();
   }, []);
@@ -150,8 +174,6 @@ export function useActions() {
     stateWithMessages.messages = [...stateWithMessages.messages, message];
     if (_db) await (_db.putMessage as (m: unknown) => Promise<void>)(message);
     saveState();
-    // Fire on_user_message trigger actors (background orchestrators react to user input)
-    if (_turns) await (_turns.fireUserMessageTriggers as (m: string) => Promise<void>)(text.trim());
   }, []);
 
   const pingConnection = useCallback(async () => {
@@ -166,5 +188,5 @@ export function useActions() {
     if (_turns) await (_turns.runDirectorBrief as () => Promise<void>)();
   }, []);
 
-  return { nextTurn, runRound, startAuto, stopGeneration, sendMessage, pingConnection, loadModels, directorBrief };
+  return { nextTurn, runRound, singleResponse, setContinueMode, continueConversation, startAuto, stopGeneration, sendMessage, pingConnection, loadModels, directorBrief };
 }

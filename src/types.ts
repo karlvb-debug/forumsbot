@@ -69,6 +69,8 @@ export interface Settings {
   seedEnabled: boolean;
   showThoughts: boolean;
   toolsEnabled: boolean;
+  globalStyleEnabled: boolean;
+  globalStylePrompt: string;
   theme: 'dark' | 'light';
   includeTraces: boolean;
   gravitySensitivity: number;
@@ -113,6 +115,7 @@ export interface UI {
   embeddingModels?: string[];
   tokenSpeed?: number | null;
   focusedDocId?: string | null;
+  continueMode?: 'next' | 'round' | 'auto';
 }
 
 export interface Memory {

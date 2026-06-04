@@ -187,6 +187,13 @@ function normalizeState(value = {}) {
   if (value.settings && typeof value.settings.toolsEnabled === "undefined") {
     merged.settings.toolsEnabled = false;
   }
+  if (value.settings && typeof value.settings.globalStyleEnabled === "undefined" && typeof value.settings.plainLanguageDefault === "boolean") {
+    merged.settings.globalStyleEnabled = value.settings.plainLanguageDefault;
+  }
+  if (typeof merged.settings.globalStylePrompt !== "string" || !merged.settings.globalStylePrompt.trim()) {
+    merged.settings.globalStylePrompt = defaultState.settings.globalStylePrompt;
+  }
+  delete merged.settings.plainLanguageDefault;
   if (!VALID_TABS.includes(merged.ui.activeTab)) {
     merged.ui.activeTab = "";
   }

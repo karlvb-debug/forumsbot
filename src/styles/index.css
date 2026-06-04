@@ -1451,6 +1451,29 @@ input[type="range"]::-webkit-slider-thumb {
 /* ───── Streaming bubble ───── */
 .msg.streaming { opacity: 0.85; }
 
+.msg.background-activity {
+  opacity: 0.78;
+}
+.background-activity .msg-body {
+  border-style: dashed;
+}
+.background-activity-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.background-activity-spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid color-mix(in srgb, var(--bg) 55%, transparent);
+  border-top-color: var(--fg);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+.background-activity-detail {
+  color: var(--fg-dim);
+}
+
 /* Thought phase — dimmed italic text while the model is still reasoning */
 .streaming-thought-live {
   color: var(--fg-mute);

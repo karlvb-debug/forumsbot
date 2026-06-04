@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildActorSchema, buildDocumentWriterSchema } from './schemas.js';
+import { buildActorSchema, buildDocumentWriterSchema, buildSchemaPromptLine } from './schemas.js';
 
 describe('schemas', () => {
   it('does not expose documentEdits on normal actor turns', () => {
@@ -11,5 +11,12 @@ describe('schemas', () => {
     const schema = buildDocumentWriterSchema();
     expect(schema.properties.documentEdits).toBeDefined();
     expect(schema.required).toContain('documentEdits');
+  });
+
+  it('prompts agentic-selected actor turns to speak without changing the API schema shape', () => {
+    const schema = buildActorSchema({ name: 'Architect' }, { forceSpeak: true });
+    const prompt = buildSchemaPromptLine({ name: 'Architect' }, { forceSpeak: true });
+    expect(schema.properties.action.enum).toEqual(['speak', 'skip']);
+    expect(prompt).toContain('"action":"speak"');
   });
 });

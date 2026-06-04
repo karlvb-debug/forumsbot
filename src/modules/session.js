@@ -441,6 +441,8 @@ export async function generateQuickStart(promptOverride = "") {
       topP: state.settings.topP ?? 1.0,
       repeatPenalty: state.settings.repeatPenalty ?? 1.1,
       toolsEnabled: !!state.settings.toolsEnabled,
+      globalStyleEnabled: state.settings.globalStyleEnabled !== false,
+      globalStylePrompt: state.settings.globalStylePrompt || "",
       streamingEnabled: state.settings.streamingEnabled !== false,
       showThoughts: state.settings.showThoughts,
       turboMode: !!state.settings.turboMode,
@@ -472,13 +474,13 @@ export async function generateQuickStart(promptOverride = "") {
   "modifyActors": [{"find":"ActorName","name":"...","role":"...","persona":"...","goal":"...","voice":"...","enabled":true,"temperature":0.9,"authority":70,"canDirect":false,"canManageCast":false,"canResearch":false,"canWriteDocuments":false,"canSeeThoughts":false,"directorMode":"facilitator|narrator|arbiter|observer"}],
   "scenario": {"title":"...","premise":"...","objective":"...","systems":{"stageDirections":{"enabled":false,"intensity":"minimal|moderate|immersive","maxTokenShare":0.2},"alignment":{"strictness":"strict|moderate|loose|off","anchorInPrompt":false,"nudgeStyle":"hard-redirect|gentle-nudge|question"},"turnRouting":{"strategy":"sequential|agentic","allowDirectAddress":true},"dmRole":{"role":"narrator|facilitator|arbiter|observer","narrates":false,"canIntroduceElements":false}}},
   "dm": {"enabled":true,"name":"...","persona":"...","canSeeThoughts":false},
-  "settings": {"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"seed":-1,"seedEnabled":false,"toolsEnabled":false,"streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":false,"preflightThreshold":0.35,"enableCrossSessionMemory":false,"enableAdaptiveCompression":true,"roundSnapshotEnabled":true,"gravitySensitivity":50,"turnDelay":0},
+  "settings": {"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"seed":-1,"seedEnabled":false,"toolsEnabled":false,"globalStyleEnabled":true,"globalStylePrompt":"Use plain everyday language unless the user, scenario, or actor voice asks for a different style.","streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":false,"preflightThreshold":0.35,"enableCrossSessionMemory":false,"enableAdaptiveCompression":true,"roundSnapshotEnabled":true,"gravitySensitivity":50,"turnDelay":0},
   "memory": {"addFacts":["fact text"],"removeFacts":["text to match and remove"],"sharedSummary":"...","openQuestions":"...","dmState":"..."},
   "autoStop": {"enabled":true,"goal":"...","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5},
   "userContext": {"interactionMode":"sponsor|collaborator|observer","displayName":"","storyRole":""}
 }`;
 
-  const fullSetupShape = `{"scenario":{"title":"","premise":"","objective":"","systems":{"stageDirections":{"enabled":false,"intensity":"moderate","maxTokenShare":0.2},"alignment":{"strictness":"moderate","anchorInPrompt":false,"nudgeStyle":"gentle-nudge"},"turnRouting":{"strategy":"sequential","allowDirectAddress":true},"dmRole":{"role":"facilitator","narrates":false,"canIntroduceElements":false}}},"dm":{"enabled":true,"name":"","persona":"","canSeeThoughts":false},"actors":[{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"authority":50,"canDirect":false,"canManageCast":false,"canResearch":false,"canWriteDocuments":false,"canSeeThoughts":false,"directorMode":"facilitator|narrator|arbiter|observer"}],"memory":{"pinnedFacts":[],"sharedSummary":"","openQuestions":"","dmState":""},"settings":{"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"seed":-1,"seedEnabled":false,"toolsEnabled":false,"streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":false,"preflightThreshold":0.35,"enableCrossSessionMemory":false,"enableAdaptiveCompression":true,"roundSnapshotEnabled":true,"gravitySensitivity":50,"turnDelay":0},"autoStop":{"enabled":false,"goal":"","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5},"userContext":{"interactionMode":"collaborator","displayName":"","storyRole":""}}`;
+  const fullSetupShape = `{"scenario":{"title":"","premise":"","objective":"","systems":{"stageDirections":{"enabled":false,"intensity":"moderate","maxTokenShare":0.2},"alignment":{"strictness":"moderate","anchorInPrompt":false,"nudgeStyle":"gentle-nudge"},"turnRouting":{"strategy":"sequential","allowDirectAddress":true},"dmRole":{"role":"facilitator","narrates":false,"canIntroduceElements":false}}},"dm":{"enabled":true,"name":"","persona":"","canSeeThoughts":false},"actors":[{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"authority":50,"canDirect":false,"canManageCast":false,"canResearch":false,"canWriteDocuments":false,"canSeeThoughts":false,"directorMode":"facilitator|narrator|arbiter|observer"}],"memory":{"pinnedFacts":[],"sharedSummary":"","openQuestions":"","dmState":""},"settings":{"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"seed":-1,"seedEnabled":false,"toolsEnabled":false,"globalStyleEnabled":true,"globalStylePrompt":"Use plain everyday language unless the user, scenario, or actor voice asks for a different style.","streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":false,"preflightThreshold":0.35,"enableCrossSessionMemory":false,"enableAdaptiveCompression":true,"roundSnapshotEnabled":true,"gravitySensitivity":50,"turnDelay":0},"autoStop":{"enabled":false,"goal":"","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5},"userContext":{"interactionMode":"collaborator","displayName":"","storyRole":""}}`;
 
   const system = [
     "You are the AI Assistant for Forum, a local multi-agent AI discussion app running LLM actors via LM Studio.",
@@ -508,7 +510,7 @@ export async function generateQuickStart(promptOverride = "") {
     "For stories/roleplay: set stageDirections.enabled=true, dmRole.role='narrator', dmRole.narrates=true, dmRole.canIntroduceElements=true, turnRouting.strategy='agentic', alignment.strictness='loose'. Create character actors with temp 1.0-1.2. ALWAYS include actors in fullSetup.",
     "",
     "## SETTINGS (key fields)",
-    "temperature, maxTokens (default 2000), topP, repeatPenalty, toolsEnabled, streamingEnabled, showThoughts, turboMode, enablePreflightRouter, turnDelay.",
+    "temperature, maxTokens (default 2000), topP, repeatPenalty, toolsEnabled, globalStyleEnabled, globalStylePrompt, streamingEnabled, showThoughts, turboMode, enablePreflightRouter, turnDelay.",
     "",
     "## PATCH RULES",
     "memory: {addFacts:[...], removeFacts:[...], sharedSummary, openQuestions, dmState}",
@@ -811,12 +813,26 @@ export function openAiAssistantPanel() {
   // Panel is a card in ScenarioPanel — always visible. Nothing to open.
 }
 
+function normalizeAssistantActorPermissions(source = {}) {
+  const out = { ...source };
+  if (source.isDirector !== undefined) out.canDirect = !!source.isDirector;
+  if (source.isManager !== undefined) out.canManageCast = !!source.isManager;
+  if (source.isResearcher !== undefined) out.canResearch = !!source.isResearcher;
+  if (source.isWriter !== undefined) out.canWriteDocuments = !!source.isWriter;
+  delete out.isDirector;
+  delete out.isManager;
+  delete out.isResearcher;
+  delete out.isWriter;
+  return out;
+}
+
 export function applyAssistantPatch(changes) {
   console.debug('[applyAssistantPatch] changes:', JSON.stringify(changes, null, 2).slice(0, 500));
   const c = changes;
 
   // Actors — add
-  for (const a of (c.addActors || [])) {
+  for (const rawActor of (c.addActors || [])) {
+    const a = normalizeAssistantActorPermissions(rawActor);
     const canDirect = !!a.canDirect;
     const actor = {
       id: crypto.randomUUID(),
@@ -851,7 +867,8 @@ export function applyAssistantPatch(changes) {
   }
 
   // Actors — modify
-  for (const mod of (c.modifyActors || [])) {
+  for (const rawMod of (c.modifyActors || [])) {
+    const mod = normalizeAssistantActorPermissions(rawMod);
     const target = state.actors.find(a => a.name.toLowerCase() === (mod.find || "").toLowerCase());
     if (target) {
       const { find: _find, ...rest } = mod;
@@ -1390,6 +1407,8 @@ export function saveConfiguration(name) {
       topP: state.settings?.topP,
       repeatPenalty: state.settings?.repeatPenalty,
       toolsEnabled: !!state.settings?.toolsEnabled,
+      globalStyleEnabled: state.settings?.globalStyleEnabled !== false,
+      globalStylePrompt: state.settings?.globalStylePrompt || "",
       streamingEnabled: state.settings?.streamingEnabled !== false,
       showThoughts: !!state.settings?.showThoughts,
       turboMode: !!state.settings?.turboMode,

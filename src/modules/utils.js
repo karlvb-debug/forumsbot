@@ -303,13 +303,30 @@ export function extractEmbeddedMessage(content) {
   return readLooseField(content, "message") || readLooseField(content, "content") || readLooseField(content, "response") || "";
 }
 
+export function stripLeakedTranscriptLines(content) {
+  const lines = String(content || "").split(/\r?\n/);
+  const kept = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^#{1,6}\s*recent transcript\b/i.test(trimmed)) continue;
+    if (/^recent transcript\s*:/i.test(trimmed)) continue;
+    if (/^\[(?:USER|DIRECTOR|SYSTEM|MODERATOR)\]\s*/i.test(trimmed)) continue;
+    if (/^\[[^\]]+\s+skipped\]\s*$/i.test(trimmed)) continue;
+    kept.push(line);
+  }
+  return kept.join("\n").trim();
+}
+
 export function normalizeAiResult(result, fallback) {
   const action = String(result.action || "speak").toLowerCase().includes("skip") ? "skip" : "speak";
-  const message = stringifyMessage(result.message || result.content || result.response || "").trim();
+  const message = stripLeakedTranscriptLines(stringifyMessage(result.message || result.content || result.response || "")).trim();
+  const fallbackText = String(fallback || "");
+  const fallbackLooksLikeEnvelope = looksLikeEnvelope(fallbackText) || /["']?(?:thought|action|message|content|response)["']?\s*:/i.test(stripCodeFence(fallbackText));
+  const fallbackMessage = fallbackLooksLikeEnvelope ? "" : stripLeakedTranscriptLines(fallbackText).trim();
   const normalized = {
     thought: String(result.thought || "").trim(),
     action: action === "skip" || !message ? "skip" : "speak",
-    message: message || fallback.trim()
+    message: message || fallbackMessage
   };
   // Pass through document edit fields
   if (result.documentEdit) {
@@ -660,9 +677,15 @@ export function normalizeQuickStartConfig(config, assignFreshIds = true) {
   if (srcSettings) {
     settings = {};
     const numKeys = ["temperature", "maxTokens", "topP", "repeatPenalty", "seed", "preflightThreshold", "gravitySensitivity", "turnDelay"];
-    const boolKeys = ["toolsEnabled", "streamingEnabled", "showThoughts", "turboMode", "seedEnabled", "enablePreflightRouter", "enableCrossSessionMemory", "enableAdaptiveCompression", "roundSnapshotEnabled"];
+    const boolKeys = ["toolsEnabled", "globalStyleEnabled", "plainLanguageDefault", "streamingEnabled", "showThoughts", "turboMode", "seedEnabled", "enablePreflightRouter", "enableCrossSessionMemory", "enableAdaptiveCompression", "roundSnapshotEnabled"];
+    const stringKeys = ["globalStylePrompt"];
     for (const k of numKeys) { if (typeof srcSettings[k] === "number") settings[k] = srcSettings[k]; }
     for (const k of boolKeys) { if (typeof srcSettings[k] === "boolean") settings[k] = srcSettings[k]; }
+    for (const k of stringKeys) { if (typeof srcSettings[k] === "string") settings[k] = srcSettings[k]; }
+    if (settings.plainLanguageDefault !== undefined && settings.globalStyleEnabled === undefined) {
+      settings.globalStyleEnabled = settings.plainLanguageDefault;
+    }
+    delete settings.plainLanguageDefault;
     if (Object.keys(settings).length === 0) settings = undefined;
   }
 

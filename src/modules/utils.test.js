@@ -275,6 +275,21 @@ describe('normalizeAiResult — pauseRequest passthrough', () => {
     expect(result.thought).toBe('My thought.');
     expect(result.pauseRequest.reason).toBe('conflict');
   });
+
+  it('strips leaked transcript label lines from public messages', () => {
+    const result = normalizeAiResult({
+      action: 'speak',
+      message: '[USER] Hi everyone. Director, are we aligned?\nYes, we should define constraints first.',
+    }, fallback);
+    expect(result.action).toBe('speak');
+    expect(result.message).toBe('Yes, we should define constraints first.');
+  });
+
+  it('does not inject malformed prompt envelopes as fallback public text', () => {
+    const result = normalizeAiResult({ action: 'speak', message: '' }, '{"thought":"x","message":"[USER] leaked');
+    expect(result.action).toBe('skip');
+    expect(result.message).toBe('');
+  });
 });
 
 describe('normalizeAiResult — pinFact passthrough', () => {

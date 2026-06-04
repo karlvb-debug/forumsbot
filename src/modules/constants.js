@@ -58,6 +58,7 @@ export const AVAILABLE_TOOLS = [
   }
 ];
 export const MAX_TOOL_ROUNDS = 3;
+export const DEFAULT_GLOBAL_STYLE_PROMPT = "Use plain everyday language unless the user, scenario, or actor voice asks for a different style. Prefer short common words, concrete claims, and direct sentences. Avoid ornate, academic, or thesaurus-like wording.";
 
 export const defaultState = {
   settings: {
@@ -74,6 +75,8 @@ export const defaultState = {
     seedEnabled: false,
     showThoughts: false,
     toolsEnabled: false,
+    globalStyleEnabled: true,
+    globalStylePrompt: DEFAULT_GLOBAL_STYLE_PROMPT,
     theme: "dark",
     includeTraces: true,
     gravitySensitivity: 50,
@@ -109,7 +112,8 @@ export const defaultState = {
     assistantOpen: false,       // AI assistant drawer open/closed
     pauseModal: null,           // { pauseRecord } — set by promptPause()
     awaitingUserInput: false,   // true while a pause modal is open
-    focusedDocId: null           // when set, stage shows the document editor
+    focusedDocId: null,          // when set, stage shows the document editor
+    continueMode: "next"         // "next" | "round" | "auto" — what empty composer Continue does
   },
   memory: {
     enabled: true,

@@ -5,6 +5,7 @@ import { trimWords } from './utils.js';
 import { buildDocumentWriterPromptLine, buildDocumentWriterSchema } from './schemas.js';
 import { actorCanReadDocument, countWords, ensureDefaultWriter, putKbEntry, resolveDesignatedWriter } from './knowledge.js';
 import { alignLineAttributions } from './telemetry.js';
+import { hideBackgroundActivity, showBackgroundActivity, updateBackgroundActivity } from '../hooks/useStreaming.js';
 
 function nowIso() {
   return new Date().toISOString();
@@ -130,6 +131,7 @@ export async function runDocumentTask(taskId, signal = null) {
   task.error = "";
   saveState();
   setStatus(`${writer.name} is drafting document changes...`, "pending");
+  const activityId = showBackgroundActivity(`${writer.name} is drafting`, `Preparing proposed edits for ${doc.title || "Untitled document"}.`, writer.color || 'var(--accent)');
 
   const system = [
     `You are ${writer.name}, the designated document writer for this forum.`,
@@ -137,6 +139,9 @@ export async function runDocumentTask(taskId, signal = null) {
     writer.persona ? `Persona: ${writer.persona}` : "",
     writer.goal ? `Goal: ${writer.goal}` : "",
     writer.voice ? `Writing voice: ${writer.voice}` : "",
+    state.settings?.globalStyleEnabled === false || !String(state.settings?.globalStylePrompt || "").trim()
+      ? ""
+      : `GLOBAL STYLE: ${String(state.settings.globalStylePrompt).trim()}`,
     "You are not taking a normal conversation turn. Your only job is to propose document edits for the user's review.",
     "Use the discussion as source material, but write coherent document prose in your assigned voice.",
     "Do not invent settled decisions that are not supported by the transcript.",
@@ -160,6 +165,7 @@ export async function runDocumentTask(taskId, signal = null) {
   ].filter(Boolean).join("\n");
 
   try {
+    updateBackgroundActivity(activityId, { detail: 'Reading the transcript and target document.' });
     const result = await chatStructured(system, user, buildDocumentWriterSchema(), {
       temperature: writer.temperature ?? state.settings.temperature,
       maxTokens: writer.maxTokens || state.settings.maxTokens,
@@ -167,6 +173,7 @@ export async function runDocumentTask(taskId, signal = null) {
     });
     const edits = sanitizeDocumentEdits(result.documentEdits, doc.id);
     if (!edits.length) throw new Error("Writer returned no applicable document edits.");
+    updateBackgroundActivity(activityId, { detail: 'Building a preview for review.' });
     const previewContent = applyEditsToContent(doc.content || "", edits, doc.id);
     const proposal = {
       id: crypto.randomUUID(),
@@ -197,6 +204,8 @@ export async function runDocumentTask(taskId, signal = null) {
     saveState();
     setStatus(task.error, "error");
     throw err;
+  } finally {
+    hideBackgroundActivity(activityId);
   }
 }
 

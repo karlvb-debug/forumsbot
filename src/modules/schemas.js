@@ -247,7 +247,7 @@ export function buildActorSchema(actor, options = {}) {
  * @returns {string}
  */
 export function buildSchemaPromptLine(actor, options = {}) {
-  const { stageDirections = false, schemaActive = false } = options;
+  const { stageDirections = false, schemaActive = false, forceSpeak = false } = options;
   const { required: reqFields, optional: optFields } = selectFields(actor, options);
 
   // When the model's response is grammar-constrained (response_format), the
@@ -263,6 +263,9 @@ export function buildSchemaPromptLine(actor, options = {}) {
   const allFields = [...reqFields, ...optFields];
   const pairs = allFields.map(name => {
     let promptValue = FIELDS[name].prompt;
+    if (name === 'action' && forceSpeak) {
+      promptValue = 'speak';
+    }
     // Stage directions override the message description.
     if (name === 'message' && stageDirections) {
       promptValue = '*actions in asterisks* plus "spoken dialogue in quotes"';

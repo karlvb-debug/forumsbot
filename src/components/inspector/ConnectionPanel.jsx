@@ -102,6 +102,8 @@ export function ConnectionPanel() {
   const topP = useForumState(s => s.settings?.topP ?? 0.95);
   const repeatPenalty = useForumState(s => s.settings?.repeatPenalty ?? 1.1);
   const streaming = useForumState(s => s.settings?.streamingEnabled !== false);
+  const globalStyleEnabled = useForumState(s => s.settings?.globalStyleEnabled !== false);
+  const globalStylePrompt = useForumState(s => s.settings?.globalStylePrompt || '');
   const availableModels = useForumState(s => s.ui?.availableModels || []);
   const chatModels = useForumState(s => s.ui?.chatModels || []);
   const embeddingModels = useForumState(s => s.ui?.embeddingModels || []);
@@ -310,7 +312,17 @@ export function ConnectionPanel() {
           </Field>
           <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
             <Toggle checked={streaming} onChange={(v) => updateSetting('streamingEnabled', v)} label="Streaming" />
+            <Toggle checked={globalStyleEnabled} onChange={(v) => updateSetting('globalStyleEnabled', v)} label="Global style" />
           </div>
+          {globalStyleEnabled && (
+            <Field label="Global style prompt" info="Applied to every actor and document-writer prompt after their persona/voice. Actor voice and direct user instructions still win.">
+              <textarea
+                value={globalStylePrompt}
+                onChange={(e) => updateSetting('globalStylePrompt', e.target.value)}
+                rows={4}
+              />
+            </Field>
+          )}
         </div>
       </details>
     </div>

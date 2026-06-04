@@ -13,8 +13,9 @@ export function Composer({ showThoughts, onToggleThoughts }) {
 
   const toolsEnabled = useForumState(s => !!s.settings?.toolsEnabled);
   const autoRunning = useForumState(s => s.autoRunning);
+  const continueMode = useForumState(s => s.ui?.continueMode || 'next');
 
-  const { nextTurn, runRound, sendMessage } = useActions();
+  const { continueConversation, sendMessage } = useActions();
 
   // Subscribe to busy state
   useSyncExternalStore(subscribeBusy, getBusyVersion);
@@ -28,14 +29,16 @@ export function Composer({ showThoughts, onToggleThoughts }) {
 
   const handleSubmit = useCallback(async (e) => {
     e?.preventDefault();
-    if (!text.trim()) return;
-    await sendMessage(text.trim());
+    const outgoing = text.trim();
     setText('');
     if (taRef.current) taRef.current.style.height = 'auto';
-    // If auto is running, the message is queued for the next prompt — don't trigger a new round.
-    // If idle, kick off a round so actors respond.
-    if (!autoRunning && !busy) runRound();
-  }, [text, sendMessage, runRound, busy, autoRunning]);
+    if (outgoing) {
+      await sendMessage(outgoing);
+    }
+    // Auto consumes new user messages in its normal loop. When idle, composer
+    // submit advances according to the selected continuation mode.
+    if (!autoRunning && !getBusy()) await continueConversation();
+  }, [text, sendMessage, continueConversation, autoRunning]);
 
   const handleToggleTools = useCallback(() => {
     mutateState(s => { s.settings.toolsEnabled = !s.settings.toolsEnabled; });
@@ -77,19 +80,19 @@ export function Composer({ showThoughts, onToggleThoughts }) {
           ref={taRef}
           value={text}
           onChange={(e) => { setText(e.target.value); autoresize(e.target); }}
-          placeholder="Join the forum — your message will trigger the next round…"
+          placeholder="Join the forum — Enter sends, empty Enter continues…"
           rows={1}
           onKeyDown={(e) => {
             if (e.key !== 'Enter') return;
             if (e.metaKey || e.ctrlKey) {
-              // Cmd/Ctrl+Enter: send if there's text, else advance a round
-              if (!text.trim()) { e.preventDefault(); if (!busy) runRound(); }
+              // Cmd/Ctrl+Enter follows the selected continuation mode too.
+              if (!text.trim()) { e.preventDefault(); if (!busy) continueConversation(); }
               else handleSubmit(e);
             } else if (!e.shiftKey) {
-              // Plain Enter: send if there's text, else take the next turn
+              // Plain Enter: send if there's text, else continue with the selected mode.
               e.preventDefault();
               if (text.trim()) handleSubmit(e);
-              else if (!busy) nextTurn();
+              else if (!busy) continueConversation();
             }
           }}
         />
@@ -119,8 +122,13 @@ export function Composer({ showThoughts, onToggleThoughts }) {
             📌 Note
           </button>
           <span className="grow" />
-          <button type="submit" className="send-btn" title="Send (Enter)" disabled={!text.trim()}>
-            <Ic.Send width={13} height={13} /> Send
+          <button
+            type="submit"
+            className="send-btn"
+            title={text.trim() ? `Send then continue via ${continueMode}` : `Continue via ${continueMode} (Enter)`}
+            disabled={!text.trim() && busy}
+          >
+            <Ic.Send width={13} height={13} /> {text.trim() ? 'Send' : 'Continue'}
             <span className="kbd">↵</span>
           </button>
         </div>

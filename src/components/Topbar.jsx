@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import * as Ic from './Icons';
 import { useForumState, mutateState, saveState } from '../hooks/useForumState';
-import { useActions, getConnectionStatus, getConnectionStatusVersion, subscribeBusy, getBusy, subscribeConnectionStatus } from '../hooks/useActions';
+import { useActions, getConnectionStatus, getConnectionStatusVersion, subscribeConnectionStatus } from '../hooks/useActions';
 import { useSyncExternalStore } from 'react';
 import { navigateToPanel } from '../hooks/navigation.js';
 
@@ -22,10 +22,7 @@ export function Topbar() {
   const roundNum = useForumState(s => s.currentRound || 0);
   const turnCount = useForumState(s => (s.messages || []).filter(m => m.type !== 'system').length);
   const autoRunning = useForumState(s => s.autoRunning);
-
-  // Busy state — disable manual transport controls while a turn/round is generating
-  useSyncExternalStore(subscribeBusy, getBusy);
-  const busy = getBusy();
+  const continueMode = useForumState(s => s.ui?.continueMode || 'next');
 
   // Connection status
   useSyncExternalStore(subscribeConnectionStatus, getConnectionStatusVersion);
@@ -33,7 +30,7 @@ export function Topbar() {
   const connClass = connStatus.tone === 'ok' ? 'live' : connStatus.tone === 'error' ? 'err' : '';
 
   const turboMode = useForumState(s => s.settings?.turboMode || false);
-  const { nextTurn, runRound, startAuto, stopGeneration, directorBrief } = useActions();
+  const { setContinueMode, stopGeneration, directorBrief } = useActions();
 
   const isSummarizing = useForumState(s => s.memory?.isSummarizing || false);
   const isExtracting = useForumState(s => s.outcomes?.isExtracting || false);
@@ -80,36 +77,36 @@ export function Topbar() {
 
       <div className="run-controls" role="group" aria-label="Run controls">
         <button
-          className={!autoRunning ? 'active' : ''}
           onClick={stopGeneration}
           title="Stop (Esc)"
-          aria-pressed={!autoRunning}
           aria-label="Stop"
         >
           <Ic.Stop width={12} height={12} /><span>Stop</span>
         </button>
         <button
-          onClick={nextTurn}
-          disabled={busy}
-          title="Next actor turn (Alt+N)"
-          aria-label="Next turn"
+          className={continueMode === 'next' && !autoRunning ? 'active' : ''}
+          onClick={() => setContinueMode('next')}
+          title="Continue mode: one routed speaker (Alt+N)"
+          aria-pressed={continueMode === 'next' && !autoRunning}
+          aria-label="Select Next mode"
         >
           <Ic.Step width={13} height={13} /><span>Next</span>
         </button>
         <button
-          onClick={runRound}
-          disabled={busy}
-          title="Run a full round (Alt+R)"
-          aria-label="Run round"
+          className={continueMode === 'round' && !autoRunning ? 'active' : ''}
+          onClick={() => setContinueMode('round')}
+          title="Continue mode: full round (Alt+R)"
+          aria-pressed={continueMode === 'round' && !autoRunning}
+          aria-label="Select Round mode"
         >
           <Ic.FastForward width={13} height={13} /><span>Round</span>
         </button>
         <button
-          className={autoRunning ? 'active' : ''}
-          onClick={startAuto}
-          title="Auto-run continuously (Alt+A)"
-          aria-pressed={autoRunning}
-          aria-label="Auto-run"
+          className={(continueMode === 'auto' || autoRunning) ? 'active' : ''}
+          onClick={() => setContinueMode('auto')}
+          title="Continue mode: auto-run until stopped or goal reached (Alt+A)"
+          aria-pressed={continueMode === 'auto' || autoRunning}
+          aria-label="Select Auto mode"
         >
           <Ic.Play width={12} height={12} /><span>Auto</span>
         </button>

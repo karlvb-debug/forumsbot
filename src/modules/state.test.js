@@ -82,6 +82,23 @@ describe('normalizeState — settings defaults', () => {
     const result = normalizeState({ settings: { toolsEnabled: true } });
     expect(result.settings.toolsEnabled).toBe(true);
   });
+
+  it('defaults missing globalStyleEnabled to true', () => {
+    const result = normalizeState({ settings: {} });
+    expect(result.settings.globalStyleEnabled).toBe(true);
+    expect(result.settings.globalStylePrompt).toContain('Use plain everyday language');
+  });
+
+  it('preserves explicit globalStyleEnabled false', () => {
+    const result = normalizeState({ settings: { globalStyleEnabled: false } });
+    expect(result.settings.globalStyleEnabled).toBe(false);
+  });
+
+  it('migrates legacy plainLanguageDefault false to globalStyleEnabled false', () => {
+    const result = normalizeState({ settings: { plainLanguageDefault: false } });
+    expect(result.settings.globalStyleEnabled).toBe(false);
+    expect(result.settings.plainLanguageDefault).toBeUndefined();
+  });
 });
 
 // ── pendingPauses normalization ───────────────────────────────────────────────

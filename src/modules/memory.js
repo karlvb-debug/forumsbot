@@ -3,6 +3,7 @@ import { state, saveState, logTransition } from './state.js';
 import { chatCompletion, getEmbedding, getEmbeddingsBatch, setStatus } from './api.js';
 import { saveState as _hookSaveState } from '../hooks/useForumState.js';
 import { setBusy, getBusy as getIsGenerating } from '../hooks/useActions.js';
+import { hideBackgroundActivity, showBackgroundActivity, updateBackgroundActivity } from '../hooks/useStreaming.js';
 import { getAllChunks, putChunk, clearChunks, countChunks, getAllMessages } from './db.js';
 import { trimWords, stringifyList, normalizeStringArray, extractKeywords, stringifyBullets, stripCodeFence, extractBalancedObjects, sanitizeJsonString, cosineSimilarity, appendMemory, formatTranscript } from './utils.js';
 
@@ -160,9 +161,11 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
   }
 
   const isBackground = reason === "cycle" || reason === "round";
+  let activityId = "";
 
   if (isBackground) {
     state.memory.status = "Updating memory in background..."; saveState();
+    activityId = showBackgroundActivity('Updating memory', 'Compressing recent turns into session memory.');
   } else {
     setBusy(true);
     setStatus("Updating memory...", "pending");
@@ -197,10 +200,9 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
     || !state.memory.sharedSummary; // always do full rewrite if no summary yet
 
   let cycleSucceeded = false;
-
-  let cycleSucceeded = false;
   try {
     if (isBackground && !needsFullRewrite) {
+      updateBackgroundActivity(activityId, { detail: 'Writing a short memory delta from recent turns.' });
       // ── DELTA path: short bullet update only ─────────────────────────────────
       const deltaSystem = [
         "You write a SHORT bullet-point update (3-5 bullets, max 120 words) summarising ONLY what just happened in these turns.",
@@ -247,6 +249,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
       }
 
     } else {
+      updateBackgroundActivity(activityId, { detail: 'Rebuilding the compact long-term session summary.' });
       // ── FULL REWRITE path: rebuild from deltas + archive ─────────────────────
       // Anchor the rewrite with pinned facts to prevent drift.
       const deltaContext = state.memory.recentDeltas.length
@@ -311,6 +314,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
     }
   } finally {
     state.memory.isSummarizing = false;
+    if (activityId) hideBackgroundActivity(activityId);
     if (isBackground) saveState();
     else setBusy(false);
   }

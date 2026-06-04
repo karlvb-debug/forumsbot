@@ -82,7 +82,7 @@ export default function App() {
   const showThoughts = useForumState(s => s.settings?.showThoughts || false);
   const autoRunning = useForumState(s => s.autoRunning || false);
 
-  const { nextTurn, runRound, startAuto, stopGeneration, directorBrief } = useActions();
+  const { stopGeneration, directorBrief, continueConversation, setContinueMode } = useActions();
   const stopModal = useForumState(s => s.ui?.stopModal || null);
   const confirmModal = useForumState(s => s.ui?.confirmModal || null);
   const pauseModal = useForumState(s => s.ui?.pauseModal || null);
@@ -119,6 +119,15 @@ export default function App() {
   useEffect(() => {
     const onKey = (e) => {
       const mod = e.metaKey || e.ctrlKey;
+      const target = e.target;
+      const tag = target?.tagName?.toLowerCase?.() || '';
+      const isEditableTarget = !!(
+        target?.isContentEditable ||
+        tag === 'textarea' ||
+        tag === 'input' ||
+        tag === 'select' ||
+        target?.closest?.('button,a,[role="button"],[contenteditable="true"]')
+      );
       // Escape — dismiss modal overlays by directly clearing state
       if (e.key === 'Escape') {
         // Force clear whichever modal is open, then try to resolve the promise chain
@@ -138,12 +147,28 @@ export default function App() {
       }
       // Ctrl+K / ⌘K — command palette
       if (mod && !e.shiftKey && !e.altKey && e.key === 'k') { e.preventDefault(); setCmdOpen(v => !v); return; }
-      // Alt+N — next turn (Ctrl+Shift+N / ⌘+Shift+N opens incognito window)
-      if (e.altKey && !mod && !e.shiftKey && e.code === 'KeyN') { e.preventDefault(); nextTurn(); return; }
-      // Alt+R — run full round (Ctrl+Shift+R / ⌘+Shift+R is hard reload)
-      if (e.altKey && !mod && !e.shiftKey && e.code === 'KeyR') { e.preventDefault(); runRound(); return; }
-      // Alt+A — toggle auto
-      if (e.altKey && !mod && !e.shiftKey && e.code === 'KeyA') { e.preventDefault(); startAuto(); return; }
+      // Enter — continue from anywhere that is not an editable/control surface.
+      if (
+        e.key === 'Enter' &&
+        !mod &&
+        !e.altKey &&
+        !e.shiftKey &&
+        !e.isComposing &&
+        !cmdOpen &&
+        !confirmModal &&
+        !stopModal &&
+        !pauseModal &&
+        !awaitingUserInput &&
+        !isEditableTarget
+      ) {
+        e.preventDefault();
+        continueConversation();
+        return;
+      }
+      // Alt+N/R/A — select what composer Continue does.
+      if (e.altKey && !mod && !e.shiftKey && e.code === 'KeyN') { e.preventDefault(); setContinueMode('next'); return; }
+      if (e.altKey && !mod && !e.shiftKey && e.code === 'KeyR') { e.preventDefault(); setContinueMode('round'); return; }
+      if (e.altKey && !mod && !e.shiftKey && e.code === 'KeyA') { e.preventDefault(); setContinueMode('auto'); return; }
       // Alt+I — toggle AI assistant (Ctrl+Shift+I / ⌘+Shift+I opens DevTools)
       if (e.altKey && !mod && !e.shiftKey && e.code === 'KeyI') { e.preventDefault(); mutateState(s => { s.ui.assistantOpen = !s.ui.assistantOpen; }); return; }
       // Ctrl+S / ⌘S — save session (prevent default browser save)
@@ -155,18 +180,18 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [nextTurn, runRound, startAuto]);
+  }, [setContinueMode, continueConversation, cmdOpen, confirmModal, stopModal, pauseModal, awaitingUserInput]);
 
   // ── Command palette handler ─────────────────────────────────
   const handleCommand = useCallback((item) => {
     if (item.kind === 'nav') {
       setActivePanel(item.id);
     } else if (item.id === 'act:next') {
-      nextTurn();
+      setContinueMode('next');
     } else if (item.id === 'act:round') {
-      runRound();
+      setContinueMode('round');
     } else if (item.id === 'act:auto') {
-      startAuto();
+      setContinueMode('auto');
     } else if (item.id === 'act:stop') {
       stopGeneration();
     } else if (item.id === 'act:nudge') {
@@ -179,7 +204,7 @@ export default function App() {
     } else if (item.id === 'act:export') {
       import('./modules/session.js').then(m => m.exportSession?.('debug'));
     }
-  }, [nextTurn, runRound, startAuto, stopGeneration]);
+  }, [setContinueMode, stopGeneration]);
 
   // Theme class on <html>
   useEffect(() => {
@@ -301,10 +326,10 @@ export default function App() {
             <div className="more-section">
               <div className="more-group-label">Run</div>
               <div className="more-grid">
-                <button className="more-item" onClick={() => { setSheet(null); nextTurn(); }}>
+                <button className="more-item" onClick={() => { setSheet(null); setContinueMode('next'); }}>
                   <Ic.Step width={20} height={20} /><span>Next</span>
                 </button>
-                <button className="more-item" onClick={() => { setSheet(null); runRound(); }}>
+                <button className="more-item" onClick={() => { setSheet(null); setContinueMode('round'); }}>
                   <Ic.Round width={20} height={20} /><span>Round</span>
                 </button>
                 {autoRunning ? (
@@ -312,7 +337,7 @@ export default function App() {
                     <Ic.Stop width={20} height={20} /><span>Stop</span>
                   </button>
                 ) : (
-                  <button className="more-item" onClick={() => { setSheet(null); startAuto(); }}>
+                  <button className="more-item" onClick={() => { setSheet(null); setContinueMode('auto'); }}>
                     <Ic.Play width={20} height={20} /><span>Auto</span>
                   </button>
                 )}
@@ -358,7 +383,7 @@ export default function App() {
             onMemory={() => { setActivePanel('memory'); setSheet('panel'); }}
             onMore={() => setSheet('more')}
             autoRunning={autoRunning}
-            onRun={nextTurn}
+            onRun={continueConversation}
             onStop={stopGeneration}
           />
         </>
