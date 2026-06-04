@@ -11,7 +11,6 @@ function normalizeDocumentEntry(e) {
     purpose: e.purpose || "",
     format: e.format || "",
     writerId: e.writerId || "",
-    target: (e.target === "all" || Array.isArray(e.target)) ? e.target : "all",
     enabled: e.enabled !== false,
     createdAt: e.createdAt || new Date().toISOString(),
     updatedAt: e.updatedAt || e.createdAt || new Date().toISOString(),
@@ -19,8 +18,6 @@ function normalizeDocumentEntry(e) {
     aiEditable: e.aiEditable === true,
     versions: Array.isArray(e.versions) ? e.versions : [],
     maxVersions: typeof e.maxVersions === "number" ? e.maxVersions : 20,
-    lineAttribution: Array.isArray(e.lineAttribution) ? e.lineAttribution : [],
-    showAttribution: !!e.showAttribution,
   };
 }
 
@@ -140,7 +137,6 @@ function normalizeState(value = {}) {
         type: "document",
         content: d.content || "",
         url: "",
-        target: "all",
         enabled: d.enabled !== false,
         aiEditable: true,
         createdAt: new Date().toISOString(),
@@ -148,8 +144,6 @@ function normalizeState(value = {}) {
         wordCount: (d.content || "").trim().split(/\s+/).filter(Boolean).length,
         versions: d.versions || [],
         maxVersions: d.maxVersions || 20,
-        lineAttribution: d.lineAttribution || [],
-        showAttribution: d.showAttribution || false,
       }));
     }
     merged.documents = docs;

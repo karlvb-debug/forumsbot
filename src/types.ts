@@ -185,15 +185,12 @@ export interface SharedDocument {
   content: string;
   type?: 'document' | 'link';
   url?: string;
-  target?: 'all' | string[];
   purpose?: string;
   format?: string;
   writerId?: string;
   aiEditable?: boolean;
   versions: DocumentVersion[];
   maxVersions: number;
-  lineAttribution: LineAttribution[];
-  showAttribution: boolean;
 }
 
 export interface DocumentVersion {
@@ -202,12 +199,6 @@ export interface DocumentVersion {
   at?: string;
   speaker?: string;
   chars?: number;
-}
-
-export interface LineAttribution {
-  line: string;
-  speaker: string;
-  color: string;
 }
 
 export interface Scenario {

@@ -110,8 +110,6 @@ export function DocEditorStage({ transcript, composer }) {
     return null;
   }
 
-  const enabledActors = actors.filter(a => a.enabled);
-  const attrLines = doc.lineAttribution || [];
   const versions = doc.versions || [];
   const wordCount = doc.wordCount || 0;
   const writerActors = actors.filter(a => a.enabled && a.canWriteDocuments);
@@ -358,23 +356,6 @@ export function DocEditorStage({ transcript, composer }) {
                 </div>
               </div>
             ))}
-          </div>
-        )}
-
-        {/* Attribution bars */}
-        {doc.aiEditable && enabledActors.length > 0 && attrLines.length > 0 && (
-          <div className="doc-editor-attribution">
-            {enabledActors.map(a => {
-              const pct = Math.round((attrLines.filter(l => l.author === a.name).length / attrLines.length) * 100);
-              if (!pct) return null;
-              return (
-                <div className="influence-row" key={a.id}>
-                  <span style={{ minWidth: 60, color: 'var(--fg-dim)', fontSize: 'var(--fs-sm)' }}>{a.name}</span>
-                  <div className="influence-bar"><div style={{ width: `${pct}%`, background: a.color }} /></div>
-                  <span className="influence-pct">{pct}%</span>
-                </div>
-              );
-            })}
           </div>
         )}
       </div>

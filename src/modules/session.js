@@ -141,7 +141,7 @@ export async function exportSession(mode = 'debug') {
         goal: state.autoStop.goal,
         roundsRun: state.autoStop.roundsRun
       },
-      sessionMetrics: calculateSessionMetrics(messages, (state.documents || []).filter(d => d.aiEditable).flatMap(d => d.lineAttribution || [])),
+      sessionMetrics: calculateSessionMetrics(messages),
       telemetry: {
         currentAlignmentScore: state.telemetry?.currentAlignmentScore,
         alignmentHistory: state.telemetry?.alignmentHistory
@@ -1363,7 +1363,6 @@ export async function applyBlueprint(id) {
         format: spec.format || '',
         writerId: designatedWriter?.id || '',
         aiEditable: true,
-        target: 'all',
         enabled: true,
         wordCount: countWords(spec.content || ''),
       });

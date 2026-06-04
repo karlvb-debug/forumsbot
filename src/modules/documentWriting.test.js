@@ -32,10 +32,6 @@ vi.mock('./knowledge.js', () => ({
   resolveDesignatedWriter: vi.fn(() => mockState.actors.find(a => a.id === mockState.documentWriting.designatedWriterId) || null),
 }));
 
-vi.mock('./telemetry.js', () => ({
-  alignLineAttributions: vi.fn((oldLines, newLines, oldAttrs, author) => newLines.map(() => ({ author }))),
-}));
-
 vi.mock('./turns.js', () => ({
   addMessage: vi.fn(async () => {}),
 }));

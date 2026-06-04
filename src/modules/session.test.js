@@ -207,7 +207,6 @@ describe('blueprints', () => {
     // Working documents stay readable to the room, but edits go through the designated writer.
     for (const d of state.documents) {
       expect(d.aiEditable).toBe(true);
-      expect(d.target).toBe('all');
     }
     // The Prose Writer carries its drafting budget and owns document-writing tasks.
     const writer = state.actors.find(a => a.role === 'Drafting Lead');

@@ -65,31 +65,31 @@ export async function deleteKbEntry(id) {
 
 // ── Query helpers ────────────────────────────────────────────────────────────
 
-function matchesActor(entry, actorId) {
-  return entry.enabled !== false &&
-    (entry.target === "all" || (Array.isArray(entry.target) && entry.target.includes(actorId)));
+// All enabled documents are visible to every actor. (Per-actor document
+// targeting was removed — it defaulted to "all" everywhere and had no use.)
+function isDocVisible(entry) {
+  return entry.enabled !== false;
 }
 
-export async function getKbEntriesForActor(actorId) {
-  return (state.documents || []).filter(e => matchesActor(e, actorId));
+export async function getKbEntriesForActor() {
+  return (state.documents || []).filter(isDocVisible);
 }
 
 export async function getKbEntriesForDirector() {
-  return (state.documents || []).filter(e => e.enabled !== false && e.target === "all");
+  return (state.documents || []).filter(isDocVisible);
 }
 
-// Split documents into editable (aiEditable=true) and reference (aiEditable=false) sets
-// filtered to what the given actorId can see.
-export function splitDocuments(actorId) {
-  const all = (state.documents || []).filter(e => matchesActor(e, actorId));
+// Split documents into editable (aiEditable=true) and reference (aiEditable=false) sets.
+export function splitDocuments() {
+  const all = (state.documents || []).filter(isDocVisible);
   return {
     editable: all.filter(e => e.aiEditable),
     reference: all.filter(e => !e.aiEditable),
   };
 }
 
-export function actorCanReadDocument(entry, actorId) {
-  return matchesActor(entry, actorId);
+export function actorCanReadDocument(entry) {
+  return isDocVisible(entry);
 }
 
 export function resolveDesignatedWriter() {
@@ -137,8 +137,8 @@ export function ensureDefaultWriter() {
   return writer;
 }
 
-export function getDocumentsForActor(actorId) {
-  return (state.documents || []).filter(e => matchesActor(e, actorId));
+export function getDocumentsForActor() {
+  return (state.documents || []).filter(isDocVisible);
 }
 
 // ── Prompt injection ─────────────────────────────────────────────────────────
@@ -147,36 +147,6 @@ export function getDocumentsForActor(actorId) {
 // maxSection is in chars (~4 chars per token).
 // Default is a conservative fallback used when no model context info is available.
 const KB_SECTION_MAX_DEFAULT = 3000;
-
-// Water-fill allocation: give each entry what it actually needs, redistribute
-// leftover space to entries that need more. A 500-char entry doesn't consume
-// space reserved for a 60K-char entry.
-function allocateChars(needs, budget) {
-  const alloc = needs.map(() => 0);
-  let pending = needs.map((_, i) => i);
-  let rem = budget;
-  while (pending.length > 0 && rem > 0) {
-    const share = Math.floor(rem / pending.length);
-    if (share === 0) break;
-    const next = [];
-    for (const i of pending) {
-      if (needs[i] <= share) {
-        alloc[i] = needs[i];
-        rem -= needs[i];
-      } else {
-        next.push(i);
-      }
-    }
-    if (next.length === pending.length) {
-      // No entry fits fully in its share — distribute remaining evenly
-      const even = Math.floor(rem / next.length);
-      for (const i of next) alloc[i] = even;
-      break;
-    }
-    pending = next;
-  }
-  return alloc;
-}
 
 export function buildDocumentManifestSection(docs) {
   if (!docs || !docs.length) return "";
@@ -210,17 +180,14 @@ export function buildReferenceSection(docs, { maxSection = KB_SECTION_MAX_DEFAUL
 
 export function buildKbSection(entries, { maxSection = KB_SECTION_MAX_DEFAULT } = {}) {
   if (!entries || !entries.length) return "";
-  // Estimate overhead: header + separators + titles
-  const overhead = 18 + Math.max(0, entries.length - 1) * 8
-    + entries.reduce((s, e) => s + (e.title || "Untitled").length + 5, 0);
-  const contentBudget = Math.max(100, maxSection - overhead);
-  const needs = entries.map(e => (e.content || "").length);
-  const allocs = allocateChars(needs, contentBudget);
-
-  const parts = entries.map((e, i) => {
-    const cap = allocs[i];
-    const content = (e.content || "").slice(0, cap);
-    const suffix = needs[i] > cap ? "\n…[truncated]" : "";
+  // Simple even per-document cap: split the budget equally and truncate each
+  // document to its share. (Replaced an over-engineered water-fill allocator —
+  // for the handful of docs in play, an even cap is indistinguishable and clear.)
+  const perDoc = Math.max(200, Math.floor(maxSection / entries.length));
+  const parts = entries.map(e => {
+    const full = e.content || "";
+    const content = full.slice(0, perDoc);
+    const suffix = full.length > perDoc ? "\n…[truncated]" : "";
     return `### ${e.title || "Untitled"}\n${content}${suffix}`;
   });
   return "## Knowledge Base\n" + parts.join("\n\n---\n\n");
@@ -258,7 +225,6 @@ export function newDocument(overrides = {}) {
     purpose: "",
     format: "",
     writerId: "",
-    target: "all",
     enabled: true,
     createdAt: now,
     updatedAt: now,
@@ -266,8 +232,6 @@ export function newDocument(overrides = {}) {
     aiEditable: false,
     versions: [],
     maxVersions: 20,
-    lineAttribution: [],
-    showAttribution: false,
     ...overrides
   };
 }

@@ -47,27 +47,6 @@ export function DocPanel() {
           </div>
         )}
       </div>
-
-      {actors.filter(a => a.enabled).length > 0 && (
-        <div className="card">
-          <div className="card-title"><h3>Attribution</h3></div>
-          {(() => {
-            const lines = doc.lineAttribution || [];
-            return actors.filter(a => a.enabled).map(a => {
-              const actorLines = lines.filter(l => l.author === a.name).length;
-              const pct = lines.length ? Math.round((actorLines / lines.length) * 100) : 0;
-              return (
-                <div className="influence-row" key={a.id}>
-                  <span style={{ minWidth: 50, color: "var(--fg-dim)" }}>{a.name}</span>
-                  <div className="influence-bar"><div style={{ width: `${pct}%`, background: a.color }} /></div>
-                  <span className="influence-pct">{pct}%</span>
-                </div>
-              );
-            });
-          })()}
-          {!(doc.lineAttribution?.length) && <div className="field-hint" style={{ marginTop: 4 }}>Attribution populates as actors edit the document.</div>}
-        </div>
-      )}
     </div>
   );
 }

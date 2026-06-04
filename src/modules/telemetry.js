@@ -34,49 +34,6 @@ export function scaledJaccardSimilarity(textA, textB) {
   return 0.3 + 0.7 * jaccard;
 }
 
-// LCS-based Line Level Attribution Engine (Myers-style LCS)
-export function alignLineAttributions(oldLines, newLines, oldAttributions, currentAuthor, versionIndex) {
-  const m = oldLines.length;
-  const n = newLines.length;
-  
-  // DP table for LCS
-  const dp = Array.from({ length: m + 1 }, () => new Int32Array(n + 1));
-  
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      if (oldLines[i - 1].trim() === newLines[j - 1].trim()) {
-        dp[i][j] = dp[i - 1][j - 1] + 1;
-      } else {
-        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-      }
-    }
-  }
-  
-  // Backtrack to find LCS alignment
-  const newAttributions = new Array(n);
-  let i = m, j = n;
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && oldLines[i - 1].trim() === newLines[j - 1].trim()) {
-      newAttributions[j - 1] = oldAttributions[i - 1] || { author: oldAttributions[i - 1]?.author || "System", versionIndex };
-      i--;
-      j--;
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      newAttributions[j - 1] = { author: currentAuthor, versionIndex };
-      j--;
-    } else {
-      i--;
-    }
-  }
-  
-  // Final safeguard: fill any empty attributions
-  for (let k = 0; k < n; k++) {
-    if (!newAttributions[k]) {
-      newAttributions[k] = { author: currentAuthor, versionIndex };
-    }
-  }
-  return newAttributions;
-}
-
 // Debounced telemetry semantic alignment updater
 let isTelemetryUpdating = false;
 export async function updateSemanticAlignment() {
@@ -161,7 +118,7 @@ function dispatchTelemetryUpdate() {
 }
 
 // Calculate session level metrics
-export function calculateSessionMetrics(messages, lineAttribution) {
+export function calculateSessionMetrics(messages) {
   const completedMessages = messages.filter(m => m.type === "actor" || m.type === "dm");
   const skipMessages = messages.filter(m => m.type === "skip");
   const totalCompleted = completedMessages.length;

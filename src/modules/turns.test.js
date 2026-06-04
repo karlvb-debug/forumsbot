@@ -103,7 +103,6 @@ vi.mock('./memory.js', () => ({
 
 vi.mock('./telemetry.js', () => ({
   updateSemanticAlignment: vi.fn(),
-  alignLineAttributions: vi.fn(() => []),
 }));
 
 vi.mock('./preflight.js', () => ({

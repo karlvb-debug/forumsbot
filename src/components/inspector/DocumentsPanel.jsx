@@ -106,37 +106,6 @@ function DocRow({ entry, actors, writerActors, designatedWriterId, onUpdate, onD
             </div>
           )}
 
-          <div className="doc-row-setting">
-            <label>Read visibility</label>
-            <select
-              value={entry.target === 'all' ? 'all' : 'specific'}
-              onChange={(e) => update({ target: e.target.value === 'all' ? 'all' : [] })}
-            >
-              <option value="all">All actors</option>
-              <option value="specific">Selected actors…</option>
-            </select>
-          </div>
-
-          {Array.isArray(entry.target) && (
-            <div className="doc-row-actors">
-              {actors.filter(a => a.enabled).map(a => (
-                <label key={a.id}>
-                  <input
-                    type="checkbox"
-                    checked={entry.target.includes(a.id)}
-                    onChange={(e) => {
-                      const next = e.target.checked
-                        ? [...entry.target, a.id]
-                        : entry.target.filter(id => id !== a.id);
-                      update({ target: next });
-                    }}
-                  />
-                  {a.name}
-                </label>
-              ))}
-            </div>
-          )}
-
           <div className="doc-row-setting vertical">
             <label>Purpose</label>
             <textarea

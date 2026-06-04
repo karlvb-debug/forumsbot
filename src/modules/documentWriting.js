@@ -4,7 +4,6 @@ import { WORD_LIMITS } from './constants.js';
 import { trimWords } from './utils.js';
 import { buildDocumentWriterPromptLine, buildDocumentWriterSchema } from './schemas.js';
 import { actorCanReadDocument, countWords, ensureDefaultWriter, putKbEntry, resolveDesignatedWriter } from './knowledge.js';
-import { alignLineAttributions } from './telemetry.js';
 import { hideBackgroundActivity, showBackgroundActivity, updateBackgroundActivity } from '../hooks/useStreaming.js';
 
 function nowIso() {
@@ -217,7 +216,6 @@ export async function createAndRunDocumentTask(options, signal = null) {
 async function commitEditsToDoc(doc, nextContent, writerName) {
   const prev = doc.content || "";
   doc.versions = [...(doc.versions || []), { author: writerName, content: prev, timestamp: nowIso() }].slice(-(doc.maxVersions || 20));
-  doc.lineAttribution = alignLineAttributions(prev.split("\n"), nextContent.split("\n"), doc.lineAttribution || [], writerName, doc.versions.length);
   doc.content = nextContent;
   doc.updatedAt = nowIso();
   doc.wordCount = countWords(nextContent);
