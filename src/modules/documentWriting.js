@@ -214,6 +214,16 @@ export async function createAndRunDocumentTask(options, signal = null) {
   return runDocumentTask(task.id, signal);
 }
 
+async function commitEditsToDoc(doc, nextContent, writerName) {
+  const prev = doc.content || "";
+  doc.versions = [...(doc.versions || []), { author: writerName, content: prev, timestamp: nowIso() }].slice(-(doc.maxVersions || 20));
+  doc.lineAttribution = alignLineAttributions(prev.split("\n"), nextContent.split("\n"), doc.lineAttribution || [], writerName, doc.versions.length);
+  doc.content = nextContent;
+  doc.updatedAt = nowIso();
+  doc.wordCount = countWords(nextContent);
+  await putKbEntry(doc);
+}
+
 export async function acceptDocumentProposal(proposalId) {
   const proposal = (state.pendingDocumentEdits || []).find(p => p.id === proposalId);
   if (!proposal || proposal.status !== "pending") return false;
@@ -230,16 +240,9 @@ export async function acceptDocumentProposal(proposalId) {
     saveState();
     return false;
   }
-  const prev = doc.content || "";
-  const next = proposal.previewContent;
-  doc.versions = [...(doc.versions || []), { author: proposal.writerName, content: prev, timestamp: nowIso() }].slice(-(doc.maxVersions || 20));
-  doc.lineAttribution = alignLineAttributions(prev.split("\n"), next.split("\n"), doc.lineAttribution || [], proposal.writerName, doc.versions.length);
-  doc.content = next;
-  doc.updatedAt = nowIso();
-  doc.wordCount = countWords(next);
+  await commitEditsToDoc(doc, proposal.previewContent, proposal.writerName);
   proposal.status = "accepted";
   proposal.resolvedAt = nowIso();
-  await putKbEntry(doc);
   saveState();
   logTransition("document_proposal_accepted", { documentId: doc.id, writer: proposal.writerName });
   return true;
@@ -253,4 +256,198 @@ export function rejectDocumentProposal(proposalId) {
   saveState();
   logTransition("document_proposal_rejected", { documentId: proposal.documentId, writer: proposal.writerName });
   return true;
+}
+
+// ── Scribe autonomy ─────────────────────────────────────────────────────────────
+// Four modes live on state.documentWriting.scribeMode:
+//   manual       — Scribe never self-initiates; only panel / inline-comment fires it.
+//   ask          — Scribe judges each turn; posts a yes/no suggestion before drafting.
+//   auto_review  — Scribe judges and drafts; user accepts/rejects the proposal.
+//   auto_apply   — Scribe judges, drafts, and applies directly (versioned, undoable).
+// Across modes the Scribe is told it MAY return an empty edits array to mean
+// "nothing worth recording this turn" — that's the gating mechanism.
+
+function pickScribeTargetDoc(writer) {
+  const docs = (state.documents || []).filter(d => d.enabled !== false && d.aiEditable);
+  if (!docs.length) return null;
+  const ownDoc = docs.find(d => d.writerId === writer.id && actorCanReadDocument(d, writer.id));
+  if (ownDoc) return ownDoc;
+  return docs.find(d => actorCanReadDocument(d, writer.id)) || null;
+}
+
+async function judgeAndDraft(writer, doc, signal, { instruction = null } = {}) {
+  const lineNumbered = (content) => {
+    const lines = String(content || "").split("\n");
+    return lines.map((line, i) => `${String(i + 1).padStart(3)} | ${line}`).join("\n");
+  };
+  const recent = recentTranscript();
+  const system = [
+    `You are ${writer.name}, the designated document writer for this forum.`,
+    writer.role ? `Role: ${writer.role}` : "",
+    writer.persona ? `Persona: ${writer.persona}` : "",
+    writer.goal ? `Goal: ${writer.goal}` : "",
+    writer.voice ? `Writing voice: ${writer.voice}` : "",
+    state.settings?.globalStyleEnabled === false || !String(state.settings?.globalStylePrompt || "").trim()
+      ? ""
+      : `GLOBAL STYLE: ${String(state.settings.globalStylePrompt).trim()}`,
+    "You are running an autonomous pass between conversation turns. Your job is to decide whether the discussion has produced anything worth recording in the target document, and if so, draft the edit.",
+    "IMPORTANT: It is fine — and often correct — to return an empty documentEdits array. Only write when the recent turns introduced a concrete decision, a new fact, a resolved question, or content the user would clearly want captured. Do NOT record speculation, restatements of earlier content, or your own commentary.",
+    "When you do write, produce coherent prose in your assigned voice, not a literal paste of the transcript.",
+    buildDocumentWriterPromptLine()
+  ].filter(Boolean).join("\n");
+
+  const user = [
+    `Scenario: ${state.scenario?.title || "Untitled forum"}`,
+    state.scenario?.objective ? `Objective: ${state.scenario.objective}` : "",
+    instruction ? `User request: ${instruction}` : "Task: Decide whether the latest turns introduced anything worth capturing in the target document. If yes, propose the edit. If no, return documentEdits: [].",
+    "",
+    `Target document: ${doc.title || "Untitled"} [id: ${doc.id}]`,
+    doc.purpose ? `Purpose: ${doc.purpose}` : "",
+    doc.format ? `Format: ${doc.format}` : "",
+    "",
+    `Full target document with line numbers:\n${lineNumbered(doc.content || "") || "(empty document)"}`,
+    "",
+    `Recent transcript:\n${recent || "No transcript yet."}`,
+  ].filter(Boolean).join("\n");
+
+  const result = await chatStructured(system, user, buildDocumentWriterSchema(), {
+    temperature: writer.temperature ?? state.settings.temperature,
+    maxTokens: writer.maxTokens || state.settings.maxTokens,
+    signal
+  });
+  const edits = sanitizeDocumentEdits(result.documentEdits, doc.id);
+  return {
+    edits,
+    summary: String(result.summary || "").slice(0, 240),
+    previewContent: edits.length ? applyEditsToContent(doc.content || "", edits, doc.id) : (doc.content || "")
+  };
+}
+
+async function postTranscriptNote(payload) {
+  try {
+    const mod = await import('./turns.js');
+    await mod.addMessage(payload);
+  } catch (err) {
+    console.warn('[scribe] could not post transcript note:', err?.message || err);
+  }
+}
+
+export async function runScribePass(signal = null, { instruction = null } = {}) {
+  const mode = state.documentWriting?.scribeMode || "auto_apply";
+  if (mode === "manual" && !instruction) return null;
+
+  const writer = resolveDesignatedWriter();
+  if (!writer) return null;
+  const doc = pickScribeTargetDoc(writer);
+  if (!doc) return null;
+
+  let draft;
+  try {
+    draft = await judgeAndDraft(writer, doc, signal, { instruction });
+  } catch (err) {
+    if (err?.name === "AbortError") return null;
+    console.warn('[scribe] judgeAndDraft failed:', err?.message || err);
+    return null;
+  }
+  if (!draft.edits.length) return null;
+
+  const effectiveMode = instruction ? "auto_apply" : mode;
+
+  if (effectiveMode === "ask") {
+    const suggestion = {
+      id: crypto.randomUUID(),
+      documentId: doc.id,
+      actorId: writer.id,
+      writerName: writer.name,
+      writerColor: writer.color || "var(--accent)",
+      summary: draft.summary || `Capture an update in ${doc.title || "the document"}.`,
+      edits: draft.edits,
+      previewContent: draft.previewContent,
+      baseHash: hashDocumentContent(doc.content || ""),
+      status: "pending",
+      createdAt: nowIso()
+    };
+    if (!Array.isArray(state.pendingScribeSuggestions)) state.pendingScribeSuggestions = [];
+    state.pendingScribeSuggestions.unshift(suggestion);
+    saveState();
+    logTransition("scribe_suggestion_offered", { documentId: doc.id, writer: writer.name });
+    return suggestion;
+  }
+
+  if (effectiveMode === "auto_review") {
+    const proposal = {
+      id: crypto.randomUUID(),
+      taskId: null,
+      documentId: doc.id,
+      actorId: writer.id,
+      writerName: writer.name,
+      summary: draft.summary || "Proposed document update.",
+      edits: draft.edits,
+      previewContent: draft.previewContent,
+      baseHash: hashDocumentContent(doc.content || ""),
+      status: "pending",
+      createdAt: nowIso(),
+      resolvedAt: ""
+    };
+    if (!Array.isArray(state.pendingDocumentEdits)) state.pendingDocumentEdits = [];
+    state.pendingDocumentEdits.unshift(proposal);
+    saveState();
+    logTransition("scribe_proposal_created", { documentId: doc.id, writer: writer.name, edits: draft.edits.length });
+    return proposal;
+  }
+
+  // auto_apply (default + after-ask-accept path)
+  await commitEditsToDoc(doc, draft.previewContent, writer.name);
+  saveState();
+  logTransition("scribe_auto_applied", { documentId: doc.id, writer: writer.name, edits: draft.edits.length });
+  await postTranscriptNote({
+    type: "system",
+    speaker: writer.name,
+    color: writer.color || "var(--accent)",
+    content: `Updated "${doc.title || "Untitled"}": ${draft.summary || "applied document edits"}.`
+  });
+  return { applied: true, documentId: doc.id, summary: draft.summary };
+}
+
+export async function acceptScribeSuggestion(suggestionId) {
+  const suggestion = (state.pendingScribeSuggestions || []).find(s => s.id === suggestionId);
+  if (!suggestion || suggestion.status !== "pending") return false;
+  const doc = resolveWritableDocument(suggestion.documentId);
+  if (!doc) {
+    suggestion.status = "conflicted";
+    suggestion.resolvedAt = nowIso();
+    saveState();
+    return false;
+  }
+  if (hashDocumentContent(doc.content || "") !== suggestion.baseHash) {
+    suggestion.status = "conflicted";
+    suggestion.resolvedAt = nowIso();
+    saveState();
+    return false;
+  }
+  await commitEditsToDoc(doc, suggestion.previewContent, suggestion.writerName);
+  suggestion.status = "accepted";
+  suggestion.resolvedAt = nowIso();
+  saveState();
+  logTransition("scribe_suggestion_accepted", { documentId: doc.id, writer: suggestion.writerName });
+  return true;
+}
+
+export function dismissScribeSuggestion(suggestionId) {
+  const suggestion = (state.pendingScribeSuggestions || []).find(s => s.id === suggestionId);
+  if (!suggestion || suggestion.status !== "pending") return false;
+  suggestion.status = "dismissed";
+  suggestion.resolvedAt = nowIso();
+  saveState();
+  logTransition("scribe_suggestion_dismissed", { documentId: suggestion.documentId });
+  return true;
+}
+
+const INLINE_SCRIBE_CMD = /\b(scribe|writer)[,!:]?\s+(write|capture|record|update|draft|note|add)\b|\badd\s+(that|this)\s+to\s+(the\s+)?(doc|document|notes?)\b|\bwrite\s+(this|that|it)\s+(up|down)\b|\bupdate\s+(the\s+)?(doc|document)\b/i;
+
+export function detectInlineScribeRequest(text) {
+  const str = String(text || "");
+  if (!str.trim()) return null;
+  if (!INLINE_SCRIBE_CMD.test(str)) return null;
+  return str.trim().slice(0, 500);
 }

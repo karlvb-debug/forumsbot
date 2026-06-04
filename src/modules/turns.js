@@ -390,6 +390,17 @@ export async function fireUserMessageTriggers(message) {
   if (!alreadyBusy) setBusy(true);
   try {
     _recentUserTriggerActorIds = await fireTriggerActors('on_user_message', { message });
+    // Inline Scribe command — works regardless of scribeMode (so users can still
+    // ask the Scribe to write even when autonomy is set to "manual").
+    try {
+      const docMod = await import('./documentWriting.js');
+      const instruction = docMod.detectInlineScribeRequest(message);
+      if (instruction) {
+        await docMod.runScribePass(null, { instruction });
+      }
+    } catch (err) {
+      console.warn('[scribe] inline request failed:', err?.message || err);
+    }
   } finally {
     if (!alreadyBusy) setBusy(false);
     _pipelineActive = false;
@@ -672,6 +683,16 @@ async function _runTurn(options = {}) {
       // immediately re-fire on itself).
       _globalTurnIndex += 1;
       await runBetweenTurnActors(abortController.signal, participant.data.id);
+
+      // Scribe autonomy pass — runs once per turn after between-turn orchestration.
+      // Honors state.documentWriting.scribeMode (manual skips entirely). Failures
+      // are intentionally swallowed: a writer hiccup must never break the loop.
+      try {
+        const docMod = await import('./documentWriting.js');
+        await docMod.runScribePass(abortController?.signal || null);
+      } catch (err) {
+        console.warn('[scribe] pass failed:', err?.message || err);
+      }
 
       // Sprint 6: Distill cross-session actor memory (fire-and-forget)
       if (result.thought && state.settings.enableCrossSessionMemory !== false && !state.settings.turboMode) {

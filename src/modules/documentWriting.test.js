@@ -36,12 +36,21 @@ vi.mock('./telemetry.js', () => ({
   alignLineAttributions: vi.fn((oldLines, newLines, oldAttrs, author) => newLines.map(() => ({ author }))),
 }));
 
+vi.mock('./turns.js', () => ({
+  addMessage: vi.fn(async () => {}),
+}));
+
 import {
   acceptDocumentProposal,
+  acceptScribeSuggestion,
   applyEditsToContent,
   createDocumentTask,
+  detectInlineScribeRequest,
+  dismissScribeSuggestion,
   hashDocumentContent,
+  runScribePass,
 } from './documentWriting.js';
+import { chatStructured } from './api.js';
 
 describe('documentWriting', () => {
   beforeEach(() => {
@@ -110,5 +119,125 @@ describe('documentWriting', () => {
     await expect(acceptDocumentProposal('p1')).resolves.toBe(false);
     expect(mockState.documents[0].content).toBe('one\ntwo\nthree');
     expect(mockState.pendingDocumentEdits[0].status).toBe('conflicted');
+  });
+});
+
+describe('scribe autonomy modes', () => {
+  beforeEach(() => {
+    mockState.actors = [
+      { id: 'w1', name: 'Scribe', enabled: true, canWriteDocuments: true, color: '#abc' }
+    ];
+    mockState.documents = [
+      { id: 'd1', title: 'Notes', content: 'one\ntwo', enabled: true, aiEditable: true, versions: [], lineAttribution: [] }
+    ];
+    mockState.documentWriting = { designatedWriterId: 'w1', scribeMode: 'auto_apply' };
+    mockState.pendingDocumentEdits = [];
+    mockState.pendingScribeSuggestions = [];
+    chatStructured.mockReset();
+  });
+
+  it('manual mode skips the pass entirely (no model call)', async () => {
+    mockState.documentWriting.scribeMode = 'manual';
+    const result = await runScribePass(null);
+    expect(result).toBeNull();
+    expect(chatStructured).not.toHaveBeenCalled();
+  });
+
+  it('returns null when the model judges nothing worth recording (empty edits)', async () => {
+    chatStructured.mockResolvedValueOnce({ thought: '', summary: '', documentEdits: [] });
+    const result = await runScribePass(null);
+    expect(result).toBeNull();
+    expect(mockState.pendingDocumentEdits).toHaveLength(0);
+    expect(mockState.pendingScribeSuggestions).toHaveLength(0);
+    expect(mockState.documents[0].content).toBe('one\ntwo');
+  });
+
+  it('auto_apply commits the edit directly to the document', async () => {
+    chatStructured.mockResolvedValueOnce({
+      thought: '',
+      summary: 'Recorded the decision.',
+      documentEdits: [{ documentId: 'd1', op: 'append', content: 'three' }]
+    });
+    const result = await runScribePass(null);
+    expect(result?.applied).toBe(true);
+    expect(mockState.documents[0].content).toBe('one\ntwo\n\nthree');
+    expect(mockState.pendingDocumentEdits).toHaveLength(0);
+    expect(mockState.pendingScribeSuggestions).toHaveLength(0);
+  });
+
+  it('auto_review files a pending proposal without touching the document', async () => {
+    mockState.documentWriting.scribeMode = 'auto_review';
+    chatStructured.mockResolvedValueOnce({
+      thought: '',
+      summary: 'Drafted update.',
+      documentEdits: [{ documentId: 'd1', op: 'append', content: 'three' }]
+    });
+    const result = await runScribePass(null);
+    expect(result?.status).toBe('pending');
+    expect(mockState.pendingDocumentEdits).toHaveLength(1);
+    expect(mockState.documents[0].content).toBe('one\ntwo');
+  });
+
+  it('ask mode queues a suggestion; accepting it applies the edit', async () => {
+    mockState.documentWriting.scribeMode = 'ask';
+    chatStructured.mockResolvedValueOnce({
+      thought: '',
+      summary: 'Capture the decision.',
+      documentEdits: [{ documentId: 'd1', op: 'append', content: 'three' }]
+    });
+    const suggestion = await runScribePass(null);
+    expect(suggestion?.status).toBe('pending');
+    expect(mockState.pendingScribeSuggestions).toHaveLength(1);
+    expect(mockState.documents[0].content).toBe('one\ntwo');
+
+    await expect(acceptScribeSuggestion(suggestion.id)).resolves.toBe(true);
+    expect(mockState.documents[0].content).toBe('one\ntwo\n\nthree');
+    expect(mockState.pendingScribeSuggestions[0].status).toBe('accepted');
+  });
+
+  it('ask mode suggestions can be dismissed without applying', async () => {
+    mockState.documentWriting.scribeMode = 'ask';
+    chatStructured.mockResolvedValueOnce({
+      thought: '',
+      summary: 'Capture the decision.',
+      documentEdits: [{ documentId: 'd1', op: 'append', content: 'three' }]
+    });
+    const suggestion = await runScribePass(null);
+    expect(dismissScribeSuggestion(suggestion.id)).toBe(true);
+    expect(mockState.pendingScribeSuggestions[0].status).toBe('dismissed');
+    expect(mockState.documents[0].content).toBe('one\ntwo');
+  });
+
+  it('inline instruction overrides manual mode and applies directly', async () => {
+    mockState.documentWriting.scribeMode = 'manual';
+    chatStructured.mockResolvedValueOnce({
+      thought: '',
+      summary: 'Captured per user request.',
+      documentEdits: [{ documentId: 'd1', op: 'append', content: 'three' }]
+    });
+    const result = await runScribePass(null, { instruction: 'scribe, add that' });
+    expect(result?.applied).toBe(true);
+    expect(mockState.documents[0].content).toBe('one\ntwo\n\nthree');
+  });
+});
+
+describe('detectInlineScribeRequest', () => {
+  it.each([
+    'Scribe, write that up.',
+    'scribe write the decision',
+    'Add that to the doc',
+    'Update the document with the latest decision',
+    'write this up in the notes',
+  ])('detects: %s', (text) => {
+    expect(detectInlineScribeRequest(text)).toBe(text.trim());
+  });
+
+  it.each([
+    'How does the scribe work?',
+    'Random conversation about writing.',
+    '',
+    '   ',
+  ])('ignores: %s', (text) => {
+    expect(detectInlineScribeRequest(text)).toBeNull();
   });
 });

@@ -173,7 +173,8 @@ export const defaultState = {
     status: "Auto-stop ready."
   },
   documentWriting: {
-    designatedWriterId: ""
+    designatedWriterId: "",
+    scribeMode: "auto_apply"
   },
   documents: [],
   documentTasks: [],

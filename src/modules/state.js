@@ -320,6 +320,10 @@ function normalizeState(value = {}) {
     const fallbackWriter = merged.actors.find(a => a.enabled && a.canWriteDocuments);
     merged.documentWriting.designatedWriterId = fallbackWriter?.id || "";
   }
+  const validScribeModes = ["manual", "ask", "auto_review", "auto_apply"];
+  if (!validScribeModes.includes(merged.documentWriting.scribeMode)) {
+    merged.documentWriting.scribeMode = "auto_apply";
+  }
   return merged;
 }
 

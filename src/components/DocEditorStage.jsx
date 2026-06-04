@@ -14,7 +14,9 @@ export function DocEditorStage({ transcript, composer }) {
   const documents = useForumState(s => s.documents || []);
   const actors = useForumState(s => s.actors || []);
   const designatedWriterId = useForumState(s => s.documentWriting?.designatedWriterId || '');
+  const scribeMode = useForumState(s => s.documentWriting?.scribeMode || 'auto_apply');
   const pendingDocumentEdits = useForumState(s => s.pendingDocumentEdits || []);
+  const pendingScribeSuggestions = useForumState(s => s.pendingScribeSuggestions || []);
   const doc = documents.find(d => d.id === focusedDocId);
 
   const [view, setView] = useState('edit');
@@ -170,6 +172,24 @@ export function DocEditorStage({ transcript, composer }) {
     mod.rejectDocumentProposal(id);
   }, []);
 
+  const acceptScribe = useCallback(async (id) => {
+    const mod = await import('../modules/documentWriting.js');
+    const ok = await mod.acceptScribeSuggestion(id);
+    if (!ok) setWriterError('Could not apply suggestion. The document may have changed; the Scribe will try again on its next pass.');
+  }, []);
+
+  const dismissScribe = useCallback(async (id) => {
+    const mod = await import('../modules/documentWriting.js');
+    mod.dismissScribeSuggestion(id);
+  }, []);
+
+  const setScribeMode = useCallback((mode) => {
+    mutateState(s => {
+      if (!s.documentWriting) s.documentWriting = {};
+      s.documentWriting.scribeMode = mode;
+    });
+  }, []);
+
   return (
     <div
       className="doc-editor-stage"
@@ -222,6 +242,27 @@ export function DocEditorStage({ transcript, composer }) {
 
         {doc.aiEditable && (
           <div className="doc-writer-toolbar">
+            <div className="doc-writer-actions" style={{ alignItems: 'center', gap: 8 }}>
+              <label className="field-hint" htmlFor="scribe-mode-select">Scribe mode</label>
+              <select
+                id="scribe-mode-select"
+                value={scribeMode}
+                onChange={(e) => setScribeMode(e.target.value)}
+                title="How autonomously the Scribe writes between turns"
+              >
+                <option value="auto_apply">Auto · apply directly</option>
+                <option value="auto_review">Auto · review-first</option>
+                <option value="ask">Ask before drafting</option>
+                <option value="manual">Manual only</option>
+              </select>
+            </div>
+            {pendingScribeSuggestions.filter(s => s.status === 'pending' && s.documentId === doc.id).map(s => (
+              <div key={s.id} className="field-hint" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: 'var(--surface-2, #f4f4f4)', borderRadius: 4 }}>
+                <span style={{ flex: 1 }}><strong>{s.writerName}</strong> suggests: {s.summary}</span>
+                <button className="btn sm" onClick={() => acceptScribe(s.id)}>Yes, write it</button>
+                <button className="btn sm ghost" onClick={() => dismissScribe(s.id)}>Not now</button>
+              </div>
+            ))}
             <textarea
               value={writerInstruction}
               onChange={(e) => setWriterInstruction(e.target.value)}
