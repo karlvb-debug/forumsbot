@@ -138,6 +138,10 @@ const FIELDS = {
     },
     prompt: '[{"toName":"...","content":"..."}] message visible only to that actor (optional)',
   },
+  updateStyle: {
+    json: { type: 'string' },
+    prompt: 'new global style instruction to apply to all actors from this turn forward (optional — use only when the user explicitly asks to change the style)',
+  },
 };
 
 // ── Field selection per actor type ────────────────────────────────────────────
@@ -164,6 +168,7 @@ function selectFields(actor, options = {}) {
     if (allowNextSpeaker) optional.push('nextSpeaker');
     optional.push('anchor', 'pinFact', 'pauseRequest');
     optional.push('manageActors', 'promptInjections', 'privateMessages');
+    optional.push('updateStyle');
     return { required, optional };
   }
 
@@ -186,7 +191,7 @@ function selectFields(actor, options = {}) {
   // Regular actor
   required.push('action', 'message');
   if (allowNextSpeaker) optional.push('nextSpeaker');
-  optional.push('anchor', 'pinFact', 'pauseRequest');
+  optional.push('anchor', 'pinFact', 'pauseRequest', 'updateStyle');
   if (actor.canInject) {
     optional.push('promptInjections', 'privateMessages');
   }

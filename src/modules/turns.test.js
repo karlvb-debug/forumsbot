@@ -438,6 +438,38 @@ describe('applyAiResult', () => {
   });
 });
 
+describe('applyAiResult updateStyle', () => {
+  beforeEach(() => {
+    mockState.actors = [
+      { id: 'a1', name: 'Alex', role: 'Analyst', enabled: true, color: '#18726d' }
+    ];
+    mockState.messages = [];
+    mockState.turnQueue = ['a1'];
+    mockState.scenario = { systems: { turnRouting: { allowDirectAddress: true } } };
+    mockState.settings.globalStylePrompt = 'Use plain everyday language.';
+  });
+
+  it('updates globalStylePrompt when actor emits updateStyle', async () => {
+    await applyAiResult({ data: mockState.actors[0] }, {
+      action: 'speak',
+      message: 'Switching to formal mode.',
+      updateStyle: 'Use formal academic language. Prefer precise technical terms.',
+    });
+
+    expect(mockState.settings.globalStylePrompt).toBe('Use formal academic language. Prefer precise technical terms.');
+  });
+
+  it('ignores updateStyle when the value is empty or whitespace', async () => {
+    await applyAiResult({ data: mockState.actors[0] }, {
+      action: 'speak',
+      message: 'No change.',
+      updateStyle: '   ',
+    });
+
+    expect(mockState.settings.globalStylePrompt).toBe('Use plain everyday language.');
+  });
+});
+
 describe('askActor style defaults', () => {
   beforeEach(() => {
     chatJson.mockReset();

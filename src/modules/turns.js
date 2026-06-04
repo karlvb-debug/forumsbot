@@ -1178,6 +1178,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
       "ANCHOR SUGGESTIONS: If the group has just reached a clear, settled agreement worth locking in, include a brief statement of it in the optional \"anchor\" field (max 20 words). The user will be prompted to approve it. Only anchor genuinely settled points — not ongoing debates.",
       "CAP-1 PROMPT INJECTION — YOUR PRIMARY TOOL FOR DIRECTING CHARACTERS: When you want a character to do, say, or react to something specific, inject private guidance into their next turn. Include \"promptInjections\": [{\"targetName\": \"ActorName\", \"content\": \"Private guidance, max 500 chars.\", \"scope\": \"next_turn_only\"}]. The character will read this before generating their response and carry it out in their own voice. This is ALWAYS better than writing dialogue or actions for another character yourself. Use \"next_turn_only\" for one-off direction, or \"persistent\" for ongoing behavioral guidance.",
       "CAP-2 PRIVATE MESSAGE: To send a message visible only to one actor, include \"privateMessages\": [{\"toName\": \"ActorName\", \"content\": \"Private message.\"}]. Max 3 per turn.",
+      "STYLE CONTROL: If the user explicitly asks to change how actors write or speak (e.g. 'be more formal', 'use simpler language', 'switch to casual tone'), update the global style by including \"updateStyle\": \"<new style instruction>\". Write it as a direct instruction (e.g. 'Use formal academic language. Prefer precise technical terms.'). This overwrites the current style for all actors from this turn forward. Only use this when the user clearly requests a style change — do not use it to fix small drift.",
       (!showThoughts)
         ? "IMPORTANT: Private thoughts display is disabled. You MUST keep your JSON \"thought\" field empty (\"\") to save tokens and minimize latency."
         : "IMPORTANT: Private thoughts display is enabled. You can record private thoughts before outputting your direction.",
@@ -1406,6 +1407,9 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
       : "",
     !sysCfg.stageDirectionsEnabled
       ? "CAP-8 FACT PIN: If this turn has just established a clear, undisputed fact that should be remembered, include \"pinFact\": \"one-sentence statement of the fact\". Only for settled, uncontested facts — not opinions or hypotheses."
+      : "",
+    !sysCfg.stageDirectionsEnabled
+      ? "STYLE CONTROL: If the user explicitly asks to change how actors write or speak (e.g. 'be more formal', 'use simpler language'), include \"updateStyle\": \"<new style instruction>\" in your JSON. Write it as a plain direct instruction. This updates the style for all actors immediately. Only use this when the user clearly requests a style change."
       : "",
     (() => {
       const mode = state.userContext?.interactionMode || "collaborator";
@@ -1995,6 +1999,15 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
       }
     } else if (targetActor && targetActor.id === actor.id) {
       console.debug(`[turns] ${actor.name} tried to route to itself — ignored`);
+    }
+  }
+
+  // Global style update — actor rewrites the style prompt when the user asks for a change
+  if (result.updateStyle && typeof result.updateStyle === "string") {
+    const newStyle = result.updateStyle.trim();
+    if (newStyle) {
+      mutateState(s => { s.settings.globalStylePrompt = newStyle; });
+      logTransition("global_style_updated", { actor: speakerName, newStyle });
     }
   }
 
