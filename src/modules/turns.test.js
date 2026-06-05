@@ -291,10 +291,11 @@ describe('scenarioBlock', () => {
     expect(block).not.toContain('Premise:');
   });
 
-  it('omits objective line when empty', () => {
+  it('substitutes a neutral fallback when objective is empty', () => {
     mockState.scenario.objective = '';
     const block = scenarioBlock();
-    expect(block).not.toContain('Objective:');
+    expect(block).toContain('Objective: None set');
+    expect(block).toContain("follow the user's lead");
   });
 
   it('falls back to "Untitled forum" when title is blank', () => {

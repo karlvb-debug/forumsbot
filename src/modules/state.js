@@ -247,7 +247,7 @@ function normalizeState(value = {}) {
       name: merged.dm.name || "Director",
       role: "Discussion facilitator",
       persona: merged.dm.persona || "",
-      goal: "Guide the group toward clear decisions and next steps.",
+      goal: "Keep the conversation flowing and inclusive.",
       voice: "Calm, concise, neutral.",
       thoughts: merged.dm.thoughts || "",
       enabled: merged.dm.enabled !== false,

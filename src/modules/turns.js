@@ -2187,10 +2187,13 @@ export function scenarioBlock() {
   const userLabel = storyRole
     ? `${storyRole}${displayName ? ` (${displayName})` : ''}`
     : (displayName || null);
+  const objectiveLine = state.scenario.objective
+    ? `Objective: ${state.scenario.objective}`
+    : "Objective: None set — follow the user's lead, stay in character, and contribute when you have something useful to add.";
   return [
     `Title: ${state.scenario.title || "Untitled forum"}`,
     state.scenario.premise ? `Premise: ${state.scenario.premise}` : "",
-    state.scenario.objective ? `Objective: ${state.scenario.objective}` : "",
+    objectiveLine,
     userLabel ? `The human participant in this session is: ${userLabel}. Messages labelled [USER] in the transcript are from them.` : ""
   ].filter(Boolean).join("\n");
 }

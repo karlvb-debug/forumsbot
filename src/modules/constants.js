@@ -177,9 +177,9 @@ export const defaultState = {
   pendingInjections: [],     // CAP-1: director prompt injection queue
   pendingPrivateMessages: [], // CAP-2: actor-to-actor private message queue
   scenario: {
-    title: "Design council",
-    premise: "A small group of local AI actors are gathered to discuss the user's topic.",
-    objective: "Ask clarifying questions, challenge weak assumptions, and converge on practical next steps.",
+    title: "Untitled forum",
+    premise: "",
+    objective: "",
     systems: {
       stageDirections: {
         enabled: false,
@@ -209,7 +209,7 @@ export const defaultState = {
       role: "Discussion facilitator",
       expanded: false,
       persona: "Keep the scene moving, summarize when useful, and invite quieter actors in without taking over.",
-      goal: "Guide the group toward clear decisions and next steps.",
+      goal: "Keep the conversation flowing and inclusive.",
       voice: "Calm, concise, neutral.",
       thoughts: "",
       enabled: true,

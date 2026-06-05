@@ -705,8 +705,8 @@ export function normalizeQuickStartConfig(config, assignFreshIds = true) {
   const result = {
     scenario: {
       title: cleanConfigText(scenario.title, "Untitled forum", 80),
-      premise: cleanConfigText(scenario.premise, "A small group of local AI actors are gathered to discuss the user's topic.", 700),
-      objective: cleanConfigText(scenario.objective, "Ask clarifying questions, challenge weak assumptions, and converge on practical next steps.", 500),
+      premise: cleanConfigText(scenario.premise, "", 700),
+      objective: cleanConfigText(scenario.objective, "", 500),
       systems
     },
     dm: {
