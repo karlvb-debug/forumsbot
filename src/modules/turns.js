@@ -1205,14 +1205,20 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
         ? "Messages labelled [USER] in the transcript are from the human facilitator. You MUST incorporate their notes, instructions, or scene adjustments into your narration and DM guidance immediately. Do not ignore them."
         : "Messages labelled [USER] in the transcript are from the human facilitator. You MUST acknowledge, address, and respond to their messages, questions, or instructions directly in your public message. Do not ignore them or treat them as out-of-character meta-disruptions; respond to them directly.",
       forceSpeak
-        ? "You have been selected by the speaking-order router to speak this turn. Do not skip; provide the most useful brief guidance, question, summary, or routing suggestion you can."
-        : "Do not dominate the forum. You may skip if the actors are already progressing.",
+        ? (sysCfg.dmRole === 'narrator'
+            ? "You have been selected to narrate this turn. Set or advance the scene with environmental detail — weather, sounds, sensory atmosphere, the passage of time, world events. If the scene hasn't opened yet, OPEN IT. Never narrate character actions."
+            : "You have been selected by the speaking-order router to speak this turn. Do not skip; provide the most useful brief guidance, question, summary, or routing suggestion you can.")
+        : (sysCfg.dmRole === 'narrator'
+            ? "Speak when the scene needs to be opened, when a beat has just landed and the world should react, or when atmosphere/transitions would help. Skip only if you would be talking over a moment that belongs to the characters."
+            : "Do not dominate the forum. You may skip if the actors are already progressing."),
       forceSpeak
         ? ""
         : sysCfg.dmRole === 'observer'
         ? "CRITICAL SKIP RULE: You are in observer mode. You MUST skip unless an actor has directly addressed you by name in their most recent message."
         : sysCfg.dmRole === 'arbiter'
         ? "SKIP RULE: Speak when there is a dispute to resolve, a ruling to deliver, or a deadlock to break. Skip if the actors are making progress without conflict."
+        : sysCfg.dmRole === 'narrator'
+        ? "SKIP RULE: If the scene hasn't opened, you MUST open it. Otherwise speak when a beat needs an environmental reaction or transition; skip only when characters are mid-exchange and the world doesn't need to comment."
         : "CRITICAL SKIP RULE: If you have no new guidance, summaries, or questions to introduce, you MUST set action to \"skip\" and leave message empty. This keeps the debate focused on the active actors.",
       "CONCISENESS RULE: Keep your directions, summaries, and questions brief, direct, and useful. Avoid conversational padding (e.g. 'Excellent points everyone', 'Let's move on'). Aim for the minimum words required to guide the discussion or narrate scene beats. Do not dominate or generate words for the sake of it.",
       "You can describe physical actions, scenery changes, or narrator actions by surrounding them with asterisks, e.g. *the wind howls in the background* or *gestures to the map*.",
