@@ -58,6 +58,11 @@ const MessageCard = React.memo(function MessageCard({ msg, actor, showThoughts, 
   };
 
   if (msg.type === 'skip') {
+    const skipThought = msg.thought || null;
+    const isLongSkipThought = skipThought && skipThought.length > THOUGHT_COLLAPSE_THRESHOLD;
+    const skipThoughtDisplay = isLongSkipThought && !thoughtExpanded
+      ? skipThought.slice(0, THOUGHT_PREVIEW_LENGTH) + '…'
+      : skipThought;
     return (
       <article className="msg">
         <span className="swatch" style={{ background: actor.color }}>{(actor.name || '?')[0]}</span>
@@ -68,6 +73,21 @@ const MessageCard = React.memo(function MessageCard({ msg, actor, showThoughts, 
             <span className="msg-time">{timeStr}</span>
           </div>
           <div className="skipped">— skip — {msg.content || msg.text || msg.reason || ''}</div>
+          {skipThought && showThoughts && (
+            <div className="thought">
+              <span className="thought-label">private</span>
+              <div className="md-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(skipThoughtDisplay) }} />
+              {isLongSkipThought && (
+                <button
+                  className="chip-btn"
+                  style={{ fontSize: 11, marginTop: 2 }}
+                  onClick={() => setThoughtExpanded(v => !v)}
+                >
+                  {thoughtExpanded ? 'Show less' : 'Show more'}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </article>
     );
