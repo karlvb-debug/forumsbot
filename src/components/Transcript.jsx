@@ -5,8 +5,6 @@ import { useBackgroundActivities, useStreaming } from '../hooks/useStreaming';
 import { renderMarkdown } from '../modules/markdown.js';
 import { PauseCard } from './PauseCard';
 
-const THOUGHT_COLLAPSE_THRESHOLD = 150;
-const THOUGHT_PREVIEW_LENGTH = 80;
 const MSG_COLLAPSE_WORDS = 250;
 const MSG_PREVIEW_WORDS = 80;
 
@@ -33,7 +31,6 @@ function cleanMessageText(raw) {
 }
 
 const MessageCard = React.memo(function MessageCard({ msg, actor, showThoughts, onAnchor, onFeedback, onFork }) {
-  const [thoughtExpanded, setThoughtExpanded] = useState(false);
   const [msgExpanded, setMsgExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -59,10 +56,6 @@ const MessageCard = React.memo(function MessageCard({ msg, actor, showThoughts, 
 
   if (msg.type === 'skip') {
     const skipThought = msg.thought || null;
-    const isLongSkipThought = skipThought && skipThought.length > THOUGHT_COLLAPSE_THRESHOLD;
-    const skipThoughtDisplay = isLongSkipThought && !thoughtExpanded
-      ? skipThought.slice(0, THOUGHT_PREVIEW_LENGTH) + '…'
-      : skipThought;
     return (
       <article className="msg">
         <span className="swatch" style={{ background: actor.color }}>{(actor.name || '?')[0]}</span>
@@ -76,16 +69,7 @@ const MessageCard = React.memo(function MessageCard({ msg, actor, showThoughts, 
           {skipThought && showThoughts && (
             <div className="thought">
               <span className="thought-label">private</span>
-              <div className="md-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(skipThoughtDisplay) }} />
-              {isLongSkipThought && (
-                <button
-                  className="chip-btn"
-                  style={{ fontSize: 11, marginTop: 2 }}
-                  onClick={() => setThoughtExpanded(v => !v)}
-                >
-                  {thoughtExpanded ? 'Show less' : 'Show more'}
-                </button>
-              )}
+              <div className="md-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(skipThought) }} />
             </div>
           )}
         </div>
@@ -141,27 +125,12 @@ const MessageCard = React.memo(function MessageCard({ msg, actor, showThoughts, 
           </button>
         )}
 
-        {thought && showThoughts && (() => {
-          const isLong = thought.length > THOUGHT_COLLAPSE_THRESHOLD;
-          const displayText = isLong && !thoughtExpanded
-            ? thought.slice(0, THOUGHT_PREVIEW_LENGTH) + '…'
-            : thought;
-          return (
-            <div className="thought">
-              <span className="thought-label">private</span>
-              <div className="md-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(displayText) }} />
-              {isLong && (
-                <button
-                  className="chip-btn"
-                  style={{ fontSize: 11, marginTop: 2 }}
-                  onClick={() => setThoughtExpanded(v => !v)}
-                >
-                  {thoughtExpanded ? 'Show less' : 'Show more'}
-                </button>
-              )}
-            </div>
-          );
-        })()}
+        {thought && showThoughts && (
+          <div className="thought">
+            <span className="thought-label">private</span>
+            <div className="md-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(thought) }} />
+          </div>
+        )}
 
         <div className="msg-actions">
           <button
@@ -217,7 +186,7 @@ function StreamingBubble({ streaming, showThoughts }) {
         {hasMessage && (
           <>
             {showThoughts && hasThought && (
-              <details className="streaming-thought-summary">
+              <details className="streaming-thought-summary" open>
                 <summary>💭 {streaming.thought.trim().split(/\s+/).filter(Boolean).length}w of reasoning</summary>
                 <div className="streaming-thought-summary-body">{streaming.thought}</div>
               </details>

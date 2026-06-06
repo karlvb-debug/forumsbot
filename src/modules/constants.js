@@ -77,7 +77,7 @@ export const defaultState = {
     globalStylePrompt: DEFAULT_GLOBAL_STYLE_PROMPT,
     theme: "dark",
     includeTraces: true,
-    gravitySensitivity: 50,
+
     // Cross-Session Actor Memory. Default OFF: when on, each actor's accumulated
     // memory is distilled once at session end (not per turn).
     enableCrossSessionMemory: false,
@@ -185,8 +185,6 @@ export const defaultState = {
       },
       alignment: {
         strictness: "moderate",   // "strict" | "moderate" | "loose" | "off"
-        anchorInPrompt: false,
-        nudgeStyle: "gentle-nudge" // "hard-redirect" | "gentle-nudge" | "question"
       },
       turnRouting: {
         strategy: "sequential",  // "sequential" | "agentic"
@@ -218,6 +216,11 @@ export const defaultState = {
       canSeeThoughts: false,
       canInject: true,
       canWriteDocuments: false,
+      canPause: true,
+      canAnchor: true,
+      canPinFacts: true,
+      canSuggestSpeaker: true,
+      canUpdateStyle: true,
       directorMode: "facilitator",
       authority: 50,
       // Fire once per round, not per turn. A per-turn director re-runs after
@@ -244,6 +247,11 @@ export const defaultState = {
       canSeeThoughts: false,
       canInject: false,
       canWriteDocuments: false,
+      canPause: true,
+      canAnchor: true,
+      canPinFacts: true,
+      canSuggestSpeaker: true,
+      canUpdateStyle: true,
       authority: 50,
       cadence: null,
       actorMode: 'participant',
@@ -266,6 +274,11 @@ export const defaultState = {
       canSeeThoughts: false,
       canInject: false,
       canWriteDocuments: false,
+      canPause: true,
+      canAnchor: true,
+      canPinFacts: true,
+      canSuggestSpeaker: true,
+      canUpdateStyle: true,
       authority: 50,
       cadence: null,
       actorMode: 'participant',
@@ -288,6 +301,11 @@ export const defaultState = {
       canSeeThoughts: false,
       canInject: false,
       canWriteDocuments: false,
+      canPause: true,
+      canAnchor: true,
+      canPinFacts: true,
+      canSuggestSpeaker: true,
+      canUpdateStyle: true,
       authority: 50,
       cadence: null,
       actorMode: 'participant',

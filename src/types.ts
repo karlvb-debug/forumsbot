@@ -21,6 +21,11 @@ export interface Actor {
   canSeeThoughts: boolean;
   canInject?: boolean;
   canWriteDocuments: boolean;
+  canPause?: boolean;
+  canAnchor?: boolean;
+  canPinFacts?: boolean;
+  canSuggestSpeaker?: boolean;
+  canUpdateStyle?: boolean;
 }
 
 export type MessageType = 'actor' | 'system' | 'user' | 'director' | 'researcher';
@@ -73,7 +78,7 @@ export interface Settings {
   globalStylePrompt: string;
   theme: 'dark' | 'light';
   includeTraces: boolean;
-  gravitySensitivity: number;
+
   enablePreflightRouter: boolean;
   preflightThreshold: number;
   enableCrossSessionMemory: boolean;
@@ -205,7 +210,7 @@ export interface Scenario {
   doneWhen: string;
   systems?: {
     stageDirections?: { enabled?: boolean; intensity?: string; maxTokenShare?: number };
-    alignment?: { strictness?: string; anchorInPrompt?: boolean; nudgeStyle?: string };
+    alignment?: { strictness?: string };
     turnRouting?: { strategy?: string; allowDirectAddress?: boolean };
     dmRole?: { role?: string; narrates?: boolean; canIntroduceElements?: boolean };
   };

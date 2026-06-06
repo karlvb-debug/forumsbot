@@ -271,7 +271,7 @@ export const BLUEPRINTS = [
       doneWhen: 'A clear approve/request-changes verdict with specific findings has been delivered.',
       systems: {
         stageDirections: { enabled: false },
-        alignment: { strictness: 'strict', nudgeStyle: 'hard-redirect' },
+        alignment: { strictness: 'strict' },
         turnRouting: { strategy: 'agentic', allowDirectAddress: true },
         dmRole: { role: 'facilitator', narrates: false, canIntroduceElements: false },
       },
@@ -288,7 +288,7 @@ export const BLUEPRINTS = [
       doneWhen: 'A well-sourced synthesis with key findings, confidence levels, and open questions has been produced.',
       systems: {
         stageDirections: { enabled: false },
-        alignment: { strictness: 'moderate', nudgeStyle: 'gentle-nudge' },
+        alignment: { strictness: 'moderate' },
         turnRouting: { strategy: 'agentic', allowDirectAddress: true },
         dmRole: { role: 'facilitator', narrates: false, canIntroduceElements: false },
       },
@@ -304,7 +304,7 @@ export const BLUEPRINTS = [
       task: 'Generate at least 10 distinct ideas, cluster them into themes, and identify the top 3 most promising.',
       systems: {
         stageDirections: { enabled: false },
-        alignment: { strictness: 'moderate', nudgeStyle: 'gentle-nudge' },
+        alignment: { strictness: 'moderate' },
         turnRouting: { strategy: 'agentic', allowDirectAddress: true },
         dmRole: { role: 'facilitator', narrates: false, canIntroduceElements: false },
       },
@@ -321,7 +321,7 @@ export const BLUEPRINTS = [
       doneWhen: 'A plan covering market, unit economics, go-to-market, and top risks with mitigations has been produced.',
       systems: {
         stageDirections: { enabled: false },
-        alignment: { strictness: 'strict', nudgeStyle: 'hard-redirect' },
+        alignment: { strictness: 'strict' },
         turnRouting: { strategy: 'agentic', allowDirectAddress: true },
         dmRole: { role: 'arbiter', narrates: false, canIntroduceElements: false },
       },
@@ -337,7 +337,7 @@ export const BLUEPRINTS = [
       task: 'Collaboratively build an engaging narrative with rising tension and a satisfying resolution.',
       systems: {
         stageDirections: { enabled: true, intensity: 'immersive', maxTokenShare: 0.4 },
-        alignment: { strictness: 'loose', anchorInPrompt: false, nudgeStyle: 'question' },
+        alignment: { strictness: 'loose' },
         turnRouting: { strategy: 'agentic', allowDirectAddress: true },
         dmRole: { role: 'narrator', narrates: true, canIntroduceElements: true },
       },
@@ -353,7 +353,7 @@ export const BLUEPRINTS = [
       task: 'Produce a finished, well-structured story draft in the Story Draft document that realizes the user\'s concept.',
       systems: {
         stageDirections: { enabled: false },
-        alignment: { strictness: 'moderate', nudgeStyle: 'gentle-nudge' },
+        alignment: { strictness: 'moderate' },
         turnRouting: { strategy: 'agentic', allowDirectAddress: true },
         dmRole: { role: 'facilitator', narrates: false, canIntroduceElements: false },
       },
@@ -380,7 +380,7 @@ export const BLUEPRINTS = [
       task: 'Steelman every position, identify the strongest objections, and converge on a reasoned verdict.',
       systems: {
         stageDirections: { enabled: false },
-        alignment: { strictness: 'strict', nudgeStyle: 'hard-redirect' },
+        alignment: { strictness: 'strict' },
         turnRouting: { strategy: 'sequential', allowDirectAddress: true },
         dmRole: { role: 'arbiter', narrates: false, canIntroduceElements: false },
       },
@@ -397,7 +397,7 @@ export const BLUEPRINTS = [
       doneWhen: 'All significant risks have been identified, rated, and the top 3 have recommended mitigations.',
       systems: {
         stageDirections: { enabled: false },
-        alignment: { strictness: 'strict', nudgeStyle: 'hard-redirect' },
+        alignment: { strictness: 'strict' },
         turnRouting: { strategy: 'sequential', allowDirectAddress: true },
         dmRole: { role: 'arbiter', narrates: false, canIntroduceElements: false },
       },
@@ -413,7 +413,7 @@ export const BLUEPRINTS = [
       task: 'Surface what went well, what went wrong, and produce a concrete list of process improvements.',
       systems: {
         stageDirections: { enabled: false },
-        alignment: { strictness: 'moderate', nudgeStyle: 'gentle-nudge' },
+        alignment: { strictness: 'moderate' },
         turnRouting: { strategy: 'sequential', allowDirectAddress: true },
         dmRole: { role: 'facilitator', narrates: false, canIntroduceElements: false },
       },
@@ -429,7 +429,7 @@ export const BLUEPRINTS = [
       task: 'Surface deep insights and disagreements between experts, then synthesize practical takeaways.',
       systems: {
         stageDirections: { enabled: false },
-        alignment: { strictness: 'moderate', nudgeStyle: 'gentle-nudge' },
+        alignment: { strictness: 'moderate' },
         turnRouting: { strategy: 'agentic', allowDirectAddress: true },
         dmRole: { role: 'observer', narrates: false, canIntroduceElements: false },
       },
@@ -446,7 +446,7 @@ export const BLUEPRINTS = [
       doneWhen: 'A specific, actionable solution with implementation steps and trade-off rationale has been agreed upon.',
       systems: {
         stageDirections: { enabled: false },
-        alignment: { strictness: 'strict', anchorInPrompt: true, nudgeStyle: 'hard-redirect' },
+        alignment: { strictness: 'strict' },
         turnRouting: { strategy: 'agentic', allowDirectAddress: true },
         dmRole: { role: 'arbiter', narrates: false, canIntroduceElements: false },
       },

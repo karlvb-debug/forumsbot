@@ -9,7 +9,6 @@ import { putMessage, getAllChunks, getActorMemory, putActorMemory } from './db.j
 import { summarizeMemory, recallRelevantChunks, formatCurrentOutcomes, parseOutcomeJson } from './memory.js';
 import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, checkDrift, normalizeCadence, isQueueActor, shouldFireCadence, appendMemory, normalizeSpeakingOrderStrategy, formatTranscript } from './utils.js';
 export { formatTranscript }; // re-export so existing imports from turns.js keep working
-import { updateSemanticAlignment } from './telemetry.js';
 // preflight.js deleted — resolver handles speaker selection upstream
 import { getKbEntriesForDirector, splitDocuments, buildDocumentManifestSection, buildReferenceSection, buildKbSection } from './knowledge.js';
 import { buildNarrativeDmInstruction, buildRoleplayContextLine, buildRoleplayStyleBlock } from './storyMode.js';
@@ -21,8 +20,6 @@ export function resolveSystemSettings() {
     stageDirectionsIntensity: sys.stageDirections?.intensity           ?? 'moderate',
     stageDirectionsMaxShare:  sys.stageDirections?.maxTokenShare       ?? 0.2,
     alignmentStrictness:      sys.alignment?.strictness               ?? 'moderate',
-    alignmentAnchorInPrompt:  sys.alignment?.anchorInPrompt            ?? false,
-    alignmentNudgeStyle:      sys.alignment?.nudgeStyle                ?? 'gentle-nudge',
     turnStrategy:             normalizeSpeakingOrderStrategy(sys.turnRouting?.strategy),
     allowDirectAddress:       sys.turnRouting?.allowDirectAddress     ?? true,
     // Single source of truth: the director actor's directorMode field.
@@ -162,9 +159,7 @@ const _tokSpeedWindow = [];
 
 // Alignment embedding is throttled: the dial reads the last 5 messages, so
 // recomputing it every single turn spends an embedding call per turn for a
-// number that barely moves. Run it every Nth visible turn instead.
-const ALIGNMENT_EVERY_N_TURNS = 3;
-let _turnsSinceAlignment = 0;
+// number that barely moves.
 
 // Cumulative count of completed visible turns this session run. Drives turn-based
 // cadence firing for background actors. Reset when a fresh auto-loop starts.
@@ -746,10 +741,7 @@ async function _runTurn(options = {}) {
         console.warn('[scribe] pass failed:', err?.message || err);
       }
 
-      if (!state.settings.turboMode && ++_turnsSinceAlignment >= ALIGNMENT_EVERY_N_TURNS) {
-        _turnsSinceAlignment = 0;
-        await updateSemanticAlignment(_sessionController?.signal);
-      }
+
       if (state.memory.enabled && options.summarizeCycle !== false && !state.settings.turboMode) {
         state.memory.turnsSinceSummary += 1;
         const cycleSize = participantCycleCount();
@@ -1348,7 +1340,8 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
       `You are ${actor.name}, the Manager of this forum.`,
       actor.persona ? `Persona: ${actor.persona}` : "",
       actor.goal ? `Responsibility: ${actor.goal}` : "",
-      globalStyleInstruction(),
+      actor.voice ? `Voice: ${actor.voice}` : "",
+      actor.voice ? "" : globalStyleInstruction(),
       "Your job is to keep the right expertise in the room at the right time.",
       "Each turn, observe the discussion and decide whether the current roster needs adjustment:",
       "  CREATE a new actor when the conversation needs a skill or perspective that nobody present can provide.",
@@ -1393,7 +1386,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
       `Responsibility: ${actor.goal || "Provide up-to-date objective research and answer open questions to ground the discussion."}`,
       `Voice: ${actor.voice || "Objective, fact-driven, structured with clear source citations."}`,
       actor.persona ? `Persona: ${actor.persona}` : "",
-      globalStyleInstruction(),
+      actor.voice ? "" : globalStyleInstruction(),
       "You are the Specialized Research Agent inside a local AI forum.",
       researcherToolsEnabled
         ? "Your sole purpose is to ground the discussion in objective facts and data by searching the web and reading webpages/documents."
@@ -1463,7 +1456,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     actor.persona ? `Persona: ${actor.persona}` : "",
     actor.goal ? `Responsibility: ${actor.goal}` : "",
     actor.voice ? `Voice: ${actor.voice}` : "",
-    globalStyleInstruction(),
+    actor.voice ? "" : globalStyleInstruction(),
     relationships,
     contextLine,
     sysCfg.stageDirectionsEnabled
@@ -1692,13 +1685,9 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
       ].filter(Boolean).join(" ")
     : "";
 
-  // Programmatic gravity reminders & warnings
-  const alignment = state.telemetry?.currentAlignmentScore ?? 100;
-  const threshold = state.settings?.gravitySensitivity ?? 50;
-  const isDrifting = alignment < threshold;
-
+  // Programmatic periodic reminders
   const strictness = sysCfg.alignmentStrictness;
-  const periodicInterval = strictness === 'strict' ? 3 : 5;
+  const periodicInterval = strictness === 'strict' ? 3 : strictness === 'loose' ? 8 : 5;
   const periodicReminder = (
     strictness !== 'off' &&
     state.scenario.task?.trim() &&
@@ -1706,14 +1695,6 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
     state.messages.length % periodicInterval === 0 &&
     !sysCfg.stageDirectionsEnabled
   ) ? `[Reminder: the task is "${state.scenario.task}". Stay on track.]` : "";
-
-  const gravityWarning = (() => {
-    if (strictness === 'off' || !isDrifting || kind !== 'actor' || actor.canResearch || sysCfg.stageDirectionsEnabled) return '';
-    const obj = state.scenario.task || 'the task';
-    if (strictness === 'strict') return `[ALIGNMENT ALERT: The discussion has drifted significantly (${alignment}% aligned). You MUST pivot to: "${obj}". Do not continue the current thread.]`;
-    if (strictness === 'loose') return `[The conversation has drifted (${alignment}% aligned). Consider connecting your next point back to: "${obj}"]`;
-    return `[The discussion has drifted off-topic (alignment ${alignment}%). Don't repeat what's already been said — challenge an assumption, ask a sharp question, or propose something concrete to get back to: "${obj}"]`;
-  })();
 
   let nudgeReminder = "";
   if (state.telemetry?.nudgeTriggered && kind === "actor") {
@@ -1760,12 +1741,14 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
     }
   }
 
-  // Style reminder re-stated at the tail of the prompt. The global style lives high
-  // in the system prompt, but small models attend most to the *end* of the context and
-  // imitate the recent transcript (their own prior verbose turns) as few-shot examples.
-  // Restating the user's style contract right before generation keeps it from decaying
-  // over a long conversation. Costs nothing for KV-cache: the user prompt changes anyway.
+  // Style / voice reminder re-stated at the tail of the prompt. Small models attend
+  // most to the *end* of the context, so restating the style contract right before
+  // generation keeps it from decaying over long conversations.
+  // When an actor has a Voice, it replaces global style entirely (the role reminder
+  // already restates voice). This avoids sending conflicting instructions and saves tokens.
+  const actorHasVoice = kind === "actor" && !!actor?.voice?.trim();
   const styleReminder = (() => {
+    if (actorHasVoice) return ""; // voice is restated via roleReminder — no duplicate needed
     if (state.settings?.globalStyleEnabled === false) return "";
     const prompt = String(state.settings?.globalStylePrompt || "").trim();
     return prompt ? `STYLE — applies to your message this turn: ${prompt}` : "";
@@ -1817,7 +1800,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
       privateThoughts,
       `### Recent transcript\n${formatTranscript(msgs, WORD_LIMITS.recentTranscript, state.actors)}`,
       periodicReminder,
-      gravityWarning,
+
       nudgeReminder,
       directAddressNote,
       authorityBlock,
@@ -1969,7 +1952,13 @@ function applyActorManagement(spec, managerName, managerColor) {
       canManageCast: !!s.canManageCast,
       canResearch: !!s.canResearch,
       canSeeThoughts: !!s.canSeeThoughts,
+      canInject: !!s.canInject,
       canWriteDocuments: !!s.canWriteDocuments,
+      canPause: typeof s.canPause === "boolean" ? s.canPause : (!!s.canDirect || !(s.canManageCast || s.canResearch)),
+      canAnchor: typeof s.canAnchor === "boolean" ? s.canAnchor : (!!s.canDirect || !(s.canManageCast || s.canResearch)),
+      canPinFacts: typeof s.canPinFacts === "boolean" ? s.canPinFacts : (!!s.canDirect || !(s.canManageCast || s.canResearch)),
+      canSuggestSpeaker: typeof s.canSuggestSpeaker === "boolean" ? s.canSuggestSpeaker : (!!s.canDirect || !(s.canManageCast || s.canResearch)),
+      canUpdateStyle: typeof s.canUpdateStyle === "boolean" ? s.canUpdateStyle : (!!s.canDirect || !(s.canManageCast || s.canResearch)),
       authority: typeof s.authority === "number" ? s.authority : 50,
       temperature: typeof s.temperature === "number" ? s.temperature : 0.8,
       cadence: null,
@@ -2084,8 +2073,8 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
     }
   }
 
-  // CAP-1: Prompt injections — director/manager/inject-capable primes an actor before their next turn
-  if ((actor.canDirect || actor.canManageCast || actor.canInject) && Array.isArray(result.promptInjections)) {
+  // CAP-1: Prompt injections — inject-capable actor primes another actor before their next turn
+  if (actor.canInject && Array.isArray(result.promptInjections)) {
     for (const inj of result.promptInjections.slice(0, 3)) {
       const target = state.actors.find(a => a.enabled &&
         a.name.toLowerCase() === String(inj.targetName || "").toLowerCase());
@@ -2101,7 +2090,7 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
   }
 
   // CAP-2: Private messages — actor sends a private message visible only to target
-  if ((actor.canDirect || actor.canManageCast || actor.canInject) && Array.isArray(result.privateMessages)) {
+  if (actor.canInject && Array.isArray(result.privateMessages)) {
     for (const msg of result.privateMessages.slice(0, 3)) {
       const target = state.actors.find(a => a.enabled &&
         a.name.toLowerCase() === String(msg.toName || "").toLowerCase());

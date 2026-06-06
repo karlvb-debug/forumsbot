@@ -7,12 +7,17 @@ import { navigateToPanel } from '../../hooks/navigation.js';
 import { ACTOR_LIBRARY } from '../../modules/blueprints.js';
 
 const PERM_DEFS = [
-  { key: 'canDirect',      label: 'Direct',      icon: '🎬', color: 'var(--gold)'   },
-  { key: 'canManageCast',  label: 'Manage',      icon: '🔧', color: 'var(--warn)'   },
-  { key: 'canInject',      label: 'Inject',      icon: '🎯', color: 'var(--teal)'   },
-  { key: 'canResearch',    label: 'Research',    icon: '🔍', color: 'var(--info)'   },
-  { key: 'canWriteDocuments', label: 'Write Docs', icon: '✍', color: 'var(--accent)' },
-  { key: 'canSeeThoughts', label: 'See Thoughts', icon: '🧠', color: 'var(--purple)' },
+  { key: 'canDirect',         label: 'Direct Session',     icon: '🎬', description: 'Acts as Director: moderates conversation and guides flow' },
+  { key: 'canManageCast',     label: 'Manage Cast',        icon: '🔧', description: 'Dynamically creates, enables, or disables other actors' },
+  { key: 'canInject',         label: 'Inject Guidance',    icon: '🎯', description: 'Whispers private prompt guidance or messages to other actors' },
+  { key: 'canResearch',       label: 'Research Web',       icon: '🔍', description: 'Uses live search and webpage reading tools' },
+  { key: 'canWriteDocuments',  label: 'Write Documents',   icon: '✍',  description: 'Proposes and executes edits to shared documents' },
+  { key: 'canSeeThoughts',    label: 'See Thoughts',       icon: '🧠', description: 'Reads private reasoning / thoughts of other actors' },
+  { key: 'canSuggestSpeaker', label: 'Suggest Speaker',    icon: '📢', description: 'Recommends who should take the next turn' },
+  { key: 'canAnchor',         label: 'Anchor Agreements',  icon: '⚓', description: 'Pins settled group agreements as context' },
+  { key: 'canPinFacts',       label: 'Pin Facts',          icon: '📌', description: 'Adds established facts to the pinned list' },
+  { key: 'canPause',          label: 'Request Pauses',     icon: '⏸️', description: 'Asks user for clarification mid-round' },
+  { key: 'canUpdateStyle',    label: 'Update Style',       icon: '🎨', description: 'Modifies the global conversation style rules' },
 ];
 
 const DEFAULT_COLORS = ['#2a9d8f', '#7c5cbf', '#4a7fd4', '#c97a40', '#e76f51', '#457b9d', '#c8a830'];
@@ -94,10 +99,6 @@ export function ActorsPanel() {
 
   const addActor = useCallback((overrides = {}) => {
     mutateState(s => {
-      // Enforce at most one director — demote any existing director if a new one is added
-      if (overrides.canDirect) {
-        s.actors.forEach(a => { a.canDirect = false; a.canManageCast = false; });
-      }
       s.actors.push({
         id: crypto.randomUUID(),
         name: overrides.name || `Actor ${s.actors.length + 1}`,
@@ -113,6 +114,11 @@ export function ActorsPanel() {
         canResearch: false,
         canWriteDocuments: false,
         canSeeThoughts: false,
+        canPause: overrides.canPause ?? (!overrides.canManageCast && !overrides.canResearch),
+        canAnchor: overrides.canAnchor ?? (!overrides.canManageCast && !overrides.canResearch),
+        canPinFacts: overrides.canPinFacts ?? (!overrides.canManageCast && !overrides.canResearch),
+        canSuggestSpeaker: overrides.canSuggestSpeaker ?? (!overrides.canManageCast && !overrides.canResearch),
+        canUpdateStyle: overrides.canUpdateStyle ?? (!overrides.canManageCast && !overrides.canResearch),
         directorMode: 'facilitator',
         authority: 50,
         cadence: null,
@@ -206,6 +212,11 @@ export function ActorsPanel() {
                 canWriteDocuments: !!tpl.canWriteDocuments,
                 directorMode: tpl.directorMode || 'facilitator',
                 canSeeThoughts: !!tpl.canSeeThoughts,
+                canPause: tpl.canPause !== undefined ? !!tpl.canPause : (!!tpl.canDirect || !(tpl.canManageCast || tpl.canResearch)),
+                canAnchor: tpl.canAnchor !== undefined ? !!tpl.canAnchor : (!!tpl.canDirect || !(tpl.canManageCast || tpl.canResearch)),
+                canPinFacts: tpl.canPinFacts !== undefined ? !!tpl.canPinFacts : (!!tpl.canDirect || !(tpl.canManageCast || tpl.canResearch)),
+                canSuggestSpeaker: tpl.canSuggestSpeaker !== undefined ? !!tpl.canSuggestSpeaker : (!!tpl.canDirect || !(tpl.canManageCast || tpl.canResearch)),
+                canUpdateStyle: tpl.canUpdateStyle !== undefined ? !!tpl.canUpdateStyle : (!!tpl.canDirect || !(tpl.canManageCast || tpl.canResearch)),
                 authority: tpl.authority ?? 50,
                 cadence: tpl.cadence ?? null,
                 actorMode: tpl.actorMode || 'participant',
@@ -319,18 +330,22 @@ export function ActorsPanel() {
                     </button>
                   </div>
                   <div>
-                    <div className="actor-section-label">Permissions</div>
-                    <div className="perm-chips" style={{ marginTop: 6 }}>
+                    <div className="actor-section-label" style={{ marginBottom: 6 }}>Abilities & Permissions</div>
+                    <div className="permissions-grid">
                       {PERM_DEFS.map(p => (
-                        <button
-                          key={p.key}
-                          className={"perm-chip" + (a[p.key] ? " active" : "")}
-                          style={a[p.key] ? { '--perm-color': p.color } : {}}
-                          onClick={() => updateActor(a.id, p.key, !a[p.key])}
-                          title={p.label}
-                        >
-                          {p.icon} {p.label}
-                        </button>
+                        <label key={p.key} className="perm-checkbox-label" title={p.description}>
+                          <input
+                            type="checkbox"
+                            checked={!!a[p.key]}
+                            onChange={(e) => updateActor(a.id, p.key, e.target.checked)}
+                          />
+                          <div>
+                            <span className="perm-label-text">
+                              {p.icon} {p.label}
+                            </span>
+                            <div className="perm-desc-text">{p.description}</div>
+                          </div>
+                        </label>
                       ))}
                     </div>
                   </div>

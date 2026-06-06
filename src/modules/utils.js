@@ -550,7 +550,13 @@ export function normalizeQuickStartActor(actor, index, assignFreshIds) {
     canResearch: !!(source.canResearch || source.isResearcher),
     canManageCast: !!(source.canManageCast || source.isManager),
     canSeeThoughts: !!source.canSeeThoughts,
+    canInject: !!source.canInject,
     canWriteDocuments: !!(source.canWriteDocuments || source.isWriter),
+    canPause: typeof source.canPause === "boolean" ? source.canPause : (!!(source.canDirect || source.isDirector) || !(source.canManageCast || source.isManager || source.canResearch || source.isResearcher)),
+    canAnchor: typeof source.canAnchor === "boolean" ? source.canAnchor : (!!(source.canDirect || source.isDirector) || !(source.canManageCast || source.isManager || source.canResearch || source.isResearcher)),
+    canPinFacts: typeof source.canPinFacts === "boolean" ? source.canPinFacts : (!!(source.canDirect || source.isDirector) || !(source.canManageCast || source.isManager || source.canResearch || source.isResearcher)),
+    canSuggestSpeaker: typeof source.canSuggestSpeaker === "boolean" ? source.canSuggestSpeaker : (!!(source.canDirect || source.isDirector) || !(source.canManageCast || source.isManager || source.canResearch || source.isResearcher)),
+    canUpdateStyle: typeof source.canUpdateStyle === "boolean" ? source.canUpdateStyle : (!!(source.canDirect || source.isDirector) || !(source.canManageCast || source.isManager || source.canResearch || source.isResearcher)),
     directorMode: ["narrator", "facilitator", "arbiter", "observer"].includes(source.directorMode) ? source.directorMode : undefined,
     color: ["#18726d", "#b84738", "#a2611a", "#355f9f", "#6e4c99", "#4f7d2d", "#9a4668"][index % 7]
   };
@@ -585,7 +591,7 @@ export function stringifyBullets(value) {
 
 export const DEFAULT_SYSTEMS = {
   stageDirections: { enabled: false, intensity: "moderate", maxTokenShare: 0.2 },
-  alignment: { strictness: "moderate", anchorInPrompt: false, nudgeStyle: "gentle-nudge" },
+  alignment: { strictness: "moderate" },
   turnRouting: { strategy: "sequential", allowDirectAddress: true },
   dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false }
 };
@@ -601,7 +607,7 @@ export function legacySystemsFromMode(mode) {
   if (mode === "story") {
     return {
       stageDirections: { enabled: true, intensity: "immersive", maxTokenShare: 0.4 },
-      alignment: { strictness: "loose", anchorInPrompt: false, nudgeStyle: "question" },
+      alignment: { strictness: "loose" },
       turnRouting: { strategy: "agentic", allowDirectAddress: true },
       dmRole: { role: "narrator", narrates: true, canIntroduceElements: true }
     };
@@ -609,7 +615,7 @@ export function legacySystemsFromMode(mode) {
   if (mode === "problem") {
     return {
       stageDirections: { enabled: false, intensity: "moderate", maxTokenShare: 0.2 },
-      alignment: { strictness: "strict", anchorInPrompt: false, nudgeStyle: "hard-redirect" },
+      alignment: { strictness: "strict" },
       turnRouting: { strategy: "sequential", allowDirectAddress: true },
       dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false }
     };
@@ -617,7 +623,7 @@ export function legacySystemsFromMode(mode) {
   if (mode === "freeform") {
     return {
       stageDirections: { enabled: false, intensity: "moderate", maxTokenShare: 0.2 },
-      alignment: { strictness: "moderate", anchorInPrompt: false, nudgeStyle: "gentle-nudge" },
+      alignment: { strictness: "moderate" },
       turnRouting: { strategy: "sequential", allowDirectAddress: true },
       dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false }
     };
@@ -676,7 +682,7 @@ export function normalizeQuickStartConfig(config, assignFreshIds = true) {
   let settings = undefined;
   if (srcSettings) {
     settings = {};
-    const numKeys = ["temperature", "maxTokens", "topP", "repeatPenalty", "seed", "preflightThreshold", "gravitySensitivity", "turnDelay"];
+    const numKeys = ["temperature", "maxTokens", "topP", "repeatPenalty", "seed", "preflightThreshold", "turnDelay"];
     const boolKeys = ["toolsEnabled", "globalStyleEnabled", "plainLanguageDefault", "streamingEnabled", "showThoughts", "turboMode", "seedEnabled", "enablePreflightRouter", "enableCrossSessionMemory", "roundSnapshotEnabled"];
     const stringKeys = ["globalStylePrompt"];
     for (const k of numKeys) { if (typeof srcSettings[k] === "number") settings[k] = srcSettings[k]; }
@@ -718,13 +724,7 @@ export function normalizeQuickStartConfig(config, assignFreshIds = true) {
       seesPrivateThoughts: !!(dm.canSeeThoughts || dm.seesPrivateThoughts)
     },
     actors: (() => {
-      const normalized = actorSources.map((actor, index) => normalizeQuickStartActor(actor, index, assignFreshIds));
-      // Enforce at most one director — keep the first, clear canDirect on the rest
-      let foundDirector = false;
-      normalized.forEach(a => {
-        if (a.canDirect) { if (foundDirector) { a.canDirect = false; a.canManageCast = false; } else { foundDirector = true; } }
-      });
-      return normalized;
+      return actorSources.map((actor, index) => normalizeQuickStartActor(actor, index, assignFreshIds));
     })(),
     memory: {
       pinnedFacts: normalizeStringArray(memory.pinnedFacts).map(f => f.slice(0, 500)),

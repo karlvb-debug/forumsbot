@@ -110,12 +110,12 @@ export function ScenarioPanel() {
           </>
         )}
 
-        <Field label="Alignment Strictness" info="How firmly actors are kept on the scenario's Task. Stricter settings inject 'get back on topic' nudges when the discussion drifts.">
+        <Field label="Alignment Strictness" info="How frequently actors are reminded of the scenario's Task. Stricter settings inject periodic reminders more often.">
           <select value={alignStrictness} onChange={e => updateSystem('alignment', 'strictness', e.target.value)}>
-            <option value="strict">Strict — hard redirects, alignment enforced</option>
-            <option value="moderate">Moderate — gentle nudges when drifting</option>
-            <option value="loose">Loose — follow the thread naturally</option>
-            <option value="off">Off — no alignment signals</option>
+            <option value="strict">Strict — task reminder every 3 turns</option>
+            <option value="moderate">Moderate — task reminder every 5 turns</option>
+            <option value="loose">Loose — task reminder every 8 turns</option>
+            <option value="off">Off — no periodic task reminders</option>
           </select>
         </Field>
 

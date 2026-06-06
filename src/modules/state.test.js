@@ -202,17 +202,17 @@ describe('normalizeState — scenario.systems deep-merge', () => {
     expect(result.scenario.systems.dmRole.role).toBe('facilitator');
   });
 
-  it('deep-merges alignment subsystem without losing unset fields', () => {
+  it('deep-merges systems without losing unset fields', () => {
     const result = normalizeState({
       scenario: {
         systems: {
-          alignment: { strictness: 'loose' },
+          stageDirections: { enabled: true },
         },
       },
     });
-    expect(result.scenario.systems.alignment.strictness).toBe('loose');
-    expect(result.scenario.systems.alignment.nudgeStyle).toBe('gentle-nudge');
-    expect(result.scenario.systems.alignment.anchorInPrompt).toBe(false);
+    expect(result.scenario.systems.stageDirections.enabled).toBe(true);
+    expect(result.scenario.systems.stageDirections.intensity).toBe('moderate');
+    expect(result.scenario.systems.stageDirections.maxTokenShare).toBe(0.2);
   });
 
   it('migrates legacy routing strategies to speaking-order values', () => {
@@ -308,3 +308,64 @@ describe('normalizeState — document writer migration', () => {
     expect(result.documentWriting.scribeMode).toBe('auto_apply');
   });
 });
+
+describe('normalizeState — actor permissions', () => {
+  it('maps legacy canDirect to true for the new permission fields by default', () => {
+    const result = normalizeState({
+      actors: [
+        { name: 'Legacy Director', canDirect: true }
+      ]
+    });
+    expect(result.actors[0].canDirect).toBe(true);
+    expect(result.actors[0].canPause).toBe(true);
+    expect(result.actors[0].canAnchor).toBe(true);
+    expect(result.actors[0].canPinFacts).toBe(true);
+    expect(result.actors[0].canSuggestSpeaker).toBe(true);
+    expect(result.actors[0].canUpdateStyle).toBe(true);
+  });
+
+  it('restricts new permissions for legacy manager and researcher roles', () => {
+    const result = normalizeState({
+      actors: [
+        { name: 'Legacy Manager', canManageCast: true },
+        { name: 'Legacy Researcher', canResearch: true }
+      ]
+    });
+    expect(result.actors[0].canPause).toBe(false);
+    expect(result.actors[0].canAnchor).toBe(false);
+    expect(result.actors[1].canPause).toBe(false);
+    expect(result.actors[1].canAnchor).toBe(false);
+  });
+
+  it('keeps standard participant permissions for clean non-manager/non-researcher actors', () => {
+    const result = normalizeState({
+      actors: [
+        { name: 'Normal Participant' }
+      ]
+    });
+    expect(result.actors[0].canPause).toBe(true);
+    expect(result.actors[0].canAnchor).toBe(true);
+    expect(result.actors[0].canSuggestSpeaker).toBe(true);
+  });
+
+  it('respects explicitly set boolean values for the new permissions', () => {
+    const result = normalizeState({
+      actors: [
+        {
+          name: 'Custom Actor',
+          canPause: false,
+          canAnchor: true,
+          canPinFacts: false,
+          canSuggestSpeaker: true,
+          canUpdateStyle: false
+        }
+      ]
+    });
+    expect(result.actors[0].canPause).toBe(false);
+    expect(result.actors[0].canAnchor).toBe(true);
+    expect(result.actors[0].canPinFacts).toBe(false);
+    expect(result.actors[0].canSuggestSpeaker).toBe(true);
+    expect(result.actors[0].canUpdateStyle).toBe(false);
+  });
+});
+

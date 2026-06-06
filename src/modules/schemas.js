@@ -95,6 +95,12 @@ const FIELDS = {
               canResearch:    { type: 'boolean' },
               canSeeThoughts: { type: 'boolean' },
               canInject:      { type: 'boolean' },
+              canWriteDocuments: { type: 'boolean' },
+              canPause:       { type: 'boolean' },
+              canAnchor:      { type: 'boolean' },
+              canPinFacts:    { type: 'boolean' },
+              canSuggestSpeaker: { type: 'boolean' },
+              canUpdateStyle: { type: 'boolean' },
             },
             required: ['name', 'role'],
             additionalProperties: false,
@@ -159,40 +165,30 @@ function selectFields(actor, options = {}) {
   // `thought` is always required in the schema; when thoughts are off the model
   // simply returns "". (The showThoughts param is kept for the callers' intent.)
   required.push('thought');
-
-  // Director
-  if (actor.canDirect) {
-    required.push('action', 'message');
-    if (allowNextSpeaker) optional.push('nextSpeaker');
-    optional.push('anchor', 'pinFact', 'pauseRequest');
-    optional.push('manageActors', 'promptInjections', 'privateMessages');
-    optional.push('updateStyle');
-    return { required, optional };
-  }
-
-  // Manager (canManageCast but not canDirect)
-  if (actor.canManageCast) {
-    required.push('action', 'message');
-    optional.push('manageActors');
-    if (actor.canInject) {
-      optional.push('promptInjections', 'privateMessages');
-    }
-    return { required, optional };
-  }
-
-  // Researcher
-  if (actor.canResearch) {
-    required.push('action', 'message');
-    return { required, optional };
-  }
-
-  // Regular actor
   required.push('action', 'message');
-  if (allowNextSpeaker) optional.push('nextSpeaker');
-  optional.push('anchor', 'pinFact', 'pauseRequest', 'updateStyle');
+
+  if (allowNextSpeaker && actor.canSuggestSpeaker) {
+    optional.push('nextSpeaker');
+  }
+  if (actor.canAnchor) {
+    optional.push('anchor');
+  }
+  if (actor.canPinFacts) {
+    optional.push('pinFact');
+  }
+  if (actor.canPause) {
+    optional.push('pauseRequest');
+  }
+  if (actor.canManageCast) {
+    optional.push('manageActors');
+  }
   if (actor.canInject) {
     optional.push('promptInjections', 'privateMessages');
   }
+  if (actor.canUpdateStyle) {
+    optional.push('updateStyle');
+  }
+
   return { required, optional };
 }
 

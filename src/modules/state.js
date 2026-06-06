@@ -270,6 +270,13 @@ function normalizeState(value = {}) {
       canManageCast: true,
       canResearch: false,
       canSeeThoughts: !!merged.dm.seesPrivateThoughts,
+      canInject: true,
+      canWriteDocuments: false,
+      canPause: true,
+      canAnchor: true,
+      canPinFacts: true,
+      canSuggestSpeaker: true,
+      canUpdateStyle: true,
       temperature: 0.8,
       relationships: {}
     };
@@ -303,6 +310,11 @@ function normalizeState(value = {}) {
     canSeeThoughts: !!(actor.canSeeThoughts),
     canInject: !!(actor.canInject),
     canWriteDocuments: !!(actor.canWriteDocuments || actor.isWriter),
+    canPause: typeof actor.canPause === "boolean" ? actor.canPause : (!!actor.canDirect || !(actor.canManageCast || actor.isManager || actor.canResearch || actor.isResearcher)),
+    canAnchor: typeof actor.canAnchor === "boolean" ? actor.canAnchor : (!!actor.canDirect || !(actor.canManageCast || actor.isManager || actor.canResearch || actor.isResearcher)),
+    canPinFacts: typeof actor.canPinFacts === "boolean" ? actor.canPinFacts : (!!actor.canDirect || !(actor.canManageCast || actor.isManager || actor.canResearch || actor.isResearcher)),
+    canSuggestSpeaker: typeof actor.canSuggestSpeaker === "boolean" ? actor.canSuggestSpeaker : (!!actor.canDirect || !(actor.canManageCast || actor.isManager || actor.canResearch || actor.isResearcher)),
+    canUpdateStyle: typeof actor.canUpdateStyle === "boolean" ? actor.canUpdateStyle : (!!actor.canDirect || !(actor.canManageCast || actor.isManager || actor.canResearch || actor.isResearcher)),
     directorMode: actor.directorMode || ((actor.canDirect || actor.isDirector) ? scenarioDirectorMode : 'facilitator'),
     authority: typeof actor.authority === "number" ? Math.max(0, Math.min(100, actor.authority)) : 50,
     // Scheduling: migrate the legacy four-way turnSchedule enum to the cadence

@@ -1231,6 +1231,47 @@ input[type="range"]::-webkit-slider-thumb {
   font-weight: 600;
 }
 
+/* Permissions Checkbox Grid (expanded card body) */
+.permissions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.perm-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-input);
+  transition: border-color .15s, background .15s;
+}
+.perm-checkbox-label:hover {
+  border-color: var(--border);
+  background: var(--bg-raised);
+}
+.perm-checkbox-label input[type="checkbox"] {
+  margin-top: 2.5px;
+  cursor: pointer;
+  accent-color: var(--accent);
+  width: 13px;
+  height: 13px;
+}
+.perm-label-text {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--fg-dim);
+}
+.perm-desc-text {
+  font-size: 9.5px;
+  color: var(--fg-mute);
+  line-height: 1.25;
+  margin-top: 1px;
+}
+
 .expand-caret { color: var(--fg-faint); transition: transform .2s; }
 .actor-card.expanded .expand-caret { transform: rotate(90deg); }
 

@@ -534,6 +534,27 @@ describe('askActor style defaults', () => {
     const user = chatJson.mock.calls[0][1];
     expect(user).not.toContain('STYLE — applies to your message this turn');
   });
+
+  it('voice replaces global style in system prompt when actor has voice', async () => {
+    const actor = { id: 'a1', name: 'Alex', role: 'Analyst', persona: '', goal: '', voice: 'Dry and precise', enabled: true, color: '#18726d' };
+    mockState.actors = [actor];
+
+    await askActor(actor);
+
+    const system = chatJson.mock.calls[0][0];
+    expect(system).toContain('Voice: Dry and precise');
+    expect(system).not.toContain('GLOBAL STYLE:');
+  });
+
+  it('voice suppresses the tail style reminder', async () => {
+    const actor = { id: 'a1', name: 'Alex', role: 'Analyst', persona: '', goal: '', voice: 'Dry and precise', enabled: true, color: '#18726d' };
+    mockState.actors = [actor];
+
+    await askActor(actor);
+
+    const user = chatJson.mock.calls[0][1];
+    expect(user).not.toContain('STYLE — applies to your message this turn');
+  });
 });
 
 describe('outcome extraction trigger policy', () => {
@@ -627,3 +648,65 @@ describe('sanitizeSpeakingPlan', () => {
     expect(sanitizeSpeakingPlan('Alice', [{ id: 'a1', name: 'Alice' }])).toBeNull();
   });
 });
+
+describe('askActor schema generation based on abilities', () => {
+  beforeEach(() => {
+    chatJson.mockReset();
+    chatJson.mockResolvedValue({ action: 'speak', thought: '', message: 'ok' });
+    mockState.settings.globalStyleEnabled = true;
+    mockState.settings.turboMode = false;
+    mockState.scenario = { title: 'Test Forum', premise: 'Premise', task: 'Task', doneWhen: '', systems: { turnRouting: { allowDirectAddress: true } } };
+    mockState.messages = [];
+    mockState.memory = { pinnedFacts: [], sharedSummary: '', openQuestions: [], dmState: '', pendingAnchors: [] };
+    mockState.documents = [];
+  });
+
+  it('includes nextSpeaker in the schema when actor has canSuggestSpeaker true', async () => {
+    const actor = {
+      id: 'a1',
+      name: 'Speaker',
+      role: 'Participant',
+      enabled: true,
+      canSuggestSpeaker: true,
+      canPause: false,
+      canAnchor: false,
+      canPinFacts: false,
+      canUpdateStyle: false
+    };
+    mockState.actors = [actor];
+
+    await askActor(actor);
+
+    const schema = chatJson.mock.calls[0][6];
+    expect(schema.properties.nextSpeaker).toBeDefined();
+    expect(schema.properties.pauseRequest).toBeUndefined();
+    expect(schema.properties.anchor).toBeUndefined();
+    expect(schema.properties.pinFact).toBeUndefined();
+    expect(schema.properties.updateStyle).toBeUndefined();
+  });
+
+  it('omits nextSpeaker in the schema when actor has canSuggestSpeaker false', async () => {
+    const actor = {
+      id: 'a1',
+      name: 'Speaker',
+      role: 'Participant',
+      enabled: true,
+      canSuggestSpeaker: false,
+      canPause: true,
+      canAnchor: true,
+      canPinFacts: true,
+      canUpdateStyle: true
+    };
+    mockState.actors = [actor];
+
+    await askActor(actor);
+
+    const schema = chatJson.mock.calls[0][6];
+    expect(schema.properties.nextSpeaker).toBeUndefined();
+    expect(schema.properties.pauseRequest).toBeDefined();
+    expect(schema.properties.anchor).toBeDefined();
+    expect(schema.properties.pinFact).toBeDefined();
+    expect(schema.properties.updateStyle).toBeDefined();
+  });
+});
+
