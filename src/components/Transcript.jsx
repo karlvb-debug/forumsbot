@@ -394,6 +394,8 @@ export function Transcript({ showThoughts }) {
         } else {
           s.anchors = (s.anchors || []).filter(a => a.messageId !== msgId);
         }
+        // Persist updated message to IndexedDB
+        import('../modules/db.js').then(({ putMessage }) => putMessage(msg)).catch(() => {});
       }
     });
   }, []);
@@ -401,7 +403,11 @@ export function Transcript({ showThoughts }) {
   const onFeedback = useCallback((msgId, value) => {
     mutateState(s => {
       const msg = s.messages.find(m => m.id === msgId);
-      if (msg) msg.feedback = msg.feedback === value ? "" : value;
+      if (msg) {
+        msg.feedback = msg.feedback === value ? "" : value;
+        // Persist updated message to IndexedDB
+        import('../modules/db.js').then(({ putMessage }) => putMessage(msg)).catch(() => {});
+      }
     });
   }, []);
 

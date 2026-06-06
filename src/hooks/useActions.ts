@@ -186,6 +186,8 @@ export function useActions() {
     stateWithMessages.messages = [...stateWithMessages.messages, message];
     if (_db) await (_db.putMessage as (m: unknown) => Promise<void>)(message);
     saveState();
+    // Fire on_user_message triggers before continueConversation runs
+    if (_turns) await (_turns.fireUserMessageTriggers as (m: string) => Promise<void>)(text.trim());
   }, []);
 
   const pingConnection = useCallback(async () => {

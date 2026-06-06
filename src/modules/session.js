@@ -317,8 +317,7 @@ export async function resetSession(fullReset = false) {
   setStatus(fullReset ? "Everything reset to defaults." : "Conversation cleared.", "ok");
 }
 
-export async function confirmAndResetSession() {}
-export async function confirmAndFullReset() {}
+
 
 export function loadPresetFile(file) {
   const reader = new FileReader();
@@ -411,14 +410,12 @@ export function addManager() {
   saveState();
 }
 
-export async function generateActorFromDescription() {
-  // Actor generation is handled directly in ActorsPanel via its own description input.
-}
+
 
 export async function generateQuickStart(promptOverride = "") {
   if (!state.settings.model) {
     setQuickStartStatus("Choose a model first.");
-    openAiAssistantPanel();
+
     return;
   }
   const prompt = (promptOverride || state.ui.quickStartPrompt || "").trim();
@@ -428,7 +425,7 @@ export async function generateQuickStart(promptOverride = "") {
   }
   state.ui.quickStartPrompt = "";
 
-  setQuickStartBusy(true);
+
   setQuickStartStatus("Thinking…");
 
   const currentConfig = {
@@ -539,7 +536,7 @@ export async function generateQuickStart(promptOverride = "") {
   // Add user bubble immediately
   if (!Array.isArray(state.ui.quickStartHistory)) state.ui.quickStartHistory = [];
   state.ui.quickStartHistory.push({ role: "user", content: prompt });
-  renderQuickStartChat();
+
 
   try {
     const temp = state.ui.quickStartTemperature ?? 0.8;
@@ -602,21 +599,17 @@ export async function generateQuickStart(promptOverride = "") {
     }
 
     saveState();
-    renderQuickStartChat();
-    updateAiAssistantApplyButton();
+
   } catch (error) {
     state.ui.quickStartHistory.push({ role: "assistant", content: "", type: "error", message: error.message || "Request failed." });
     setQuickStartStatus("Error: " + (error.message || "Request failed."));
-    renderQuickStartChat();
+
   } finally {
-    setQuickStartBusy(false);
+
   }
 }
 
-export function renderQuickStartChat() {
-  // ScenarioPanel renders chat history declaratively from state.ui.quickStartHistory.
-  // saveState() \u2192 notifyStateChange() drives React re-render; no imperative DOM needed.
-}
+
 export function parseQuickStartConfig(content) {
   const cleaned = sanitizeJsonString(stripCodeFence(content));
   try {
@@ -645,7 +638,7 @@ export async function applyQuickStartConfig() {
   }
   await _applyDraft(draft);
   state.ui.quickStartDraft = null;
-  updateAiAssistantApplyButton();
+
   saveState();
 }
 
@@ -670,7 +663,7 @@ export async function applyQuickStartAtIndex(index) {
   console.debug('[applyQuickStartAtIndex] POST-APPLY state snapshot:', { actorCount: state.actors.length, actorNames: state.actors.map(a => a.name), title: state.scenario.title });
   // Also clear global draft if it matches
   state.ui.quickStartDraft = null;
-  updateAiAssistantApplyButton();
+
   saveState();
 }
 
@@ -790,27 +783,20 @@ export function discardQuickStartConfig() {
   state.ui.quickStartPrompt = "";
   state.ui.quickStartStatus = "";
   saveState();
-  renderQuickStartChat();
-  updateAiAssistantApplyButton();
+
 }
 
 
-export function setQuickStartBusy() {
-  // ScenarioPanel controls button disabled state via its own quickStartBusy local state.
-}
+
 
 export function setQuickStartStatus(message) {
   state.ui.quickStartStatus = message;
   saveState();
 }
 
-export function updateAiAssistantApplyButton() {
-  // ScenarioPanel renders Apply button conditionally from state.ui.quickStartDraft.
-}
 
-export function openAiAssistantPanel() {
-  // Panel is a card in ScenarioPanel — always visible. Nothing to open.
-}
+
+
 
 function normalizeAssistantActorPermissions(source = {}) {
   const out = { ...source };
@@ -1075,6 +1061,25 @@ export async function loadSession(session) {
     state.actors = normalized.actors;
   }
 
+  // Restore document-related fields saved by saveCurrentSession
+  if (session.documentWriting) {
+    state.documentWriting = { ...(state.documentWriting || {}), ...session.documentWriting };
+  }
+  if (Array.isArray(session.documents)) {
+    state.documents = session.documents;
+    // Sync restored documents to IndexedDB so knowledge lookups find them
+    const { putKbEntry } = await import('./knowledge.js');
+    for (const doc of state.documents) {
+      await putKbEntry(doc);
+    }
+  }
+  if (Array.isArray(session.documentTasks)) {
+    state.documentTasks = session.documentTasks;
+  }
+  if (Array.isArray(session.pendingDocumentEdits)) {
+    state.pendingDocumentEdits = session.pendingDocumentEdits;
+  }
+
   state._currentSessionId = session.id;
 
   saveState();
@@ -1126,105 +1131,7 @@ export async function forkSessionAtMessage(messageId) {
   setStatus(`Forked from message ${idx + 1}. ${truncated.length} messages kept.`, 'ok');
 }
 
-// ── Scenario Presets ─────────────────────────────────────────────────────────
 
-export const SCENARIO_PRESETS = {
-  brainstorm: {
-    title: "Brainstorm Session",
-    premise: "A diverse panel is gathered to generate creative ideas around the user's topic without premature judgment.",
-    objective: "Generate at least 10 distinct ideas, cluster them into themes, and identify the top 3 most promising.",
-    systems: {
-      stageDirections: { enabled: false },
-      alignment: { strictness: "moderate", nudgeStyle: "gentle-nudge" },
-      turnRouting: { strategy: "agentic", allowDirectAddress: true },
-      dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false }
-    }
-  },
-  risk: {
-    title: "Risk Assessment",
-    premise: "The panel is analyzing a proposed plan or decision for risks, blind spots, and failure modes.",
-    objective: "Identify all significant risks, rate likelihood and impact, and recommend mitigations for the top 3.",
-    systems: {
-      stageDirections: { enabled: false },
-      alignment: { strictness: "strict", nudgeStyle: "hard-redirect" },
-      turnRouting: { strategy: "sequential", allowDirectAddress: true },
-      dmRole: { role: "arbiter", narrates: false, canIntroduceElements: false }
-    }
-  },
-  debate: {
-    title: "Structured Debate",
-    premise: "Two or more positions are presented. The panel must argue each side rigorously before reaching a verdict.",
-    objective: "Steelman every position, identify the strongest objections, and converge on a reasoned verdict.",
-    systems: {
-      stageDirections: { enabled: false },
-      alignment: { strictness: "strict", nudgeStyle: "hard-redirect" },
-      turnRouting: { strategy: "sequential", allowDirectAddress: true },
-      dmRole: { role: "arbiter", narrates: false, canIntroduceElements: false }
-    }
-  },
-  retrospective: {
-    title: "Project Retrospective",
-    premise: "The panel reviews a recently completed project or sprint to extract lessons.",
-    objective: "Surface what went well, what went wrong, and produce a concrete list of process improvements.",
-    systems: {
-      stageDirections: { enabled: false },
-      alignment: { strictness: "moderate", nudgeStyle: "gentle-nudge" },
-      turnRouting: { strategy: "sequential", allowDirectAddress: true },
-      dmRole: { role: "facilitator", narrates: false, canIntroduceElements: false }
-    }
-  },
-  story: {
-    title: "Collaborative Story",
-    premise: "A group of characters finds themselves in an unfolding situation. The DM narrates the world.",
-    objective: "Collaboratively build an engaging narrative with rising tension and satisfying resolution.",
-    systems: {
-      stageDirections: { enabled: true, intensity: "immersive", maxTokenShare: 0.4 },
-      alignment: { strictness: "loose", anchorInPrompt: false, nudgeStyle: "question" },
-      turnRouting: { strategy: "agentic", allowDirectAddress: true },
-      dmRole: { role: "narrator", narrates: true, canIntroduceElements: true }
-    }
-  },
-  interview: {
-    title: "Expert Panel Interview",
-    premise: "The user is interviewing a panel of specialists on their topic of choice.",
-    objective: "Surface deep insights, surface disagreements between experts, and synthesize practical takeaways.",
-    systems: {
-      stageDirections: { enabled: false },
-      alignment: { strictness: "moderate", nudgeStyle: "gentle-nudge" },
-      turnRouting: { strategy: "agentic", allowDirectAddress: true },
-      dmRole: { role: "observer", narrates: false, canIntroduceElements: false }
-    }
-  },
-  improv: {
-    title: "Collaborative Improv",
-    premise: "Actors collaborate on an unscripted scene. There is no DM narration — characters drive the story themselves.",
-    objective: "Build a coherent, entertaining scene through reactive character play. Say 'yes, and' to keep momentum.",
-    systems: {
-      stageDirections: { enabled: true, intensity: "moderate", maxTokenShare: 0.3 },
-      alignment: { strictness: "loose", nudgeStyle: "question" },
-      turnRouting: { strategy: "agentic", allowDirectAddress: true },
-      dmRole: { role: "observer", narrates: false, canIntroduceElements: false }
-    }
-  },
-  problemsolving: {
-    title: "Problem Solving",
-    premise: "The panel is focused on solving a well-defined problem with concrete constraints and a clear success criterion.",
-    objective: "Arrive at a specific, actionable solution with clear implementation steps and trade-off rationale.",
-    systems: {
-      stageDirections: { enabled: false },
-      alignment: { strictness: "strict", anchorInPrompt: true, nudgeStyle: "hard-redirect" },
-      turnRouting: { strategy: "agentic", allowDirectAddress: true },
-      dmRole: { role: "arbiter", narrates: false, canIntroduceElements: false }
-    }
-  }
-};
-
-export function applyScenarioPreset(key) {
-  const preset = SCENARIO_PRESETS[key];
-  if (!preset) return;
-  state.scenario = mergeScenario(state.scenario, preset);
-  saveState();
-}
 
 // ── Copy as Markdown ─────────────────────────────────────────────────────────
 

@@ -532,10 +532,7 @@ export async function runSingleResponse(options = {}) {
     const strategy = normalizeSpeakingOrderStrategy(state.scenario?.systems?.turnRouting?.strategy);
     if (strategy === 'agentic') {
       let plan = await buildAgenticSpeakingPlan(1, abortController?.signal);
-      if (!plan.length) {
-        const fallback = agenticEligibleActors()[0];
-        plan = fallback ? [fallback.id] : [];
-      }
+      // If the router returns an empty plan, honor it — no one needs to speak.
       state.turnQueue = [...plan];
       if (!plan.length) {
         setStatus("No eligible speaker found.", "warn");
@@ -544,7 +541,7 @@ export async function runSingleResponse(options = {}) {
     } else if (!state.turnQueue.length) {
       buildTurnQueue();
     }
-    return await _runTurn({ summarizeCycle: false, isRoundContinuation: true, forceSpeak: strategy === 'agentic' });
+    return await _runTurn({ summarizeCycle: false, isRoundContinuation: true, forceSpeak: false });
   } finally {
     _pipelineActive = false;
   }
@@ -635,12 +632,7 @@ async function _runTurn(options = {}) {
       const onStream = (data) => updateStreamingBubble(data);
 
       const result = await askActor(participant.data, abortController.signal, onStream, twoPhase, { forceSpeak: !!options.forceSpeak });
-      if (options.forceSpeak && result?.action === 'skip') {
-        result.action = 'speak';
-        if (!String(result.message || '').trim()) {
-          result.message = 'I was selected to speak, but I do not have a substantive new contribution beyond the current thread.';
-        }
-      }
+
 
       const latencyMs = Date.now() - startTime;
 
@@ -703,7 +695,7 @@ async function _runTurn(options = {}) {
         state.memory.turnsSinceSummary += 1;
         const cycleSize = participantCycleCount();
         if (state.memory.turnsSinceSummary >= cycleSize) {
-          summarizeMemory("cycle");
+          await summarizeMemory("cycle");
         }
       }
       // Store prompt parts for debugging
@@ -810,7 +802,7 @@ async function _runRound(options = {}) {
 
   for (let index = 0; index < expectedTurns; index += 1) {
     if (_stopFlag || abortController?.signal.aborted) break;
-    const ok = await runNextTurn({ summarizeCycle: false, isRoundContinuation: true, forceSpeak: strategy === 'agentic' });
+    const ok = await runNextTurn({ summarizeCycle: false, isRoundContinuation: true, forceSpeak: false });
     if (!ok) break;
     completedTurns += 1;
     // Configurable inter-turn pause when auto-running
@@ -829,7 +821,7 @@ async function _runRound(options = {}) {
 
   if (roundMessages.length && state.memory.enabled && !state.settings.turboMode) {
     state.memory.turnsSinceSummary = 0;
-    summarizeMemory("round", roundMessages);
+    await summarizeMemory("round", roundMessages);
   }
   if (roundMessages.length) {
     const shouldStop = await evaluateAutoStopAfterRound(roundMessages, options);

@@ -825,13 +825,16 @@ export async function pingConnection(silent = false) {
     }).catch(() => {}); // non-critical
 
     // Probe the embedding endpoint so we can warn the user if it's broken.
-    // Runs after every successful ping, silent — never blocks or throws.
+    // Only re-probes when the embedding model config changes (not every ping).
     (async () => {
       const embedModel = state.settings.embeddingModel || state.settings.model;
       if (!embedModel) {
+        _lastProbedEmbedConfig = null;
         mutateState(s => { s.ui.embeddingProbeResult = { ok: false, reason: "No model configured. Semantic memory recall and drift detection are disabled." }; });
         return;
       }
+      // Skip probe if the model hasn't changed since last successful probe
+      if (embedModel === _lastProbedEmbedConfig) return;
       try {
         const resp = await fetch("/api/embeddings", {
           method: "POST",
@@ -844,6 +847,7 @@ export async function pingConnection(silent = false) {
         });
         const data = await resp.json();
         const ok = resp.ok && Array.isArray(data?.data?.[0]?.embedding);
+        if (ok) _lastProbedEmbedConfig = embedModel;
         mutateState(s => { s.ui.embeddingProbeResult = ok
           ? { ok: true }
           : { ok: false, reason: `Embedding model "${embedModel}" returned an error — semantic memory is in keyword-only mode.` };
@@ -886,12 +890,13 @@ export async function loadLmStudioModel(identifier) {
 }
 
 let _pingInterval = null;
+let _lastProbedEmbedConfig = null;
 export function startConnectionPing() {
   if (_pingInterval) return; // already running — prevent duplicates on HMR / double-mount
   pingConnection(true);
   _pingInterval = setInterval(() => {
     if (!document.hidden) pingConnection(true);
-  }, 12000);
+  }, 30000);
 }
 
 export function restoreLastConnection() {

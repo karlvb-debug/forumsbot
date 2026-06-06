@@ -16,8 +16,7 @@ export function TelemetryPanel() {
   const extractAttempts = extractLog.length;
   const extractSuccesses = extractLog.filter(e => e.success !== false).length;
   const extractRate = extractAttempts > 0 ? Math.round((extractSuccesses / extractAttempts) * 100) : null;
-  const memDupLog = diagnostics.warnings || [];
-  const memDups = memDupLog.filter(w => w.category === 'memory_dup' || w.msg?.includes('dup')).length;
+
 
   // currentAlignmentScore is 0–100; default to 100 (on-track) before first check
   const alignmentPct = telemetry.currentAlignmentScore ?? 100;
@@ -52,12 +51,6 @@ export function TelemetryPanel() {
             </div>
           </div>
           <div>
-            <div className="card-row" style={{ padding: "4px 0", borderTop: 0 }}>
-              <span className="lbl">Drift</span>
-              <span className="val" style={{ color: (telemetry.drift ?? 0) < 0 ? "var(--ok)" : "var(--warn)" }}>
-                {((telemetry.drift ?? 0) >= 0 ? '+' : '') + (telemetry.drift ?? 0).toFixed(2)}
-              </span>
-            </div>
             <div className="card-row" style={{ padding: "4px 0" }}>
               <span className="lbl">Method</span>
               <span className="val">{telemetry.alignmentMode || 'none'}</span>
@@ -84,10 +77,7 @@ export function TelemetryPanel() {
             <span className="metric-val">{extractRate !== null ? `${extractRate}%` : '—'}</span>
             <span className="metric-lbl">Extract Rate</span>
           </div>
-          <div className="metric-tile">
-            <span className="metric-val">{memDups}</span>
-            <span className="metric-lbl">Mem Dups</span>
-          </div>
+
           <div className="metric-tile">
             <span className="metric-val">{alignmentPct}%</span>
             <span className="metric-lbl">Aligned</span>

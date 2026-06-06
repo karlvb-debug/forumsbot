@@ -26,6 +26,7 @@ export function DocEditorStage({ transcript, composer }) {
   const [writerError, setWriterError] = useState('');
   const editorRef = useRef(null);
   const containerRef = useRef(null);
+  const kbDebounceRef = useRef(null);
 
   // ── Resize state ──────────────────────────────────────────
   const [splitPx, setSplitPx] = useState(340);
@@ -88,7 +89,12 @@ export function DocEditorStage({ transcript, composer }) {
       wordCount: mod.countWords((patch.content ?? entry.content) || ''),
       updatedAt: new Date().toISOString(),
     };
-    await mod.putKbEntry(updated);
+    // Debounce IndexedDB writes by 500ms to avoid hammering IDB on every keystroke
+    if (kbDebounceRef.current) clearTimeout(kbDebounceRef.current);
+    kbDebounceRef.current = setTimeout(() => {
+      mod.putKbEntry(updated);
+    }, 500);
+    // React state update remains immediate for responsiveness
     mutateState(s => {
       if (!s.documents) s.documents = [];
       const idx = s.documents.findIndex(e => e.id === updated.id);

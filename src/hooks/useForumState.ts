@@ -65,8 +65,18 @@ export function getState(): ForumState {
 /**
  * Mutate state and notify React.
  * Usage: mutateState(s => { s.settings.theme = 'light'; });
+ *
+ * React is notified immediately so the UI stays responsive.
+ * localStorage serialization (saveState) is debounced by 300ms
+ * to avoid hammering JSON.stringify on rapid successive mutations.
  */
+let _saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 export function mutateState(fn: (s: ForumState) => void): void {
   fn(state as ForumState);
-  saveState();
+  notifyStateChange();
+  if (_saveDebounceTimer) clearTimeout(_saveDebounceTimer);
+  _saveDebounceTimer = setTimeout(() => {
+    _saveDebounceTimer = null;
+    originalSaveState();
+  }, 300);
 }
