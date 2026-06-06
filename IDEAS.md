@@ -170,6 +170,24 @@ reading papers.
 Running notes from auditing the Inspector panels for (a) controls bound to
 dead/removed systems, and (b) live systems with no UI control.
 
+### Participation panel — small surface, one prompt/enforcement mismatch
+
+Every control binds to a live consumer. No dead UI, no missing UI for
+live fields. One real prompt-vs-engine mismatch:
+
+- [ ] `allowedReasons` UI offers 5 checkboxes, but the actor prompt at
+  `turns.js:1467-1470` only knows the coarse sponsor / non-sponsor
+  split. Custom subsets get silently suppressed by the enforcement at
+  `turns.js:2103` — the actor was never told. Rebuild `allowedDesc`
+  from `policy.allowedReasons` instead of the mode default. Small fix.
+- [ ] Add a small "(remembered across sessions)" hint under Display
+  name to surface the parallel localStorage persistence
+  (`forum_user_context`). Currently invisible.
+- [ ] "Reset to mode default" button for allowed reasons — after
+  customizing there's no quick way back.
+- [ ] Pause History never empties. Add a Clear button. Optional:
+  collapse by default in a `<details>`.
+
 ### Actors panel — fully wired but has one real bug and several gaps
 
 Every control on the panel maps to a live consumer in the engine — no
