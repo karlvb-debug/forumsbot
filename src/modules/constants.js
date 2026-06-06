@@ -78,10 +78,6 @@ export const defaultState = {
     theme: "dark",
     includeTraces: true,
     gravitySensitivity: 50,
-    // Sprint 5: Preflight Skip Router. Default OFF: it adds a classifier LLM call
-    // before every actor turn, and the main actor prompt already enforces skipping.
-    enablePreflightRouter: false,
-    preflightThreshold: 0.35,
     // Cross-Session Actor Memory. Default OFF: when on, each actor's accumulated
     // memory is distilled once at session end (not per turn).
     enableCrossSessionMemory: false,
@@ -228,8 +224,8 @@ export const defaultState = {
       // every actor turn and looks like an infinite "responds again" loop.
       // Keep it visible by default so Director turns appear in the transcript.
       cadence: { unit: 'round', n: 1 },
-      actorMode: 'participant',
-      triggerOn: ['on_user_message', 'on_conflict'],
+      actorMode: 'background',
+      triggerOn: ['on_conflict'],
     },
     {
       id: crypto.randomUUID(),

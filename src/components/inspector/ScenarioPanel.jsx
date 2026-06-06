@@ -43,9 +43,6 @@ export function ScenarioPanel() {
   const stageIntensity = systems.stageDirections?.intensity ?? 'moderate';
   const stageMaxShare = systems.stageDirections?.maxTokenShare ?? 0.2;
   const alignStrictness = systems.alignment?.strictness ?? 'moderate';
-  const turnStrategy = ['agentic', 'smart', 'dm-directed', 'narrative-flow'].includes(systems.turnRouting?.strategy)
-    ? 'agentic'
-    : 'sequential';
   const allowDirectAddress = systems.turnRouting?.allowDirectAddress ?? true;
 
   return (
@@ -115,11 +112,8 @@ export function ScenarioPanel() {
           </select>
         </Field>
 
-        <Field label="Speaking Order" info="Sequential follows the visible queue. Agentic uses one small router call per round to pick only the actors likely to have something useful to add.">
-          <select value={turnStrategy} onChange={e => updateSystem('turnRouting', 'strategy', e.target.value)}>
-            <option value="sequential">Sequential — actors rotate in order</option>
-            <option value="agentic">Agentic — router picks a short speaking plan</option>
-          </select>
+        <Field label="Speaking Order" info="The resolver picks the next speaker based on conversation context: who was addressed, actor handoffs, recency, and relevance. Falls back to a tiny LLM call only when ambiguous.">
+          <span className="field-value muted">Hybrid resolver (automatic)</span>
         </Field>
 
         <Field label="Direct Addressing">

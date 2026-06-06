@@ -108,7 +108,7 @@ describe('normalizeState — cadence migration & loop guard', () => {
       actors: [{ name: 'Director', canDirect: true, actorMode: 'background', turnSchedule: 'every-turn' }],
     });
     expect(result.actors[0].cadence).toEqual({ unit: 'round', n: 1 });
-    expect(result.actors[0].actorMode).toBe('participant');
+    expect(result.actors[0].actorMode).toBe('background');
   });
 
   it('demotes a background actor saved with per-turn cadence to per-round', () => {
@@ -139,7 +139,7 @@ describe('normalizeState — cadence migration & loop guard', () => {
     });
     expect(result.actors[0].triggerOn).toEqual(['on_conflict']);
     expect(result.actors[0].cadence).toEqual({ unit: 'round', n: 1 });
-    expect(result.actors[0].actorMode).toBe('participant');
+    expect(result.actors[0].actorMode).toBe('background');
   });
 });
 

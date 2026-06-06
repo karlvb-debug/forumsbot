@@ -100,12 +100,10 @@ const FIELDS = {
             additionalProperties: false,
           },
         },
-        silence: { type: 'array', items: { type: 'string' } },
-        resume:  { type: 'array', items: { type: 'string' } },
       },
       additionalProperties: false,
     },
-    prompt: '{"create":[{"name":"...","role":"...","persona":"...","goal":"...","voice":"...","authority":50,"temperature":0.8}],"silence":["Name"],"resume":["Name"]} (optional)',
+    prompt: '{"create":[{"name":"...","role":"...","persona":"...","goal":"...","voice":"..."}]} (optional)',
   },
   promptInjections: {
     json: {

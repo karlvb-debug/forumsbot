@@ -182,6 +182,19 @@ export function useActions() {
       type: 'user' as const,
       createdAt: Date.now(),
     };
+    // Detect @mention in user message
+    const mentionMatch = text.match(/@(\w[\w\s]*?)(?=[,?.!\s]|$)/);
+    if (mentionMatch) {
+      const mentionName = mentionMatch[1].trim().toLowerCase();
+      const stateWithActors = state as { actors: { id: string; name: string; enabled: boolean }[]; ui: { mentionTarget: string | null } };
+      const target = stateWithActors.actors.find((a) =>
+        a.enabled && a.name.toLowerCase() === mentionName
+      );
+      if (target) {
+        stateWithActors.ui.mentionTarget = target.id;
+      }
+    }
+
     const stateWithMessages = state as { messages: unknown[] };
     stateWithMessages.messages = [...stateWithMessages.messages, message];
     if (_db) await (_db.putMessage as (m: unknown) => Promise<void>)(message);
