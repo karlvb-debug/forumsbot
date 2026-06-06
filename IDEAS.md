@@ -170,6 +170,46 @@ reading papers.
 Running notes from auditing the Inspector panels for (a) controls bound to
 dead/removed systems, and (b) live systems with no UI control.
 
+### Telemetry panel — earns its slot but ships three dead displays
+
+Verdict: **keep, don't merge away**. The alignment dial + skip rate
+are genuinely useful for long sessions, and the routing/perf settings
+are real knobs. But the panel currently shows 3 dead values, displays
+the alignment percentage 4 times, and visualizes the same history
+data twice — the live signal is buried in redundancy.
+
+Cut:
+- [ ] Drift row — `telemetry.drift` is **never written** anywhere in
+  the codebase. Always renders `+0.00`.
+- [ ] Mem Dups tile — reads `diagnostics.warnings.filter(category ===
+  'memory_dup')`. **No logWarning call uses that category.** The only
+  warning ever logged is from `telemetry.js:85` with category
+  `"embeddings"`. Permanently 0.
+- [ ] Aligned tile in Session Health grid — duplicates the main dial
+  number (also shown in the header badge and implied by the sparkline).
+- [ ] Tension grid — redundant with spark bars (same data, different
+  visual). Pick one.
+
+Add — data we already collect but don't surface:
+- [ ] Context usage tile: `contextInfo.lastPromptTokens` /
+  `maxContextLength`. Already shown in Topbar; reinforce here as
+  pacing indicator.
+- [ ] Parse failures count: `diagnostics.parseFailures.length` —
+  signals model fighting the JSON schema.
+- [ ] Embedding probe status: `ui.embeddingProbeResult` — gates the
+  dial's embedding mode, worth reinforcing.
+- [ ] Per-actor skip rate breakdown — aggregate is fine; per-actor
+  catches "Alice never speaks" situations.
+- [ ] If `includeTraces` is on, surface recent API call count /
+  average latency from `diagnostics.apiCallLogs`.
+
+Relocate (optional):
+- [ ] `roundSnapshotEnabled` and `enablePreflightRouter` (+ its orphan
+  threshold) are performance toggles, not telemetry. Consider moving
+  to Connection's Generation tuning disclosure.
+- [ ] `gravitySensitivity` and `includeTraces` stay here — both are
+  alignment- or diagnostics-flavored.
+
 ### Memory panel — well-wired but missing controls for live engine state
 
 All controls are bound to live consumers — no dead UI. The findings
