@@ -170,6 +170,52 @@ reading papers.
 Running notes from auditing the Inspector panels for (a) controls bound to
 dead/removed systems, and (b) live systems with no UI control.
 
+### Sessions panel — same UX problems as Library, plus hidden behavior
+
+All handlers live, no dead UI. Same browse + preview problems as
+Library. Plus several pieces of hidden behavior the user can't see.
+
+Hidden behavior:
+- [ ] Sessions auto-save every round during auto-run (`turns.js:875`)
+  and on tab close (`App.jsx:178, 204`). UI implies manual saves
+  required.
+- [ ] 20-session cap (`session.js:1045-1051`) silently evicts the
+  oldest. No warning at 18/19/20.
+- [ ] No name dialog on save — sessions take `scenario.title`. With
+  the recent neutralize fix, default is "Untitled forum" — multiple
+  sessions become indistinguishable.
+- [ ] `_currentSessionId` tracked but never surfaced. Users can't
+  tell which row in the list is their working state.
+
+Footguns:
+- [ ] Loading a session = immediate state replacement, no confirm
+  modal. Auto-save covers the loss but users don't know.
+- [ ] "Save current" button label implies manual saves are required.
+  Rename to "Save now" + add auto-save indicator.
+- [ ] "Load preset" is the import button but the label conflicts
+  with Library's "preset/setup" terminology. Rename to "Import…".
+
+Missing UI:
+- [ ] "Save as new" — `saveCurrentSession` always overwrites; no
+  deliberate branch. Fork-from-message exists in transcript but is
+  not discoverable from here.
+- [ ] Per-session export ("⇩" on each row) so users can export
+  without first loading.
+- [ ] Bulk export / import for full backup.
+- [ ] Search / filter.
+- [ ] Session preview before load (same as Library).
+- [ ] Auto-save indicator ("last saved 30s ago").
+- [ ] "Current" badge on the row matching `_currentSessionId`.
+- [ ] Optional user-given name override (beyond scenario.title).
+
+Strategic option — merge Library + Sessions:
+- [ ] Both panels are variations of "saved state you can load back."
+  Setup-only vs full-session is a category, not a separate panel.
+  Consider unifying under a single Library panel with tabs:
+  Blueprints / Setups / Sessions / Import-Export. Same browse +
+  preview pattern across all three; shared export/import utility.
+  Reduces duplicated UI logic.
+
 ### Library panel — wiring is fine, interface needs a total rethink
 
 All four handlers (apply blueprint, save / apply / delete config) are
