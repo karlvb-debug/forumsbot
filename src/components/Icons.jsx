@@ -288,3 +288,14 @@ export const FastForward = (props) => (
     <path d="M10 5l7 5-7 5V5z" />
   </svg>
 );
+
+export const GripVertical = (props) => (
+  <svg viewBox="0 0 8 16" width={8} height={16} fill="currentColor" {...props}>
+    <circle cx="2.5" cy="4"  r="1.1"/>
+    <circle cx="5.5" cy="4"  r="1.1"/>
+    <circle cx="2.5" cy="8"  r="1.1"/>
+    <circle cx="5.5" cy="8"  r="1.1"/>
+    <circle cx="2.5" cy="12" r="1.1"/>
+    <circle cx="5.5" cy="12" r="1.1"/>
+  </svg>
+);

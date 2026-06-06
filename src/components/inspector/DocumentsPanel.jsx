@@ -1,13 +1,20 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Toggle } from '../shared/FormControls';
 import { useForumState, mutateState } from '../../hooks/useForumState';
+import { renderMarkdown } from '../../modules/markdown.js';
 import * as Ic from '../Icons';
 
 const FILTERS = ['all', 'writable', 'reference', 'pending'];
 const FILTER_LABELS = { all: 'All', writable: 'Writable', reference: 'Reference', pending: 'Pending' };
 
-function DocRow({ entry, actors, writerActors, designatedWriterId, pendingCount, onUpdate, onDelete }) {
+function DocRow({
+  entry, actors, writerActors, designatedWriterId, pendingCount,
+  bulkMode, isSelected, onToggleSelect,
+  isDragOver, isDragging, onDragStart, onDragOver, onDragLeave, onDrop,
+  onUpdate, onDelete,
+}) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [fetchingId, setFetchingId] = useState(false);
   const [fetchError, setFetchError] = useState(null);
 
@@ -22,7 +29,7 @@ function DocRow({ entry, actors, writerActors, designatedWriterId, pendingCount,
       const content = await mod.fetchUrlContent(entry.url);
       await onUpdate(entry, {
         content,
-        title: entry.title && entry.title !== 'New link' ? entry.title : entry.url
+        title: entry.title && entry.title !== 'New link' ? entry.title : entry.url,
       });
     } catch (err) {
       setFetchError(err?.message || 'Fetch failed');
@@ -33,10 +40,37 @@ function DocRow({ entry, actors, writerActors, designatedWriterId, pendingCount,
 
   const wordCount = entry.wordCount || 0;
   const versionCount = entry.versions?.length || 0;
+  const hasContent = !!(entry.content || '').trim();
 
   return (
-    <div className={`doc-row ${settingsOpen ? 'open' : ''}`}>
+    <div
+      className={[
+        'doc-row',
+        settingsOpen ? 'open' : '',
+        isDragging ? 'dragging' : '',
+        isDragOver ? 'drag-over' : '',
+      ].filter(Boolean).join(' ')}
+      draggable
+      onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart(entry.id); }}
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; onDragOver(entry.id); }}
+      onDragLeave={onDragLeave}
+      onDrop={(e) => { e.preventDefault(); onDrop(entry.id); }}
+    >
       <div className="doc-row-main">
+        <span className="doc-grip" title="Drag to reorder">
+          <Ic.GripVertical width={8} height={14} />
+        </span>
+
+        {bulkMode && (
+          <input
+            type="checkbox"
+            className="doc-row-check"
+            checked={isSelected}
+            onChange={() => onToggleSelect(entry.id)}
+            onClick={(e) => e.stopPropagation()}
+          />
+        )}
+
         <button
           className="doc-row-chevron"
           onClick={() => setSettingsOpen(v => !v)}
@@ -64,6 +98,16 @@ function DocRow({ entry, actors, writerActors, designatedWriterId, pendingCount,
           {pendingCount > 0 && <span className="doc-pending-dot">·{pendingCount}</span>}
         </span>
 
+        {hasContent && (
+          <button
+            className={`mini-icon-btn ${previewOpen ? 'active' : ''}`}
+            onClick={() => setPreviewOpen(v => !v)}
+            title={previewOpen ? 'Hide preview' : 'Preview content'}
+          >
+            <Ic.Eye width={13} height={13} />
+          </button>
+        )}
+
         <button
           className="mini-icon-btn"
           onClick={() => mutateState(s => { s.ui.focusedDocId = entry.id; })}
@@ -79,6 +123,24 @@ function DocRow({ entry, actors, writerActors, designatedWriterId, pendingCount,
         />
       </div>
 
+      {/* Inline content preview */}
+      {previewOpen && hasContent && (
+        <div className="doc-row-preview">
+          <div
+            className="md-body doc-row-preview-body"
+            dangerouslySetInnerHTML={{ __html: renderMarkdown((entry.content || '').slice(0, 800)) }}
+          />
+          {(entry.content || '').length > 800 && (
+            <div className="doc-row-preview-more">
+              <button className="btn sm ghost" onClick={() => mutateState(s => { s.ui.focusedDocId = entry.id; })}>
+                Open full document…
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Settings (expanded) */}
       {settingsOpen && (
         <div className="doc-row-settings">
           <div className="doc-row-setting">
@@ -164,7 +226,13 @@ export function DocumentsPanel() {
   const writerActors = actors.filter(a => a.enabled && a.canWriteDocuments);
 
   const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
   const [newDocWritable, setNewDocWritable] = useState(true);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selected, setSelected] = useState(new Set());
+  const [dragOverId, setDragOverId] = useState(null);
+  const dragSrcRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const pendingByDoc = {};
   for (const e of pendingDocumentEdits) {
@@ -244,19 +312,107 @@ export function DocumentsPanel() {
     });
   }, []);
 
+  // ── Drag reorder ────────────────────────────────────────────────────────
+  const handleDragStart = useCallback((id) => { dragSrcRef.current = id; }, []);
+  const handleDragOver = useCallback((id) => { setDragOverId(id); }, []);
+  const handleDragLeave = useCallback(() => { setDragOverId(null); }, []);
+
+  const handleDrop = useCallback(async (targetId) => {
+    const srcId = dragSrcRef.current;
+    dragSrcRef.current = null;
+    setDragOverId(null);
+    if (!srcId || srcId === targetId) return;
+
+    let updated = [];
+    mutateState(s => {
+      const docs = s.documents || [];
+      const srcIdx = docs.findIndex(d => d.id === srcId);
+      const tgtIdx = docs.findIndex(d => d.id === targetId);
+      if (srcIdx < 0 || tgtIdx < 0) return;
+      const [item] = docs.splice(srcIdx, 1);
+      docs.splice(tgtIdx, 0, item);
+      docs.forEach((d, i) => { d.sortOrder = i; });
+      updated = docs.map(d => ({ ...d }));
+    });
+
+    const mod = await import('../../modules/knowledge.js');
+    for (const d of updated) await mod.putKbEntry(d);
+  }, []);
+
+  // ── Bulk select ─────────────────────────────────────────────────────────
+  const toggleSelect = useCallback((id) => {
+    setSelected(s => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelected(new Set(documents.map(d => d.id)));
+  }, [documents]);
+
+  const clearSel = useCallback(() => setSelected(new Set()), []);
+
+  const bulkSetEnabled = useCallback(async (val) => {
+    for (const id of selected) {
+      const doc = documents.find(d => d.id === id);
+      if (doc) await persistEntry(doc, { enabled: val });
+    }
+  }, [selected, documents, persistEntry]);
+
+  const bulkDelete = useCallback(async () => {
+    if (!window.confirm(`Delete ${selected.size} document${selected.size !== 1 ? 's' : ''}?`)) return;
+    const mod = await import('../../modules/knowledge.js');
+    for (const id of selected) await mod.deleteKbEntry(id);
+    mutateState(s => { s.documents = (s.documents || []).filter(d => !selected.has(d.id)); });
+    setSelected(new Set());
+  }, [selected]);
+
+  const exitBulk = () => { setBulkMode(false); setSelected(new Set()); };
+
+  // ── Import ───────────────────────────────────────────────────────────────
+  const importFiles = useCallback(async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const mod = await import('../../modules/knowledge.js');
+    for (const file of files) {
+      const text = await file.text();
+      const title = file.name.replace(/\.(md|txt|markdown)$/i, '');
+      const entry = mod.newDocument({ title, content: text, aiEditable: newDocWritable });
+      await persistEntry(entry, {});
+    }
+    e.target.value = '';
+  }, [newDocWritable, persistEntry]);
+
+  const importClipboard = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) return;
+      const mod = await import('../../modules/knowledge.js');
+      const firstLine = text.split('\n').find(l => l.trim())?.replace(/^#+\s*/, '').trim().slice(0, 60) || 'Pasted document';
+      const entry = mod.newDocument({ title: firstLine, content: text, aiEditable: newDocWritable });
+      await persistEntry(entry, {});
+    } catch {
+      // clipboard access denied — silently ignore
+    }
+  }, [newDocWritable, persistEntry]);
+
+  // ── Filtering ────────────────────────────────────────────────────────────
   const filteredDocs = documents.filter(d => {
-    if (filter === 'writable') return d.aiEditable;
-    if (filter === 'reference') return !d.aiEditable;
-    if (filter === 'pending') return (pendingByDoc[d.id] || 0) > 0;
+    if (filter === 'writable') { if (!d.aiEditable) return false; }
+    else if (filter === 'reference') { if (d.aiEditable) return false; }
+    else if (filter === 'pending') { if (!(pendingByDoc[d.id] > 0)) return false; }
+    if (search) {
+      const q = search.toLowerCase();
+      if (!(d.title || '').toLowerCase().includes(q) && !(d.content || '').toLowerCase().includes(q)) return false;
+    }
     return true;
   });
 
-  const emptyMsg = {
-    pending: 'No pending proposals.',
-    writable: 'No writable documents yet.',
-    reference: 'No reference documents yet.',
-    all: 'No documents yet.',
-  }[filter];
+  const emptyMsg = search
+    ? 'No documents match your search.'
+    : { pending: 'No pending proposals.', writable: 'No writable documents yet.', reference: 'No reference documents yet.', all: 'No documents yet.' }[filter];
 
   return (
     <div>
@@ -293,8 +449,30 @@ export function DocumentsPanel() {
         <div className="card-title">
           <h3><Ic.Doc /> Documents</h3>
           <span className="doc-count-badge">{documents.length}</span>
+          <button
+            className={`btn sm ghost doc-bulk-toggle ${bulkMode ? 'active' : ''}`}
+            onClick={() => bulkMode ? exitBulk() : setBulkMode(true)}
+            title="Select multiple"
+          >
+            {bulkMode ? 'Done' : 'Select'}
+          </button>
         </div>
 
+        {/* Search */}
+        <div className="doc-search-wrap">
+          <Ic.Search width={13} height={13} />
+          <input
+            className="doc-search-input"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search documents…"
+          />
+          {search && (
+            <button className="doc-search-clear" onClick={() => setSearch('')} title="Clear">×</button>
+          )}
+        </div>
+
+        {/* Filter chips */}
         <div className="doc-filter-chips">
           {FILTERS.map(f => (
             <button
@@ -308,6 +486,18 @@ export function DocumentsPanel() {
           ))}
         </div>
 
+        {/* Bulk actions bar */}
+        {bulkMode && selected.size > 0 && (
+          <div className="doc-bulk-bar">
+            <span className="doc-bulk-count">{selected.size} selected</span>
+            <button className="btn sm ghost" onClick={() => bulkSetEnabled(true)}>Enable</button>
+            <button className="btn sm ghost" onClick={() => bulkSetEnabled(false)}>Disable</button>
+            <button className="btn sm ghost" style={{ color: 'var(--danger)' }} onClick={bulkDelete}>Delete</button>
+            <button className="btn sm ghost" onClick={selectAll}>All</button>
+            <button className="btn sm ghost" onClick={clearSel}>None</button>
+          </div>
+        )}
+
         <div className="doc-file-list">
           {filteredDocs.map(entry => (
             <DocRow
@@ -317,6 +507,15 @@ export function DocumentsPanel() {
               writerActors={writerActors}
               designatedWriterId={designatedWriterId}
               pendingCount={pendingByDoc[entry.id] || 0}
+              bulkMode={bulkMode}
+              isSelected={selected.has(entry.id)}
+              onToggleSelect={toggleSelect}
+              isDragging={dragSrcRef.current === entry.id}
+              isDragOver={dragOverId === entry.id}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
               onUpdate={persistEntry}
               onDelete={deleteEntry}
             />
@@ -331,6 +530,20 @@ export function DocumentsPanel() {
           </label>
           <button className="btn sm" onClick={() => addEntry('document')}><Ic.Plus width={11} height={11} /> Document</button>
           <button className="btn sm" onClick={() => addEntry('link')}><Ic.Globe width={11} height={11} /> Link</button>
+          <button className="btn sm ghost" onClick={() => fileInputRef.current?.click()} title="Import from file">
+            <Ic.Upload width={11} height={11} /> Import
+          </button>
+          <button className="btn sm ghost" onClick={importClipboard} title="Paste from clipboard">
+            Paste
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".txt,.md,.markdown"
+            multiple
+            style={{ display: 'none' }}
+            onChange={importFiles}
+          />
         </div>
       </div>
     </div>

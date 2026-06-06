@@ -25,7 +25,11 @@ export async function syncIdbToDocuments() {
 }
 
 export async function getAllKbEntries() {
-  return (state.documents || []).slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  return (state.documents || []).slice().sort((a, b) => {
+    const sa = a.sortOrder ?? new Date(a.createdAt).getTime();
+    const sb = b.sortOrder ?? new Date(b.createdAt).getTime();
+    return sa - sb;
+  });
 }
 
 export async function putKbEntry(entry) {
@@ -216,6 +220,7 @@ export function newKbEntry(overrides = {}) {
 
 export function newDocument(overrides = {}) {
   const now = new Date().toISOString();
+  const maxOrder = (state.documents || []).reduce((m, d) => Math.max(m, d.sortOrder ?? 0), 0);
   return {
     id: crypto.randomUUID(),
     title: "",
@@ -232,6 +237,7 @@ export function newDocument(overrides = {}) {
     aiEditable: false,
     versions: [],
     maxVersions: 20,
+    sortOrder: maxOrder + 1,
     ...overrides
   };
 }
