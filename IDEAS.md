@@ -170,6 +170,50 @@ reading papers.
 Running notes from auditing the Inspector panels for (a) controls bound to
 dead/removed systems, and (b) live systems with no UI control.
 
+### Actors panel — fully wired but has one real bug and several gaps
+
+Every control on the panel maps to a live consumer in the engine — no
+dead UI. The findings here are a bug, a few missing controls for state
+that exists, and small UX quibbles.
+
+**Bug to fix:**
+- [ ] Reset memory button uses `a.id` as the key
+  (`ActorsPanel.jsx:500`), but cross-session actor memory is keyed by
+  `actor.name` (`turns.js:1118, 1123, 1603`). The button clears
+  in-state `actor.thoughts` but the distilled DB record persists across
+  sessions. One-char fix: `putActorMemory(a.name, '')`. Add a
+  confirmation modal while in there.
+
+Live state with no UI:
+- [ ] Color picker for `actor.color`. Set on create from
+  `DEFAULT_COLORS`, never editable after. Surface in the Identity row
+  with `<input type="color">`. Size: trivial.
+- [ ] "View memory" disclosure for `actor.thoughts`. Currently only
+  resettable, never viewable. Helpful for debugging "why is this actor
+  stuck on X?". Size: small.
+- [ ] Surface cross-session distilled memory from the `actor-memory`
+  store. No way today for the user to see what's accumulated. Pair it
+  with the View memory disclosure. Size: small.
+- [ ] `actor.skipCount` is tracked but invisible. Show next to the
+  stats badge (`Nt · Nw · Ns`). Useful for spotting silent actors.
+  Size: trivial.
+
+UX quibbles:
+- [ ] `canSeeThoughts` chip should be conditional on `canDirect` — it's
+  gated as director-only at `turns.js:1172`. Toggling it on a regular
+  actor does nothing.
+- [ ] `canManageCast` similarly pairs with `canDirect` in practice.
+  Consider grouping or gating.
+- [ ] Add confirmation modal for Remove actor (one-click destructive).
+- [ ] Permission chips are a flat row of 6. As `actor.model` /
+  `actor.thinking` and other capabilities land (three-mode thinking),
+  sub-group into Role / Capabilities / Visibility.
+- [ ] `actor.expanded` is UI state living on the data model and
+  persisting to localStorage. Move to local component state. Minor.
+- [ ] Authority badge isn't shown in the collapsed actor header — only
+  permission icons + stats. For tuning authority, the value isn't
+  visible at a glance.
+
 ### Scenario panel — exposes live engine surface but ships dead state
 
 The panel's controls all bind to live systems. The problem is in the state
