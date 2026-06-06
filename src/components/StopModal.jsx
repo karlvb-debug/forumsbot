@@ -1,4 +1,4 @@
-import { useState } from 'react';
+
 
 export function StopModal({ reason, onStop, onContinue }) {
   const title = reason.startsWith('Task complete')

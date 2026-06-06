@@ -13,7 +13,7 @@ export default function AutoStopPanel() {
 
   const checkGoalNow = async () => {
     const turns = await import('../../modules/turns.js');
-    await turns.judgeGoal();
+    await turns.judgeGoal([], { manual: true });
   };
 
   const canCheck = !!model && !!doneWhen.trim() && messages.length > 0;
@@ -51,7 +51,7 @@ export default function AutoStopPanel() {
           <span className="disclosure-sub">goal judge · skip · max rounds</span>
         </summary>
         <div className="disclosure-body">
-          <Toggle checked={autoStop.goalCheckEnabled ?? true} onChange={(v) => update('goalCheckEnabled', v)} label="Judge goal after each round" />
+          <Toggle checked={autoStop.goalCheckEnabled ?? true} onChange={(v) => update('goalCheckEnabled', v)} label="Judge completion after each round" />
           <Toggle checked={autoStop.stopOnAllSkip ?? true} onChange={(v) => update('stopOnAllSkip', v)} label="Stop when everyone skips" />
           <Toggle checked={autoStop.maxRoundsEnabled ?? false} onChange={(v) => update('maxRoundsEnabled', v)} label="Max rounds" />
           <Field label="Max rounds">

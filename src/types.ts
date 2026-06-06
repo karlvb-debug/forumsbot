@@ -74,6 +74,8 @@ export interface Settings {
   theme: 'dark' | 'light';
   includeTraces: boolean;
   gravitySensitivity: number;
+  enablePreflightRouter: boolean;
+  preflightThreshold: number;
   enableCrossSessionMemory: boolean;
   streamingEnabled: boolean;
   turboMode: boolean;

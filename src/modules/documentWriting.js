@@ -151,7 +151,7 @@ export async function runDocumentTask(taskId, signal = null) {
   const selected = selectionText(doc, task.selection);
   const user = [
     `Scenario: ${state.scenario?.title || "Untitled forum"}`,
-    state.scenario?.objective ? `Objective: ${state.scenario.objective}` : "",
+    state.scenario?.task ? `Task: ${state.scenario.task}` : "",
     `Task: ${task.instruction}`,
     "",
     `Target document: ${doc.title || "Untitled"} [id: ${doc.id}]`,
@@ -297,7 +297,7 @@ async function judgeAndDraft(writer, doc, signal, { instruction = null } = {}) {
 
   const user = [
     `Scenario: ${state.scenario?.title || "Untitled forum"}`,
-    state.scenario?.objective ? `Objective: ${state.scenario.objective}` : "",
+    state.scenario?.task ? `Task: ${state.scenario.task}` : "",
     instruction ? `User request: ${instruction}` : "Task: Decide whether the latest turns introduced anything worth capturing in the target document. If yes, propose the edit. If no, return documentEdits: [].",
     "",
     `Target document: ${doc.title || "Untitled"} [id: ${doc.id}]`,

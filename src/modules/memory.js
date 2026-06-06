@@ -42,7 +42,7 @@ export async function recallRelevantChunks(actor) {
     : "";
   const queryText = [
     state.scenario.title,
-    state.scenario.objective,
+    state.scenario.task,
     state.scenario.premise,
     actor?.name,
     actor?.role,
@@ -109,7 +109,7 @@ function scenarioBlock() {
   return [
     `Title: ${state.scenario.title || "Untitled forum"}`,
     state.scenario.premise ? `Premise: ${state.scenario.premise}` : "",
-    state.scenario.objective ? `Objective: ${state.scenario.objective}` : ""
+    state.scenario.task ? `Task: ${state.scenario.task}` : ""
   ].filter(Boolean).join("\n");
 }
 

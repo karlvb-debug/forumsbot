@@ -988,16 +988,25 @@ export async function evaluateAutoStopAfterRound(roundMessages, options = {}) {
   // odd-numbered maxRounds settings are never goal-checked before the cap fires.
   const atMaxRounds = state.autoStop.maxRoundsEnabled && state.autoStop.roundsRun >= state.autoStop.maxRounds;
 
-  if (state.autoStop.goalCheckEnabled && state.autoStop.goal.trim() && (state.autoStop.roundsRun % 2 === 0 || atMaxRounds)) {
+  if (options.fromAuto && state.autoStop.goalCheckEnabled && state.scenario.doneWhen?.trim() && (state.autoStop.roundsRun % 2 === 0 || atMaxRounds)) {
     const verdict = await judgeGoal(roundMessages);
-    if (verdict.achieved) {
-      const confidence = Number.isFinite(verdict.confidence) ? ` (${Math.round(verdict.confidence * 100)}% confidence)` : "";
-      return promptStopOrContinue(`Goal looks achieved${confidence}: ${verdict.reason || "The group appears to have satisfied the goal."}`, {
-        ...options,
-        suggestedGoal: verdict.nextGoalSuggestion
-      });
+    if (verdict.status === 'complete') {
+      state.autoRunning = false;
+      setAutoStopStatus(`Task complete: ${verdict.reason}`);
+      showToast(`Task complete: ${verdict.reason}`, 'ok');
+      await addMessage({ type: 'system', speaker: 'System', content: `✓ Task complete: ${verdict.reason}`, color: 'var(--accent)' });
+      saveState();
+      return true;
     }
-    setAutoStopStatus(`Goal not complete yet: ${verdict.reason || "Needs more discussion."}`);
+    if (verdict.status === 'blocked') {
+      state.autoRunning = false;
+      setAutoStopStatus(`Blocked: ${verdict.reason}`);
+      showToast(`Discussion blocked: ${verdict.reason}`, 'warn');
+      await addMessage({ type: 'system', speaker: 'System', content: `⚠ Blocked: ${verdict.reason}`, color: 'var(--warn)' });
+      saveState();
+      return true;
+    }
+    setAutoStopStatus(`Still working: ${verdict.reason || "Needs more discussion."}`);
   } else if (!atMaxRounds) {
     setAutoStopStatus(`Round ${state.autoStop.roundsRun} complete. Auto-stop is watching for skips and limits.`);
   }
@@ -1011,95 +1020,91 @@ export async function evaluateAutoStopAfterRound(roundMessages, options = {}) {
 }
 
 export async function judgeGoal(roundMessages = [], options = {}) {
-  if (!state.autoStop.goal.trim()) {
-    setAutoStopStatus("Add a goal before checking.");
-    return { achieved: false, confidence: 0, reason: "No goal set.", nextGoalSuggestion: "" };
+  const doneWhen = (state.scenario.doneWhen || '').trim();
+  const task = (state.scenario.task || '').trim();
+  if (!doneWhen) {
+    setAutoStopStatus("Set 'Done When' criteria to enable completion checking.");
+    return { status: 'continue', reason: 'No completion criteria set.' };
   }
   if (!state.settings.model) {
-    setAutoStopStatus("Choose or type a model before checking the goal.");
-    return { achieved: false, confidence: 0, reason: "No model selected.", nextGoalSuggestion: "" };
+    setAutoStopStatus("Choose or type a model before checking.");
+    return { status: 'continue', reason: 'No model selected.' };
   }
 
   const alreadyBusy = getIsGenerating();
   setBusy(true);
-  setAutoStopStatus("Checking goal...");
+  setAutoStopStatus("Checking completion...");
 
-  const chunks = await getAllChunks();
-  const archiveText = chunks.slice(-6).map((chunk) => `- ${chunk.text}`).join("\n");
+  const schema = {
+    type: 'object',
+    properties: {
+      status: { type: 'string', enum: ['continue', 'complete', 'blocked'] },
+      reason: { type: 'string' }
+    },
+    required: ['status', 'reason'],
+    additionalProperties: false
+  };
   const system = [
-    "You judge whether a multi-actor AI forum has achieved a user-defined goal.",
-    "Be conservative: mark achieved only when the transcript contains a concrete answer, decision, deliverable, or next-step plan matching the goal.",
-    "Do not require perfect consensus, but do require enough substance that stopping would be reasonable.",
-    "Return only valid JSON with this exact shape:",
-    "{\"achieved\":false,\"confidence\":0.0,\"reason\":\"short reason\",\"nextGoalSuggestion\":\"optional next goal\"}"
+    "You judge whether a multi-actor forum has completed its task.",
+    "Return only JSON: {\"status\":\"continue|complete|blocked\",\"reason\":\"short explanation\"}",
+    "complete: the criteria are clearly satisfied.",
+    "blocked: something is missing and the group cannot proceed.",
+    "continue: progress is being made but criteria are not yet met."
   ].join("\n");
   const user = [
-    `Goal:\n${state.autoStop.goal}`,
-    scenarioBlock(),
-    `Pinned facts:\n${(Array.isArray(state.memory.pinnedFacts) ? state.memory.pinnedFacts.join("\n") : state.memory.pinnedFacts) || "None."}`,
-    `Shared memory summary:\n${state.memory.sharedSummary || "None."}`,
+    task ? `Task:\n${task}` : '',
+    `Done When:\n${doneWhen}`,
+    `Shared summary:\n${state.memory.sharedSummary || "None."}`,
     `Open questions:\n${(Array.isArray(state.memory.openQuestions) ? state.memory.openQuestions.join("\n") : state.memory.openQuestions) || "None."}`,
-    `Known outcomes:\n${formatCurrentOutcomes()}`,
-    `Recent transcript:\n${formatTranscript(state.messages.slice(-8), 1200, state.actors)}`,
-    `Latest round:\n${formatTranscript(roundMessages, 600, state.actors)}`,
-    `Recent archive summaries:\n${archiveText || "None."}`
-  ].join("\n\n");
+    `Latest round:\n${formatTranscript(roundMessages.length ? roundMessages : state.messages.slice(-8), 600, state.actors)}`
+  ].filter(Boolean).join("\n\n");
 
   try {
-    const content = await chatCompletion(system, user, { temperature: 0.1, maxTokens: 500 });
-    const parsed = parseOutcomeJson(content);
-    const verdict = normalizeGoalVerdict(parsed);
+    const result = await chatStructured(system, user, schema, {
+      temperature: 0.1, maxTokens: 200
+    });
+    const verdict = {
+      status: ['complete', 'blocked', 'continue'].includes(result?.status) ? result.status : 'continue',
+      reason: trimWords(String(result?.reason || ''), 80)
+    };
     if (options.manual) {
-      if (verdict.achieved) {
-        await promptStopOrContinue(`Goal looks achieved: ${verdict.reason || "The group appears to have satisfied the goal."}`, {
-          fromAuto: false,
-          suggestedGoal: verdict.nextGoalSuggestion
-        });
+      if (verdict.status === 'complete') {
+        setAutoStopStatus(`Task complete: ${verdict.reason}`);
+      } else if (verdict.status === 'blocked') {
+        setAutoStopStatus(`Blocked: ${verdict.reason}`);
       } else {
-        setAutoStopStatus(`Goal not complete yet: ${verdict.reason || "Needs more discussion."}`);
+        setAutoStopStatus(`Still working: ${verdict.reason || "Needs more discussion."}`);
       }
     }
     return verdict;
   } catch (error) {
-    const message = error.message || "Goal check failed.";
+    const message = error.message || "Completion check failed.";
     setAutoStopStatus(message);
-    return { achieved: false, confidence: 0, reason: message, nextGoalSuggestion: "" };
+    return { status: 'continue', reason: message };
   } finally {
     if (!alreadyBusy) setBusy(false);
   }
 }
 
+// Legacy compat — old sessions may call normalizeGoalVerdict
 export function normalizeGoalVerdict(value) {
-  const achievedValue = value?.achieved;
-  const achieved = achievedValue === true || String(achievedValue).toLowerCase() === "true" || String(achievedValue).toLowerCase() === "yes";
-  const confidence = Math.min(1, Math.max(0, Number(value?.confidence || 0)));
-  return {
-    achieved,
-    confidence,
-    reason: trimWords(stringifyList(value?.reason), 80),
-    nextGoalSuggestion: trimWords(stringifyList(value?.nextGoalSuggestion), 80)
-  };
+  const status = value?.status || (value?.achieved ? 'complete' : 'continue');
+  return { status, reason: trimWords(stringifyList(value?.reason), 80) };
 }
 
 // Called by the React StopModal component when the user makes a decision.
 let _stopResolve = null;
-export function resolveStopOrContinue(shouldStop, newGoal = "") {
-  // Always clear the modal immediately so it dismisses
+export function resolveStopOrContinue(shouldStop) {
   mutateState(s => { s.ui.stopModal = null; });
 
   if (_stopResolve) {
-    _stopResolve({ shouldStop, newGoal });
+    _stopResolve({ shouldStop });
     _stopResolve = null;
   } else {
-    // Fallback: auto-loop already exited, handle inline
     if (shouldStop) {
       state.autoRunning = false;
       state.autoStop.roundsRun = 0;
       setAutoStopStatus("Stopped by user.");
-    } else if (newGoal && newGoal.trim()) {
-      state.autoStop.goal = newGoal.trim();
-      state.autoStop.roundsRun = 0;
-      setAutoStopStatus("New goal saved. Press Auto to continue.");
     }
     saveState();
   }
@@ -1108,16 +1113,13 @@ export function resolveStopOrContinue(shouldStop, newGoal = "") {
 export async function promptStopOrContinue(reason, options = {}) {
   state.autoRunning = false;
   setAutoStopStatus(reason);
-  // Headline notification for the auto-stop event (the modal handles the choice);
-  // visible even if the user has scrolled away from the transport controls.
   showToast(reason, "warn");
   saveState();
 
-  const { shouldStop, newGoal } = await new Promise(resolve => {
+  const { shouldStop } = await new Promise(resolve => {
     _stopResolve = resolve;
-    mutateState(s => { s.ui.stopModal = { reason, suggestedGoal: options.suggestedGoal || "" }; });
+    mutateState(s => { s.ui.stopModal = { reason }; });
   });
-  // Modal is cleared by resolveStopOrContinue
 
   if (shouldStop) {
     state.autoStop.roundsRun = 0;
@@ -1125,17 +1127,8 @@ export async function promptStopOrContinue(reason, options = {}) {
     saveState();
     return true;
   }
-  if (newGoal.trim()) {
-    state.autoStop.goal = newGoal.trim();
-    state.autoStop.roundsRun = 0;
-    setAutoStopStatus(options.fromAuto ? "New goal saved. Continuing Auto." : "New goal saved. Press Auto to continue.");
-    if (options.fromAuto) { state.autoRunning = true; saveState(); }
-    return false;
-  }
-  state.autoStop.roundsRun = 0;
-  setAutoStopStatus("Auto paused.");
   saveState();
-  return true;
+  return false;
 }
 
 export function setAutoStopStatus(message) {
@@ -1354,7 +1347,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     const system = [
       `You are ${actor.name}, the Manager of this forum.`,
       actor.persona ? `Persona: ${actor.persona}` : "",
-      actor.goal ? `Goal: ${actor.goal}` : "",
+      actor.goal ? `Responsibility: ${actor.goal}` : "",
       globalStyleInstruction(),
       "Your job is to keep the right expertise in the room at the right time.",
       "Each turn, observe the discussion and decide whether the current roster needs adjustment:",
@@ -1397,7 +1390,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     const system = [
       `You are ${actor.name}.`,
       `Role: ${actor.role || "Research Specialist"}`,
-      `Goal: ${actor.goal || "Provide up-to-date objective research and answer open questions to ground the discussion."}`,
+      `Responsibility: ${actor.goal || "Provide up-to-date objective research and answer open questions to ground the discussion."}`,
       `Voice: ${actor.voice || "Objective, fact-driven, structured with clear source citations."}`,
       actor.persona ? `Persona: ${actor.persona}` : "",
       globalStyleInstruction(),
@@ -1468,7 +1461,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     `You are ${actor.name}.`,
     actor.role ? `Role: ${actor.role}` : "",
     actor.persona ? `Persona: ${actor.persona}` : "",
-    actor.goal ? `Personal goal: ${actor.goal}` : "",
+    actor.goal ? `Responsibility: ${actor.goal}` : "",
     actor.voice ? `Voice: ${actor.voice}` : "",
     globalStyleInstruction(),
     relationships,
@@ -1694,7 +1687,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   const roleReminder = kind === "actor" && (participant.role || participant.goal || participant.voice)
     ? [
         `Reminder — you are ${participant.name}${participant.role ? `, ${participant.role}` : ""}.`,
-        participant.goal ? `Your goal: ${participant.goal}` : "",
+        participant.goal ? `Your responsibility: ${participant.goal}` : "",
         participant.voice ? `Your voice: ${participant.voice}` : ""
       ].filter(Boolean).join(" ")
     : "";
@@ -1708,15 +1701,15 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   const periodicInterval = strictness === 'strict' ? 3 : 5;
   const periodicReminder = (
     strictness !== 'off' &&
-    state.scenario.objective &&
+    state.scenario.task?.trim() &&
     state.messages.length > 0 &&
     state.messages.length % periodicInterval === 0 &&
     !sysCfg.stageDirectionsEnabled
-  ) ? `[Reminder: the objective is "${state.scenario.objective}". Stay on track.]` : "";
+  ) ? `[Reminder: the task is "${state.scenario.task}". Stay on track.]` : "";
 
   const gravityWarning = (() => {
     if (strictness === 'off' || !isDrifting || kind !== 'actor' || actor.canResearch || sysCfg.stageDirectionsEnabled) return '';
-    const obj = state.scenario.objective || 'the goal';
+    const obj = state.scenario.task || 'the task';
     if (strictness === 'strict') return `[ALIGNMENT ALERT: The discussion has drifted significantly (${alignment}% aligned). You MUST pivot to: "${obj}". Do not continue the current thread.]`;
     if (strictness === 'loose') return `[The conversation has drifted (${alignment}% aligned). Consider connecting your next point back to: "${obj}"]`;
     return `[The discussion has drifted off-topic (alignment ${alignment}%). Don't repeat what's already been said — challenge an assumption, ask a sharp question, or propose something concrete to get back to: "${obj}"]`;
@@ -1724,7 +1717,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
 
   let nudgeReminder = "";
   if (state.telemetry?.nudgeTriggered && kind === "actor") {
-    nudgeReminder = `[Steering nudge from facilitator: pivot now, address the core objective directly. Objective: "${state.scenario.objective}"]`;
+    nudgeReminder = `[Steering nudge from facilitator: pivot now, address the core task directly. Task: "${state.scenario.task}"]`;
     // Consume nudge
     state.telemetry.nudgeTriggered = false;
     logTransition("manual_nudge_consumed", { actor: actor.name });
@@ -1841,7 +1834,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
 
   let assembled = buildSections(recallChunks, recentMessages);
 
-  // The scenario block (premise + objective) is non-compressible — it is the anchor
+  // The scenario block (premise + task) is non-compressible — it is the anchor
   // that prevents drift and must reach the model intact regardless of budget pressure.
   // This guarantee holds by construction: the degradation stages below only drop
   // retrieved chunks, transcript history, and the KB section — scenarioBlock() is
@@ -2261,19 +2254,13 @@ export function scenarioBlock() {
   const userLabel = storyRole
     ? `${storyRole}${displayName ? ` (${displayName})` : ''}`
     : (displayName || null);
-  const objectiveLine = state.scenario.objective
-    ? `Objective: ${state.scenario.objective}`
-    : "Objective: None set — follow the user's lead, stay in character, and contribute when you have something useful to add.";
-  // Include the discussion goal from auto-stop settings if set — this is what
-  // the user types in the Goal panel and expects actors to work toward.
-  const goalLine = state.autoStop?.goal?.trim()
-    ? `Discussion Goal: ${state.autoStop.goal.trim()}`
-    : '';
+  const taskLine = state.scenario.task?.trim()
+    ? `Task: ${state.scenario.task}`
+    : "Task: None set — follow the user's lead, stay in character, and contribute when you have something useful to add.";
   return [
     `Title: ${state.scenario.title || "Untitled forum"}`,
-    state.scenario.premise ? `Premise: ${state.scenario.premise}` : "",
-    objectiveLine,
-    goalLine,
+    state.scenario.premise ? `Context: ${state.scenario.premise}` : "",
+    taskLine,
     userLabel ? `The human participant in this session is: ${userLabel}. Messages labelled [USER] in the transcript are from them.` : ""
   ].filter(Boolean).join("\n");
 }

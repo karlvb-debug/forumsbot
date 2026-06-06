@@ -6,7 +6,8 @@ const { mockState } = vi.hoisted(() => {
     scenario: {
       title: 'Test Forum',
       premise: 'Test premise',
-      objective: 'Test objective',
+      task: 'Test task',
+      doneWhen: '',
       systems: {},
     },
     userContext: {
@@ -21,7 +22,7 @@ const { mockState } = vi.hoisted(() => {
     pendingInjections: [],
     pendingPrivateMessages: [],
     pendingPauses: [],
-    autoStop: { enabled: false, goal: '', goalCheckEnabled: false, stopOnAllSkip: false, maxRoundsEnabled: false, maxRounds: 5, roundsRun: 0 },
+    autoStop: { enabled: false, goalCheckEnabled: false, stopOnAllSkip: false, maxRoundsEnabled: false, maxRounds: 5, roundsRun: 0 },
     settings: { temperature: 0.8, maxTokens: 2000, topP: 1.0, repeatPenalty: 1.1, toolsEnabled: false, turboMode: false, streamingEnabled: false, enableCrossSessionMemory: false, enableAdaptiveCompression: false },
     ui: { stopModal: null, pauseModal: null, awaitingUserInput: false, currentSpeaker: '' },
     diagnostics: {},
@@ -105,9 +106,7 @@ vi.mock('./telemetry.js', () => ({
   updateSemanticAlignment: vi.fn(),
 }));
 
-vi.mock('./preflight.js', () => ({
-  preflightSkipCheck: vi.fn(async () => false),
-}));
+
 
 vi.mock('./knowledge.js', () => ({
   getKbEntriesForDirector: vi.fn(async () => []),
@@ -248,15 +247,15 @@ describe('resolveSystemSettings', () => {
 // ── scenarioBlock ─────────────────────────────────────────────────────────────
 describe('scenarioBlock', () => {
   beforeEach(() => {
-    mockState.scenario = { title: 'My Forum', premise: 'Test premise', objective: 'Test objective', systems: {} };
+    mockState.scenario = { title: 'My Forum', premise: 'Test premise', task: 'Test task', doneWhen: '', systems: {} };
     mockState.userContext = { interactionMode: 'collaborator', displayName: '', storyRole: '', pausePolicy: {} };
   });
 
-  it('includes title, premise, objective without a mode line', () => {
+  it('includes title, premise, task without a mode line', () => {
     const block = scenarioBlock();
     expect(block).toContain('Title: My Forum');
-    expect(block).toContain('Premise: Test premise');
-    expect(block).toContain('Objective: Test objective');
+    expect(block).toContain('Context: Test premise');
+    expect(block).toContain('Task: Test task');
     expect(block).not.toContain('Mode:');
   });
 
@@ -288,13 +287,13 @@ describe('scenarioBlock', () => {
   it('omits premise line when empty', () => {
     mockState.scenario.premise = '';
     const block = scenarioBlock();
-    expect(block).not.toContain('Premise:');
+    expect(block).not.toContain('Context:');
   });
 
-  it('substitutes a neutral fallback when objective is empty', () => {
-    mockState.scenario.objective = '';
+  it('substitutes a neutral fallback when task is empty', () => {
+    mockState.scenario.task = '';
     const block = scenarioBlock();
-    expect(block).toContain('Objective: None set');
+    expect(block).toContain('Task: None set');
     expect(block).toContain("follow the user's lead");
   });
 
@@ -483,7 +482,7 @@ describe('askActor style defaults', () => {
     mockState.settings.globalStyleEnabled = true;
     mockState.settings.globalStylePrompt = 'Use plain everyday language. Avoid ornate wording.';
     mockState.settings.turboMode = false;
-    mockState.scenario = { title: 'Test Forum', premise: 'Premise', objective: 'Objective', systems: {} };
+    mockState.scenario = { title: 'Test Forum', premise: 'Premise', task: 'Task', doneWhen: '', systems: {} };
     mockState.messages = [];
     mockState.memory = { pinnedFacts: [], sharedSummary: '', openQuestions: [], dmState: '', pendingAnchors: [] };
     mockState.documents = [];

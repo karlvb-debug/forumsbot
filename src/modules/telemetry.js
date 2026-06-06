@@ -42,7 +42,7 @@ export async function updateSemanticAlignment(signal) {
   isTelemetryUpdating = true;
 
   try {
-    const objectiveText = (state.scenario.objective || "").trim();
+    const objectiveText = (state.scenario.task || "").trim();
     if (!objectiveText) {
       state.telemetry.currentAlignmentScore = 100;
       dispatchTelemetryUpdate();
