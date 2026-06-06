@@ -165,6 +165,67 @@ reading papers.
 
 ---
 
+## UI audit — panel by panel
+
+Running notes from auditing the Inspector panels for (a) controls bound to
+dead/removed systems, and (b) live systems with no UI control.
+
+### Scenario panel — exposes live engine surface but ships dead state
+
+The panel's controls all bind to live systems. The problem is in the state
+*around* it: four fields are still in defaults, blueprints, normalization,
+the AI Assistant guide, and types — but the engine has no reader for them.
+Significant cleanup opportunity.
+
+Dead state to remove:
+- [ ] `systems.alignment.nudgeStyle` — extracted to `sysCfg` at
+  `turns.js:25`, never read. Behavior comes from `alignmentStrictness`
+  alone (strict→hard-redirect, moderate→question, loose→soft). Touch:
+  `constants.js`, `state.js`, `blueprints.js`, `session.js` (blueprint
+  catalog + AI Assistant guide), `utils.js`, `types.ts`, tests.
+- [ ] `systems.alignment.anchorInPrompt` — extracted at `turns.js:24`,
+  never read. Anchor injection uses `state.anchors[]` directly. Same
+  touch list as above.
+- [ ] `systems.dmRole.narrates` — superseded by derived
+  `get dmNarrates()` at `turns.js:39`. Field still written by every
+  blueprint and the AI Assistant guide. Remove.
+- [ ] `systems.dmRole.canIntroduceElements` — already removed from
+  `resolveSystemSettings`. Still written by blueprints. Remove.
+- [ ] Consider deprecating `systems.dmRole.role` entirely: panel writes
+  `actor.directorMode` instead, and `dmRole.role` is read only as
+  fallback when no director actor exists. Either keep as legacy seed or
+  remove.
+
+UI changes:
+- [ ] Reorder cards: Core Context (title/premise/objective) above
+  Systems. Currently the most fundamental fields sit at the bottom.
+- [ ] Mild redundancy: Director Behavior selector also lives on the
+  Director actor card. Could collapse to one or accept the redundancy.
+
+### Connection panel — healthy, missing some homes for orphans
+
+All controls in the panel are bound to live systems. No dead-code UI to
+remove. Adds/relocations:
+
+- [ ] Add seed controls (`settings.seed` + `settings.seedEnabled`) to the
+  Generation tuning disclosure — pure generation tuning, currently
+  orphaned in state with no UI. `api.js:103` `applySamplingParams` already
+  honors them. Size: trivial.
+- [ ] Relocate `settings.preflightThreshold` to Telemetry panel next to
+  its companion toggle `enablePreflightRouter`. Currently orphaned.
+- [ ] Relocate `settings.enableCrossSessionMemory` to Memory panel.
+  Currently orphaned.
+- [ ] Relocate `settings.turnDelay` to Goal panel (auto-run section).
+  Currently orphaned.
+- [ ] Reserve placement for `judgmentModel`, `fastModel`,
+  `reasoningEffort` controls below the embedding-model row when the
+  three-mode thinking system ships.
+- [ ] Consider promoting Streaming + Global style toggles out of the
+  Generation tuning disclosure (neither is really "advanced tuning").
+  Mild UX quibble, not urgent.
+
+---
+
 ## Done (recent)
 
 - [x] **Wire up the toast notification system** (2026-06) — Toaster
