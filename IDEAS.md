@@ -170,6 +170,44 @@ reading papers.
 Running notes from auditing the Inspector panels for (a) controls bound to
 dead/removed systems, and (b) live systems with no UI control.
 
+### Goal panel — clean and fully wired, small targeted improvements
+
+All controls bind to live consumers — no dead UI. The panel is small
+and focused. Findings are missing UI, one misleading hint, and a
+documentation gap.
+
+Bug-ish:
+- [ ] Misleading hint under the Goal field claims "LLM judge checks
+  this after each round" but the engine at `turns.js:925` checks
+  `roundsRun % 2 === 0` — every other round. Either fix the hint or
+  make the cadence configurable.
+
+Missing UI for live state:
+- [ ] `settings.turnDelay` (auto-run pacing seconds, consumed at
+  `turns.js:818`) — orphan from Connection audit. Belongs here next
+  to auto-stop. After landing, consider renaming the panel to
+  "Auto-run & Goal".
+- [ ] Manual reset button for `autoStop.roundsRun`. Counter resets
+  automatically on stop / goal change / "Use objective" but has no
+  manual control.
+- [ ] Surface `judgeGoal` confidence (0-1, computed at
+  `turns.js:1009`) when verdicts run. Currently only the reason
+  string flows through `setAutoStopStatus`.
+- [ ] Goal / verdict history. Each `judgeGoal` call clobbers
+  `autoStop.status` — no trail of past judgments or past goals.
+
+Documentation / UX:
+- [ ] Two-goal confusion: `scenario.objective` shapes behavior and
+  alignment; `autoStop.goal` only triggers stop. Engine seeds goal
+  from objective when blank (`state.js:239-240`). The "Use objective"
+  chip hints at the relationship but doesn't explain it. Add a
+  one-line hint under "Goal to reach".
+- [ ] Stop Conditions disclosure mixes LLM judge (expensive) with
+  deterministic conditions (skip / max rounds). Could group "Smart"
+  vs "Hard" stops.
+- [ ] Add "(model call)" hint on the judge toggle and Check Goal Now
+  button (same caveat as Memory panel).
+
 ### Telemetry panel — earns its slot but ships three dead displays
 
 Verdict: **keep, don't merge away**. The alignment dial + skip rate
