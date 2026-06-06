@@ -1,0 +1,184 @@
+# Ideas & TODO
+
+Running backlog of things worth doing, ranked roughly by impact within each
+section. Each entry: one-line bottom-line, key files, rough size.
+
+**Status legend:** `[ ]` idea / `[~]` in progress / `[x]` done / `[-]` decided
+against. Add a date when status changes.
+
+---
+
+## Thinking & models
+
+- [ ] **Three-mode thinking system (Real / Simulated / None).** Per-task mode
+  registry + `judgmentModel` and `fastModel` slots so reasoning models drive
+  judgment tasks while instruct models drive conversation. Strip `<think>`
+  blocks, surface native reasoning into the thought slot, add a global
+  `reasoning_effort` selector. Full design exists — Stages 0-5 with
+  Sonnet/Opus split (see chat history). Files: `api.js`, `turns.js`,
+  `memory.js`, `documentWriting.js`, `session.js`, `preflight.js`,
+  `ConnectionPanel.jsx`, `constants.js`, `state.js`. Size: large (5 stages).
+- [ ] **Per-actor `model` / `thinking` override.** Mirror the existing
+  `actor.temperature` / `actor.maxTokens` pattern so one actor can use a
+  thinking model while others don't. Small add once the three-mode system
+  exists. Files: `state.js`, `constants.js`, `ActorsPanel.jsx`, `turns.js`.
+  Size: small.
+- [ ] **Try Qwen3-Embedding-0.6B as drop-in vs Nomic v1.5.** Empirical A/B on
+  real session archives for fact dedup + chunk recall. No code change yet —
+  just a measurement. Size: small.
+
+## Orchestration & scheduling
+
+- [ ] **Two-step intent pass + speaker scoring.** Each enabled actor emits a
+  tiny `{desire_to_speak, target, intent, reason}` blob; orchestrator picks
+  one based on score. Highest-ceiling architectural change — most other
+  scheduling improvements fall out for free. Files: `turns.js` (round loop),
+  new scheduler module. Size: large.
+- [ ] **Addressee-driven next-speaker routing.** Regex/parse `@Name` or "Bob,
+  what do you think?" in the latest message; bump that actor's priority.
+  Cheap, big naturalness win even without the two-step pass. Files:
+  `turns.js`. Size: small.
+- [ ] **Backchannels.** `actor.backchannel: true` schema flag — when enabled
+  the actor can emit a short acknowledgment ("Agreed.", "Hold on —")
+  instead of a full paragraph. Drops max_tokens, skips full prompt context.
+  Files: `schemas.js`, `turns.js`, `ActorsPanel.jsx`. Size: medium.
+- [ ] **Dominance / participation balancing.** Track turns-per-actor, subtract
+  a dominance penalty from the scheduler score so chatty actors don't
+  monopolize. Trivial once intent-pass exists. Files: `turns.js`. Size: small.
+- [ ] **Conversational repair.** When `openQuestions` has an entry that's
+  stayed unanswered for N turns, nudge the next speaker to address it.
+  Files: `turns.js`, `memory.js`. Size: small.
+- [ ] **Adjacency-pair routing.** Question → answer, then control returns
+  upward instead of cascading. Linguistic concept worth encoding as a
+  scheduler rule. Files: `turns.js`. Size: small.
+
+## Memory & context
+
+- [ ] **Decision memory.** New `state.memory.decisions: []` collection
+  populated by the summarizer (separate from `pinnedFacts` /
+  `openQuestions`). Anchors future turns and feeds output synthesis. Files:
+  `constants.js`, `state.js`, `memory.js`, `turns.js`. Size: medium.
+- [ ] **Memory correction.** UI affordance to mark a chunk or fact as wrong
+  so it stops being recalled. Addresses the "sleeper cell" hallucination
+  propagation problem. Files: `memory.js`, `MemoryPanel.jsx` (or new). Size:
+  medium.
+- [ ] **Bipartite write control on shared memory.** Gate writes to
+  `pinnedFacts` / `openQuestions` behind a `verified` flag so claimed vs
+  ground-truth facts are distinguishable. Files: `memory.js`, `state.js`.
+  Size: small.
+- [ ] **Open-question dedup via embeddings.** Reuse the fact-dedup path
+  (`memory.js:386`) for open questions; also detect when transcript has
+  answered a stale question. Files: `memory.js`. Size: small.
+- [-] **Raw-message RAG as second recall channel.** Evaluated and skipped —
+  current chunk-summary recall covers thematic queries; no concrete failure
+  mode justifies the cost yet. Revisit if verbatim recall becomes a need.
+
+## Detection & quality signals
+
+- [ ] **Sycophancy detector (cosine sim ≥0.95).** Embed each turn, compare
+  to previous; when threshold crossed in a debate context, inject an
+  anti-echo system hint into the next actor's prompt. Uses existing
+  embedding infrastructure. Files: `turns.js`, `telemetry.js`. Size: small.
+- [ ] **State hashing for stuck-loop detection.** Hash recent state
+  (messages + summary + facts); if the hash recurs, force termination.
+  Catches loops that alignment scoring misses. Files: `turns.js`,
+  `telemetry.js`. Size: small.
+- [ ] **Character-drift telemetry.** Embed each actor's persona once; embed
+  their recent outputs; surface drift score and optionally auto-fire the
+  style reminder more aggressively when it dips. Files: `telemetry.js`,
+  `turns.js`. Size: medium.
+
+## Documents
+
+- [ ] **Document semantic retrieval.** Replace the even-cap per-doc
+  allocation in `buildKbSection` with embedding-ranked top-k of doc
+  paragraphs. Biggest remaining embedding upgrade — documents grow
+  unbounded today. Files: `knowledge.js`, possibly new chunk store for
+  docs. Size: medium-large.
+
+## UX & debugging
+
+- [ ] **Output synthesis ("Session Outcome" doc).** On-demand and
+  session-end pass that produces a structured doc: decisions, open
+  questions, dissent, recommended next steps. Ties together documents +
+  pinned facts + open questions. Highest user-visible payoff of all the UX
+  items. Files: new module, `session.js`, `DocEditorStage.jsx`. Size:
+  medium.
+- [ ] **"Why did this actor speak?" chip.** The director already emits a
+  routing reason; surface it as a tiny ℹ chip on each message. Mostly
+  plumbing existing data through to the UI. Files: `turns.js` (persist
+  reason), `Transcript.jsx`. Size: small.
+- [ ] **Force-ask UI ("Ask this actor").** Right-click an actor in the
+  inspector → "Ask next." Or `@Alice` chip in the composer. Pairs with
+  addressee-driven routing. Files: `ActorsPanel.jsx`, `Composer.jsx`,
+  `turns.js`. Size: small.
+- [ ] **Show actor goals on Director roster line.** Append `actor.goal` to
+  the roster entries the Director sees, so its `nextSpeaker` and
+  `promptInjections` decisions are better informed without dumping full
+  personas. Files: `turns.js:1251`. Size: trivial.
+- [ ] **Suggest objective when scenario.objective is empty.** One-shot LLM
+  call after the first user message that proposes an objective; surface
+  as an editable chip ("Suggested: X — Use / Edit / Dismiss"). Files:
+  `turns.js`, new UI. Size: small.
+
+## Research reading list
+
+Reading that would inform the next round of design — not code work, just
+reading. Top three are the most directly applicable to features above.
+
+- [ ] **Lost in the Middle** (Liu et al., 2023) — positional attention in
+  long contexts; justifies our style-reminder-at-tail and would inform
+  placement of anti-sycophancy hints and recall results.
+- [ ] **Towards Understanding Sycophancy in Language Models** (Sharma et
+  al., Anthropic, 2023) — quantifies the failure mode that the sycophancy
+  detector targets. Validates the cosine-sim threshold idea.
+- [ ] **A Simplest Systematics for the Organization of Turn-Taking** (Sacks
+  / Schegloff / Jefferson, 1974) — short paper. The actual rule set behind
+  the addressee-routing idea.
+- [ ] **Generative Agents** (Park et al., 2023) — canonical memory /
+  reflection / planning paper. Informs how far to push actor believability.
+- [ ] **Improving Factuality and Reasoning through Multiagent Debate** (Du
+  et al., 2023) — empirical case for/against debate features.
+- [ ] **Structured output research** — Outlines, llguidance,
+  lm-format-enforcer, LM Studio structured output. Affects `chatStructured`
+  reliability.
+- [ ] **AutoGen GroupChatManager source** — prior art on speaker selection
+  that survived iteration.
+- [ ] **Letta (ex-MemGPT) source** — tiered memory + paging design more
+  polished than ours.
+
+## Empirical measurements on our own system
+
+Things we should know but don't, that need running the app rather than
+reading papers.
+
+- [ ] **What cosine threshold actually catches fact duplicates?** Dump a
+  session's pinned facts, look at sim values clustering real duplicates vs
+  distinct. Validates the 0.88 we use today and the proposed 0.95 for
+  sycophancy.
+- [ ] **At what session length does our local model degrade?** Same
+  scenario at 20 / 50 / 100 / 200 turns; rate coherence. Justifies
+  summarization-aggressiveness tuning quantitatively.
+- [ ] **Embedding model A/B.** Nomic v1.5 vs Qwen3-Embedding-0.6B on a
+  fixed set of recall queries against a real session archive. Settles the
+  model question with data.
+
+---
+
+## Done (recent)
+
+- [x] **Wire up the toast notification system** (2026-06) — Toaster
+  component, CSS, three trigger points. Commit `90e3e92`.
+- [x] **Simplify memory** (2026-06) — collapsed dual delta+rewrite paths
+  into one incremental summary. Commit `e9ee467`.
+- [x] **Simplify document system** (2026-06) — dropped per-actor
+  visibility, LCS line attribution, water-fill char allocator. Commit
+  `8463cca`.
+- [x] **Neutralize default scenario** (2026-06) — title/premise/objective
+  defaults emptied so they stop steering actors into a council frame.
+  Director goal made procedural. Commit `123e1a7`.
+- [x] **Narrator-mode director skip rules** (2026-06) — added narrator
+  branch so the Director opens the scene instead of skipping on turn 1.
+  Commit `c123c7b`.
+- [x] **Show thoughts on skipped turns** (2026-06) — skip render path now
+  includes the thought block. Commit `5655ab1`.
