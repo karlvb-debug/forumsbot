@@ -176,6 +176,7 @@ export const defaultState = {
   pendingDocumentEdits: [],
   pendingInjections: [],     // CAP-1: director prompt injection queue
   pendingPrivateMessages: [], // CAP-2: actor-to-actor private message queue
+  pendingStyleUpdate: null,  // Phase 3: pending global style proposal awaiting user approval
   scenario: {
     title: "Untitled forum",
     premise: "",

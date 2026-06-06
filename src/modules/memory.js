@@ -159,6 +159,8 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
     state.memory.cycleCount = 0;
   }
 
+  const signal = options.signal || null;
+
   const isBackground = reason === "cycle" || reason === "round";
   let activityId = "";
 
@@ -222,7 +224,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
       `Source turns:\n${formatTranscript(usableMessages, 1600)}`
     ].filter(Boolean).join("\n\n");
 
-    const content = await chatCompletion(system, user, { temperature: 0.2, maxTokens: 1600 });
+    const content = await chatCompletion(system, user, { temperature: 0.2, maxTokens: 1600, signal });
     const parsed = parseMemoryJson(content);
     if (!parsed) {
       console.warn('[memory] Summary parse failed — preserving existing memory');

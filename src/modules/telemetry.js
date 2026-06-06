@@ -36,7 +36,8 @@ export function scaledJaccardSimilarity(textA, textB) {
 
 // Debounced telemetry semantic alignment updater
 let isTelemetryUpdating = false;
-export async function updateSemanticAlignment() {
+export async function updateSemanticAlignment(signal) {
+  if (signal?.aborted) return;
   if (isTelemetryUpdating) return;
   isTelemetryUpdating = true;
 

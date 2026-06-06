@@ -111,6 +111,8 @@ export function ConnectionPanel() {
   const modelIsEmbedding = isEmbeddingModel(model);
   const embeddingProbe = useForumState(s => s.ui?.embeddingProbeResult || null);
 
+  const pendingStyleUpdate = useForumState(s => s.pendingStyleUpdate || null);
+
   const [loadingModel, setLoadingModel] = useState(null);
   const [loadError, setLoadError] = useState(null);
 
@@ -314,6 +316,24 @@ export function ConnectionPanel() {
             <Toggle checked={streaming} onChange={(v) => updateSetting('streamingEnabled', v)} label="Streaming" />
             <Toggle checked={globalStyleEnabled} onChange={(v) => updateSetting('globalStyleEnabled', v)} label="Global style" />
           </div>
+          {pendingStyleUpdate && (
+            <div className="style-proposal">
+              <p><strong>{pendingStyleUpdate.proposedBy}</strong> suggests a style change:</p>
+              <pre className="style-preview">{pendingStyleUpdate.newStyle}</pre>
+              <div className="style-proposal-actions">
+                <button className="btn sm" onClick={() => {
+                  mutateState(s => {
+                    s.settings.globalStylePrompt = s.pendingStyleUpdate.newStyle;
+                    s.settings.globalStyleEnabled = true;
+                    s.pendingStyleUpdate = null;
+                  });
+                }}>Apply</button>
+                <button className="btn sm ghost" onClick={() => mutateState(s => { s.pendingStyleUpdate = null; })}>
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
           {globalStyleEnabled && (
             <Field label="Global style prompt" info="Applied to every actor and document-writer prompt after their persona/voice. Actor voice and direct user instructions still win.">
               <textarea

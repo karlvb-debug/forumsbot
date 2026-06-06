@@ -447,16 +447,21 @@ describe('applyAiResult updateStyle', () => {
     mockState.turnQueue = ['a1'];
     mockState.scenario = { systems: { turnRouting: { allowDirectAddress: true } } };
     mockState.settings.globalStylePrompt = 'Use plain everyday language.';
+    mockState.pendingStyleUpdate = null;
   });
 
-  it('updates globalStylePrompt when actor emits updateStyle', async () => {
+  it('sets pendingStyleUpdate when actor emits updateStyle', async () => {
     await applyAiResult({ data: mockState.actors[0] }, {
       action: 'speak',
       message: 'Switching to formal mode.',
       updateStyle: 'Use formal academic language. Prefer precise technical terms.',
     });
 
-    expect(mockState.settings.globalStylePrompt).toBe('Use formal academic language. Prefer precise technical terms.');
+    expect(mockState.pendingStyleUpdate).not.toBeNull();
+    expect(mockState.pendingStyleUpdate.proposedBy).toBe('Alex');
+    expect(mockState.pendingStyleUpdate.newStyle).toBe('Use formal academic language. Prefer precise technical terms.');
+    // globalStylePrompt must NOT be changed yet — it's pending user approval
+    expect(mockState.settings.globalStylePrompt).toBe('Use plain everyday language.');
   });
 
   it('ignores updateStyle when the value is empty or whitespace', async () => {
@@ -466,6 +471,7 @@ describe('applyAiResult updateStyle', () => {
       updateStyle: '   ',
     });
 
+    expect(mockState.pendingStyleUpdate).toBeNull();
     expect(mockState.settings.globalStylePrompt).toBe('Use plain everyday language.');
   });
 });

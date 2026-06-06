@@ -18,6 +18,9 @@ export function MemoryPanel() {
   const archivedCount = useForumState(s => s.memory?.archivedCount || 0);
   const memoryStatus = useForumState(s => s.memory?.status || '');
   const outcomeStatus = useForumState(s => s.outcomes?.status || '');
+  const injections = useForumState(s => s.pendingInjections || []);
+  const privateMessages = useForumState(s => s.pendingPrivateMessages || []);
+  const actors = useForumState(s => s.actors || []);
 
   const removeFact = (index) => mutateState(s => { s.memory.pinnedFacts.splice(index, 1); });
   const removeQuestion = (index) => mutateState(s => { s.memory.openQuestions.splice(index, 1); });
@@ -192,6 +195,34 @@ export function MemoryPanel() {
             <div className="field-hint">Run after the discussion finishes to mine structured findings.</div>
           </div>
         </div>
+      )}
+
+      {(injections.length > 0 || privateMessages.length > 0) && (
+        <details className="card">
+          <summary>Active Steering ({injections.length + privateMessages.filter(m => !m.consumed).length})</summary>
+          <div className="steering-list">
+            {injections.map(inj => (
+              <div key={inj.id} className="steering-item">
+                <span className="badge sm">{inj.scope}</span>
+                <span className="steering-target">→ {actors.find(a => a.id === inj.targetId)?.name || 'unknown'}</span>
+                <span className="steering-content">{inj.content}</span>
+                <button className="btn-icon sm" onClick={() => mutateState(s => {
+                  s.pendingInjections = s.pendingInjections.filter(i => i.id !== inj.id);
+                })}>×</button>
+              </div>
+            ))}
+            {privateMessages.filter(m => !m.consumed).map(pm => (
+              <div key={pm.id} className="steering-item">
+                <span className="badge sm">PM</span>
+                <span className="steering-target">{pm.fromName} → {pm.toName}</span>
+                <span className="steering-content">{pm.content}</span>
+                <button className="btn-icon sm" onClick={() => mutateState(s => {
+                  s.pendingPrivateMessages = s.pendingPrivateMessages.filter(m => m.id !== pm.id);
+                })}>×</button>
+              </div>
+            ))}
+          </div>
+        </details>
       )}
     </div>
   );

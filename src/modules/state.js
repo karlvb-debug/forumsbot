@@ -166,6 +166,7 @@ function normalizeState(value = {}) {
   if (!Array.isArray(merged.pendingInjections)) merged.pendingInjections = [];
   if (!Array.isArray(merged.pendingPrivateMessages)) merged.pendingPrivateMessages = [];
   if (!Array.isArray(merged.pendingPauses)) merged.pendingPauses = [];
+  if (merged.pendingStyleUpdate === undefined) merged.pendingStyleUpdate = null;
 
   merged.memory.isSummarizing = false;
   merged.memory.isDistilling = false;

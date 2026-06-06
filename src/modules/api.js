@@ -68,8 +68,12 @@ function extractStreamingDisplay(accumulated) {
 // Callers opt in by wrapping their async fn with scheduleChat / scheduleEmbed.
 
 let _chatChain = Promise.resolve();
-export function scheduleChat(fn) {
-  const slot = _chatChain.then(() => fn());
+export function scheduleChat(fn, signal) {
+  const slot = _chatChain.then(() => {
+    // If the caller's abort signal fired while queued, skip execution.
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    return fn();
+  });
   // Advance the chain even if fn() rejects, so the queue never stalls.
   _chatChain = slot.catch(() => {});
   return slot;
@@ -275,15 +279,16 @@ async function _chatCompletionDirect(system, user, { temperature = state.setting
  * Public scheduled entry point — serializes concurrent LLM calls through the
  * chat chain so no two generation requests run simultaneously.
  */
-export function chatCompletion(system, user, options) {
-  return scheduleChat(() => _chatCompletionDirect(system, user, options));
+export function chatCompletion(system, user, options = {}) {
+  return scheduleChat(() => _chatCompletionDirect(system, user, options), options.signal);
 }
 
 /**
  * Like chatCompletion but accepts a pre-built messages array (system + history + user).
  * Used by the conversational Quick Setup to pass full conversation history.
  */
-export async function chatCompletionMessages(messages, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal } = {}) {
+export function chatCompletionMessages(messages, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal } = {}) {
+  return scheduleChat(async () => {
   _lastToolCalls = [];
   const payload = {
     model: state.settings.model,
@@ -322,6 +327,7 @@ export async function chatCompletionMessages(messages, { temperature = state.set
     notifyStateChange();
   }
   return data?.choices?.[0]?.message?.content || "";
+  }, signal);
 }
 
 
@@ -482,7 +488,8 @@ async function _getEmbeddingsBatchDirect(texts) {
   return items.map(item => item.embedding).filter(Array.isArray);
 }
 
-export async function chatJson(system, user, temperature, signal, onStream = null, maxTokens = null, jsonSchema = null, options = {}) {
+export function chatJson(system, user, temperature, signal, onStream = null, maxTokens = null, jsonSchema = null, options = {}) {
+  return scheduleChat(async () => {
   // Stream when a callback is provided and streaming is enabled. The grammar
   // schema is applied inside chatStream/_chatCompletionDirect; text-tag tool
   // calls are detected post-response (the vast majority of turns have none).
@@ -636,6 +643,7 @@ ${result}
   });
 
   return parsed;
+  }, signal);
 }
 
 /**
@@ -643,7 +651,8 @@ ${result}
  * Passes a JSON Schema to LM Studio for grammar-constrained decoding.
  * Falls back to plain chatCompletion if the model/server doesn't support it.
  */
-export async function chatStructured(system, user, schema, { temperature = 0.2, maxTokens = null, signal = null } = {}) {
+export function chatStructured(system, user, schema, { temperature = 0.2, maxTokens = null, signal = null } = {}) {
+  return scheduleChat(async () => {
   try {
     const raw = await _chatCompletionDirect(system, user, {
       temperature,
@@ -672,6 +681,7 @@ export async function chatStructured(system, user, schema, { temperature = 0.2, 
     });
     return parsed;
   }
+  }, signal);
 }
 
 

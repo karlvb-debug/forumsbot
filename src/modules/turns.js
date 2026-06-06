@@ -105,7 +105,21 @@ async function promptPause(pauseRecord) {
   });
 }
 
+let _sessionController = null;
 export let abortController = null;
+
+// Backward compat — components check abortController?.signal.aborted
+export function getSessionSignal() {
+  return _sessionController?.signal ?? null;
+}
+
+function ensureSessionController() {
+  if (!_sessionController || _sessionController.signal.aborted) {
+    _sessionController = new AbortController();
+  }
+  abortController = _sessionController;
+  return _sessionController;
+}
 let _stopFlag = false;
 // Pipeline re-entrancy lock. Held for the full duration of a manual single turn,
 // a manual round, or an auto-loop — NOT toggled between turns the way `busy` is.
@@ -528,6 +542,7 @@ export async function runSingleResponse(options = {}) {
   _pipelineActive = true;
   try {
     abortController = null;
+    _sessionController = null;
     _stopFlag = false;
     const strategy = normalizeSpeakingOrderStrategy(state.scenario?.systems?.turnRouting?.strategy);
     if (strategy === 'agentic') {
@@ -576,7 +591,7 @@ async function _runTurn(options = {}) {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     if (abortController?.signal.aborted) break;
     try {
-      abortController = new AbortController();
+      ensureSessionController();
       setCurrentSpeaker(participant.data.name);
 
       const startTime = Date.now();
@@ -689,13 +704,13 @@ async function _runTurn(options = {}) {
 
       if (!state.settings.turboMode && ++_turnsSinceAlignment >= ALIGNMENT_EVERY_N_TURNS) {
         _turnsSinceAlignment = 0;
-        await updateSemanticAlignment();
+        await updateSemanticAlignment(_sessionController?.signal);
       }
       if (state.memory.enabled && options.summarizeCycle !== false && !state.settings.turboMode) {
         state.memory.turnsSinceSummary += 1;
         const cycleSize = participantCycleCount();
         if (state.memory.turnsSinceSummary >= cycleSize) {
-          await summarizeMemory("cycle");
+          await summarizeMemory("cycle", null, { signal: _sessionController?.signal });
         }
       }
       // Store prompt parts for debugging
@@ -706,6 +721,7 @@ async function _runTurn(options = {}) {
       setStatus(`Last turn: ${participant.data.name}`, "ok");
       setBusy(false);
       abortController = null;
+      _sessionController = null;
       return true;
     } catch (error) {
       lastError = error;
@@ -713,6 +729,7 @@ async function _runTurn(options = {}) {
       forceRemoveStreamingBubble();
       clearBackgroundActivities();
       abortController = null;
+      _sessionController = null;
 
       if (error.name === "AbortError") {
         setStatus("Generation stopped.", "warn");
@@ -768,8 +785,9 @@ export async function runRound(options = {}) {
 }
 
 async function _runRound(options = {}) {
-  abortController = null; // Reset abort state for the new round
-  _stopFlag = false;       // Clear stop flag for this round
+  abortController = null;
+  _sessionController = null; // Reset abort state for the new round
+  _stopFlag = false;          // Clear stop flag for this round
   // Count only actors that actually take queue turns — background/cadence actors
   // fire as hooks and are never in the turn queue. Counting them inflates the
   // round loop, causing normal actors to speak extra times (looks like a loop).
@@ -821,7 +839,7 @@ async function _runRound(options = {}) {
 
   if (roundMessages.length && state.memory.enabled && !state.settings.turboMode) {
     state.memory.turnsSinceSummary = 0;
-    await summarizeMemory("round", roundMessages);
+    await summarizeMemory("round", roundMessages, { signal: _sessionController?.signal });
   }
   if (roundMessages.length) {
     const shouldStop = await evaluateAutoStopAfterRound(roundMessages, options);
@@ -878,7 +896,8 @@ export async function runAutoLoop() {
     if (starting) _pipelineActive = false;
     saveState();
     // Cross-session memory: distill once at session end (opt-in, best-effort).
-    if (starting) {
+    // Only distill if we ended naturally, not via stop
+    if (starting && !_stopFlag) {
       await distillAllActorsMemory().catch(err =>
         console.warn('[cross-session-memory] session-end pass failed:', err?.message || err));
     }
@@ -888,7 +907,9 @@ export async function runAutoLoop() {
 export function stopGeneration() {
   state.autoRunning = false;
   _stopFlag = true;
-  _pipelineActive = false; // force-release the lock; aborted pipelines also release in finally
+  // Do NOT clear _pipelineActive here — let the pipeline's own finally block
+  // release it. Clearing it prematurely causes a race where a new pipeline
+  // starts while the old finally is still running.
   abortController?.abort();
   forceRemoveStreamingBubble();
   clearBackgroundActivities();
@@ -1512,7 +1533,7 @@ export async function runDirectorBrief() {
   _pipelineActive = true;
   setBusy(true);
   try {
-    abortController = new AbortController();
+    ensureSessionController();
     const streamingColor = director.color || "var(--gold)";
     showStreamingBubble(director.name, streamingColor, "dm");
     const onStream = (data) => updateStreamingBubble(data);
@@ -1548,6 +1569,7 @@ export async function runDirectorBrief() {
     _pipelineActive = false;
     setBusy(false);
     abortController = null;
+    _sessionController = null;
   }
 }
 
@@ -1825,6 +1847,9 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
     if (unread.length) {
       assembled += `\n\n${unread.map(m => `[Private from ${m.fromName}]: ${m.content}`).join("\n")}`;
       unread.forEach(m => { m.consumed = true; });
+      state.pendingPrivateMessages = state.pendingPrivateMessages.filter(
+        m => !(m.toId === actor.id && m.consumed)
+      );
     }
   }
 
@@ -2014,12 +2039,18 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
     }
   }
 
-  // Global style update — actor rewrites the style prompt when the user asks for a change
+  // Global style update — actor proposes a style change for user review
   if (result.updateStyle && typeof result.updateStyle === "string") {
     const newStyle = result.updateStyle.trim();
     if (newStyle) {
-      mutateState(s => { s.settings.globalStylePrompt = newStyle; });
-      logTransition("global_style_updated", { actor: speakerName, newStyle });
+      mutateState(s => {
+        s.pendingStyleUpdate = {
+          proposedBy: speakerName,
+          newStyle,
+          proposedAt: new Date().toISOString()
+        };
+      });
+      logTransition("style_proposed", { actor: speakerName, newStyle });
     }
   }
 
@@ -2029,9 +2060,9 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
     const duped = (state.memory.pinnedFacts || []).some(f =>
       f.toLowerCase() === fact.toLowerCase());
     if (!duped && fact) {
-      if (!Array.isArray(state.memory.pinnedFacts)) state.memory.pinnedFacts = [];
-      state.memory.pinnedFacts.push(fact);
-      logTransition("fact_pinned", { actor: speakerName, fact });
+      if (!Array.isArray(state.memory.pendingPinnedFacts)) state.memory.pendingPinnedFacts = [];
+      state.memory.pendingPinnedFacts.push(fact);
+      logTransition("fact_proposed", { actor: speakerName, fact });
     }
   }
 
