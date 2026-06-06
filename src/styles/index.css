@@ -1287,6 +1287,107 @@ input[type="range"]::-webkit-slider-thumb {
 /* active eye icon */
 .mini-icon-btn.active { color: var(--accent); }
 
+/* ── Writer Task Queue ── */
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--border-soft);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-top: 6px;
+}
+.task-row {
+  background: var(--bg);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.task-row-running { background: oklch(0.18 0.04 250 / 0.6); }
+.task-row-failed  { background: oklch(0.18 0.04 20 / 0.5); }
+.task-row-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.task-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+}
+.task-instruction {
+  font-size: var(--fs-sm);
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.task-arrow { color: var(--fg-faint); font-size: var(--fs-xs); flex-shrink: 0; }
+.task-doc {
+  font-size: var(--fs-xs);
+  color: var(--fg-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+}
+.task-row-btns {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.task-row-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-left: 18px;
+  font-size: var(--fs-xs);
+  color: var(--fg-faint);
+}
+.task-error {
+  color: var(--danger);
+  font-size: var(--fs-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-divider {
+  height: 1px;
+  background: var(--border-soft);
+  margin: 2px 0;
+}
+.task-active-badge {
+  font-size: var(--fs-xs);
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: oklch(0.25 0.06 250);
+  color: oklch(0.75 0.12 250);
+  border: 1px solid oklch(0.35 0.08 250);
+  font-weight: 600;
+}
+
+/* Status dots */
+.task-dot {
+  font-size: 11px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  width: 14px;
+  justify-content: center;
+}
+.task-dot.pending   { color: var(--fg-faint); }
+.task-dot.running   { color: var(--accent); animation: spin 1s linear infinite; }
+.task-dot.proposed  { color: var(--ok); }
+.task-dot.failed    { color: var(--danger); }
+.task-dot.cancelled { color: var(--fg-faint); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* Import PR form */
 .import-pr-form {
   border-top: 1px solid var(--border-soft);

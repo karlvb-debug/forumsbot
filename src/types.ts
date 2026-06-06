@@ -226,7 +226,7 @@ export interface DocumentTask {
   actorId: string;
   instruction: string;
   selection?: { startLine: number; endLine: number } | null;
-  status: 'pending' | 'running' | 'proposed' | 'failed';
+  status: 'pending' | 'running' | 'proposed' | 'failed' | 'cancelled';
   createdAt: string;
   updatedAt: string;
   error?: string;

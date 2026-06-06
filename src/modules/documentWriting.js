@@ -453,3 +453,27 @@ export function detectInlineScribeRequest(text) {
   if (!INLINE_SCRIBE_CMD.test(str)) return null;
   return str.trim().slice(0, 500);
 }
+
+export function cancelDocumentTask(taskId) {
+  const task = (state.documentTasks || []).find(t => t.id === taskId);
+  if (!task || task.status === 'running') return false;
+  task.status = 'cancelled';
+  task.updatedAt = nowIso();
+  saveState();
+  return true;
+}
+
+export function dismissDocumentTask(taskId) {
+  state.documentTasks = (state.documentTasks || []).filter(t => t.id !== taskId);
+  saveState();
+}
+
+export async function retryDocumentTask(taskId, signal = null) {
+  const task = (state.documentTasks || []).find(t => t.id === taskId);
+  if (!task) throw new Error("Task not found.");
+  task.status = 'pending';
+  task.error = '';
+  task.updatedAt = nowIso();
+  saveState();
+  return runDocumentTask(taskId, signal);
+}

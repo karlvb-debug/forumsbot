@@ -7,6 +7,136 @@ import * as Ic from '../Icons';
 const FILTERS = ['all', 'writable', 'reference', 'pending'];
 const FILTER_LABELS = { all: 'All', writable: 'Writable', reference: 'Reference', pending: 'Pending' };
 
+function timeAgo(iso) {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 60000) return 'just now';
+  if (ms < 3600000) return `${Math.floor(ms / 60000)}m ago`;
+  if (ms < 86400000) return `${Math.floor(ms / 3600000)}h ago`;
+  return `${Math.floor(ms / 86400000)}d ago`;
+}
+
+const TASK_STATUS_ICON = {
+  pending:   <span className="task-dot pending">○</span>,
+  running:   <span className="task-dot running"><Ic.Round width={10} height={10} /></span>,
+  proposed:  <span className="task-dot proposed">✓</span>,
+  failed:    <span className="task-dot failed">✗</span>,
+  cancelled: <span className="task-dot cancelled">—</span>,
+};
+
+function TaskRow({ task, documents, actors }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const doc = documents.find(d => d.id === task.documentId);
+  const actor = actors.find(a => a.id === task.actorId);
+  const isActive = task.status === 'pending' || task.status === 'running';
+
+  const cancel = async () => {
+    const mod = await import('../../modules/documentWriting.js');
+    mod.cancelDocumentTask(task.id);
+  };
+
+  const dismiss = async () => {
+    const mod = await import('../../modules/documentWriting.js');
+    mod.dismissDocumentTask(task.id);
+  };
+
+  const retry = async () => {
+    setBusy(true);
+    setErr('');
+    try {
+      const mod = await import('../../modules/documentWriting.js');
+      await mod.retryDocumentTask(task.id);
+    } catch (e) {
+      setErr(e?.message || 'Retry failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className={`task-row task-row-${task.status}`}>
+      <div className="task-row-main">
+        {TASK_STATUS_ICON[task.status] ?? TASK_STATUS_ICON.pending}
+        <div className="task-row-body">
+          <span className="task-instruction" title={task.instruction}>
+            {(task.instruction || '').length > 52
+              ? (task.instruction || '').slice(0, 52) + '…'
+              : task.instruction}
+          </span>
+          {doc && <><span className="task-arrow">›</span><span className="task-doc">{doc.title || 'Untitled'}</span></>}
+        </div>
+        <div className="task-row-btns">
+          {task.status === 'pending' && (
+            <button className="mini-icon-btn" onClick={cancel} title="Cancel task">
+              <Ic.Close width={10} height={10} />
+            </button>
+          )}
+          {task.status === 'failed' && (
+            <button className="btn sm" onClick={retry} disabled={busy}>
+              {busy ? '…' : 'Retry'}
+            </button>
+          )}
+          {!isActive && (
+            <button className="mini-icon-btn" onClick={dismiss} title="Dismiss">
+              <Ic.Close width={10} height={10} />
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="task-row-meta">
+        {actor && <span>{actor.name}</span>}
+        <span>{timeAgo(task.updatedAt)}</span>
+        {task.status === 'failed' && task.error && (
+          <span className="task-error" title={task.error}>
+            {task.error.length > 60 ? task.error.slice(0, 60) + '…' : task.error}
+          </span>
+        )}
+        {err && <span className="task-error">{err}</span>}
+      </div>
+    </div>
+  );
+}
+
+function WriterQueue({ documents, actors }) {
+  const tasks = useForumState(s => s.documentTasks || []);
+  if (!tasks.length) return null;
+
+  const sorted = [...tasks].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  const active = sorted.filter(t => t.status === 'pending' || t.status === 'running');
+  const recent = sorted.filter(t => t.status !== 'pending' && t.status !== 'running').slice(0, 5);
+
+  const clearCompleted = () => {
+    mutateState(s => {
+      s.documentTasks = (s.documentTasks || []).filter(t => t.status === 'pending' || t.status === 'running');
+    });
+  };
+
+  const hasCompleted = recent.length > 0;
+
+  return (
+    <div className="card">
+      <div className="card-title">
+        <h3><Ic.Robot /> Writer Queue</h3>
+        {active.length > 0 && <span className="task-active-badge">{active.length} active</span>}
+        {hasCompleted && (
+          <button className="btn sm ghost" onClick={clearCompleted} style={{ marginLeft: 'auto' }}>
+            Clear
+          </button>
+        )}
+      </div>
+      <div className="task-list">
+        {active.map(t => (
+          <TaskRow key={t.id} task={t} documents={documents} actors={actors} />
+        ))}
+        {active.length > 0 && recent.length > 0 && <div className="task-divider" />}
+        {recent.map(t => (
+          <TaskRow key={t.id} task={t} documents={documents} actors={actors} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function DocRow({
   entry, actors, writerActors, designatedWriterId, pendingCount,
   bulkMode, isSelected, onToggleSelect,
@@ -443,6 +573,9 @@ export function DocumentsPanel() {
           Only the designated writer receives document-writing tasks.
         </div>
       </div>
+
+      {/* Writer task queue */}
+      <WriterQueue documents={documents} actors={actors} />
 
       {/* Unified document list */}
       <div className="card">
