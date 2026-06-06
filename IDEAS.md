@@ -170,6 +170,55 @@ reading papers.
 Running notes from auditing the Inspector panels for (a) controls bound to
 dead/removed systems, and (b) live systems with no UI control.
 
+### Documents panel — wiring is fine, layout is cramped, three orphans
+
+Every control fires a live consumer. No dead UI. The problems are
+layout density, missing controls for important state, and a couple of
+orphans.
+
+Missing UI for live state:
+- [ ] `scribeMode` lives only in DocEditorStage. It's a session-level
+  setting (`state.documentWriting.scribeMode`) that affects every
+  writable document. Belongs in the panel header next to the writer
+  dropdown.
+- [ ] Pending review counts: `pendingDocumentEdits` and
+  `pendingScribeSuggestions` are shown per-doc in the editor but the
+  panel list has no badge. Add header count + per-row indicator.
+- [ ] `state.documentTasks` orphan. Created by
+  `createDocumentTask` (`documentWriting.js:56`), no UI anywhere.
+  Either build queue UI under the Writer header or remove the field.
+
+Layout / UX:
+- [ ] Working vs Reference split is artificial — just `aiEditable`
+  filter rendered as two cards with duplicate add-buttons. Merge
+  into one list with filter chips (All / Writable / Reference /
+  Pending) + one Add button group.
+- [ ] DocRow main row crams 7 elements in a flex (chevron, type
+  badge, title input, Nw, vN, Writable, Expand, Toggle). Title
+  input gets squeezed. Switch to fixed-grid columns with clear
+  regions for title / meta / actions.
+- [ ] Expanded settings mix inline (toggles, dropdown) and vertical
+  (textareas) layouts inconsistently. Pick one rhythm.
+- [ ] Open Editor button is duplicated (icon in collapsed row, label
+  in expanded). Drop the expanded one.
+- [ ] No content preview in collapsed row — add ~50 chars under
+  title.
+- [ ] No search / filter input.
+- [ ] No drag-and-drop reorder. Doc order matters for
+  `buildKbSection` packing.
+- [ ] No bulk operations (enable / disable / delete multiple).
+- [ ] No file or clipboard import for doc content. Today you have to
+  open the editor and paste.
+
+Phased build mirrors Library/Sessions pattern:
+- Phase 1 (biggest win): single list + filter chips + scribeMode in
+  header + pending badge + row layout fix + drop duplicate Open
+  button.
+- Phase 2: search, bulk select, content preview, drag reorder,
+  import from file/clipboard.
+- Phase 3: decide on `documentTasks` — surface as a queue or
+  remove.
+
 ### Sessions panel — same UX problems as Library, plus hidden behavior
 
 All handlers live, no dead UI. Same browse + preview problems as
