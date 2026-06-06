@@ -170,6 +170,59 @@ reading papers.
 Running notes from auditing the Inspector panels for (a) controls bound to
 dead/removed systems, and (b) live systems with no UI control.
 
+### Library panel — wiring is fine, interface needs a total rethink
+
+All four handlers (apply blueprint, save / apply / delete config) are
+live. No dead UI. The problem is the **interface design** — it's
+deeply inconvenient for what should be the discovery-and-reuse hub.
+
+Current pain points:
+- Blueprint dropdown shows icon + label + actor count only. To see
+  what a blueprint contains (premise, objective, cast, systems,
+  seeded docs), you have to apply it.
+- Description appears only after selection, and only the one-line
+  `description` field. Premise / objective / systems config / cast
+  roster all hidden.
+- No grouping. 11 blueprints in one dropdown. They split cleanly into
+  Problem-Solving / Story / Hybrid but the UI doesn't show that.
+  `ACTOR_LIBRARY` already has a `group` field used elsewhere —
+  BLUEPRINTS doesn't.
+- Apply is one-click destructive with only a plain text confirm.
+- Saved setups have the same lack of preview (name + date + count).
+- Saved setups can't be edited in place — Apply or Delete only.
+- No export / import — saved setups are localStorage-only, can't be
+  shared or backed up.
+- No search / filter.
+- Two different concepts (curated blueprints, personal saves) share
+  one panel without clear separation.
+
+Redesign — browse + preview pattern (Sublime / Notion / Figma style):
+
+Phase 1 — minimum viable rethink (biggest win):
+- [ ] Add `group` field to `BLUEPRINTS` entries (mirrors
+  `ACTOR_LIBRARY` pattern). Two natural groups: Problem-Solving,
+  Story; Hybrid for outliers like Debate.
+- [ ] Replace blueprint dropdown with grouped card/row list.
+- [ ] Preview pane (below list, or modal on narrow viewports) showing
+  premise, objective, full cast roster with personas + colors,
+  systems summary, seeded docs.
+- [ ] Apply button at bottom of preview with explicit "will replace X
+  / will keep Y" callout.
+- [ ] Same row + preview pattern for saved setups.
+- [ ] Tab switch at top: Blueprints / Saved / Import/Export.
+
+Phase 2 — convenience:
+- [ ] "Update from current state" button on saved setups.
+- [ ] Export saved setup as JSON (clipboard + file).
+- [ ] Import setup from JSON (paste or file).
+- [ ] Search bar across both blueprints and saved setups.
+- [ ] Visual cast preview — actor color swatches inline with cast.
+
+Phase 3 — power features (only if needed):
+- [ ] Side-by-side compare between two blueprints.
+- [ ] Tag-based filtering beyond two groups.
+- [ ] Saved setup version history.
+
 ### Goal panel — clean and fully wired, small targeted improvements
 
 All controls bind to live consumers — no dead UI. The panel is small
