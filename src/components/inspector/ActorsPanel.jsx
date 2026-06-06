@@ -296,7 +296,7 @@ export function ActorsPanel() {
                     <Field label="Role"><input value={a.role} onChange={(e) => updateActor(a.id, 'role', e.target.value)} /></Field>
                   </div>
                   <Field label="Persona"><textarea rows={3} value={a.persona} onChange={(e) => updateActor(a.id, 'persona', e.target.value)} /></Field>
-                  <Field label="Goal"><textarea rows={2} value={a.goal} onChange={(e) => updateActor(a.id, 'goal', e.target.value)} /></Field>
+                  <Field label="Responsibility" info="This actor's personal focus — not the session completion criteria."><textarea rows={2} value={a.goal} onChange={(e) => updateActor(a.id, 'goal', e.target.value)} /></Field>
                   <Field label="Voice"><input value={a.voice || ''} onChange={(e) => updateActor(a.id, 'voice', e.target.value)} /></Field>
                 </div>
 

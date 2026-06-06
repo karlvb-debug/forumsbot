@@ -7,12 +7,19 @@ import { navigateToPanel } from '../../hooks/navigation.js';
 export function ScenarioPanel() {
   const title = useForumState(s => s.scenario?.title || '');
   const premise = useForumState(s => s.scenario?.premise || '');
-  const objective = useForumState(s => s.scenario?.objective || '');
+  const task = useForumState(s => s.scenario?.task || '');
+  const doneWhen = useForumState(s => s.scenario?.doneWhen || '');
   const systems = useForumState(s => s.scenario?.systems || {});
   const actors = useForumState(s => s.actors || []);
   const activeDirector = actors.find(a => a.canDirect && a.enabled) || actors.find(a => a.canDirect);
 
-  const updateScenario = (key, val) => mutateState(s => { s.scenario[key] = val; });
+  const updateScenario = (key, val) => mutateState(s => {
+    s.scenario[key] = val;
+    if (key === 'task' || key === 'doneWhen') {
+      s.autoStop.roundsRun = 0;
+      s.autoStop.status = 'Auto-stop ready.';
+    }
+  });
   const updateSystem = (group, key, val) => {
     // mutateState already persists via saveState — no extra call needed.
     mutateState(s => {
@@ -48,7 +55,7 @@ export function ScenarioPanel() {
   return (
     <div>
       <div className="field-hint" style={{ marginBottom: 12 }}>
-        Configure this forum's premise, objective, and systems below. For a ready-made
+        Configure this forum's premise, task, and systems below. For a ready-made
         setup with a recommended cast, start from a{' '}
         <button className="link-btn" onClick={() => navigateToPanel('library')}>blueprint in the Library</button>.
       </div>
@@ -103,7 +110,7 @@ export function ScenarioPanel() {
           </>
         )}
 
-        <Field label="Alignment Strictness" info="How firmly actors are kept on the scenario's Objective. Stricter settings inject 'get back on topic' nudges when the discussion drifts.">
+        <Field label="Alignment Strictness" info="How firmly actors are kept on the scenario's Task. Stricter settings inject 'get back on topic' nudges when the discussion drifts.">
           <select value={alignStrictness} onChange={e => updateSystem('alignment', 'strictness', e.target.value)}>
             <option value="strict">Strict — hard redirects, alignment enforced</option>
             <option value="moderate">Moderate — gentle nudges when drifting</option>
@@ -133,8 +140,11 @@ export function ScenarioPanel() {
         <Field label="Premise" info="The backstory that grounds every actor prompt">
           <textarea rows={4} value={premise} onChange={(e) => updateScenario('premise', e.target.value)} />
         </Field>
-        <Field label="Objective" info="Used for drift scoring and the auto-stop goal judge">
-          <textarea rows={3} value={objective} onChange={(e) => updateScenario('objective', e.target.value)} />
+        <Field label="Task" info="What should the group accomplish? Injected into every actor prompt.">
+          <textarea rows={3} value={task} onChange={(e) => updateScenario('task', e.target.value)} />
+        </Field>
+        <Field label="Done When" info="Concrete completion criteria. Enables the auto-stop judge. Leave blank for open-ended conversations.">
+          <textarea rows={2} value={doneWhen} onChange={(e) => updateScenario('doneWhen', e.target.value)} />
         </Field>
       </div>
 

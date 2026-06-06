@@ -10,6 +10,7 @@ export function ReadinessStrip() {
   const actors = useForumState(s => s.actors || []);
   const memoryEnabled = useForumState(s => s.memory?.enabled ?? false);
   const autoStop = useForumState(s => s.autoStop || {});
+  const scenario = useForumState(s => s.scenario || {});
 
   const enabledActors = actors.filter(a => a.enabled);
   const hasActors = enabledActors.length > 0;
@@ -31,10 +32,10 @@ export function ReadinessStrip() {
       ok: memoryEnabled,
       warn: !memoryEnabled,
     },
-    ...(autoStop.enabled && !autoStop.goal?.trim()
+    ...(autoStop.enabled && (autoStop.goalCheckEnabled ?? true) && !scenario.doneWhen?.trim()
       ? [{
           key: 'goal',
-          label: 'Auto-stop: no goal',
+          label: 'No completion criteria set',
           ok: false,
           warn: true,
         }]

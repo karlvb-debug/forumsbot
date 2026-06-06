@@ -74,8 +74,6 @@ export interface Settings {
   theme: 'dark' | 'light';
   includeTraces: boolean;
   gravitySensitivity: number;
-  enablePreflightRouter: boolean;
-  preflightThreshold: number;
   enableCrossSessionMemory: boolean;
   streamingEnabled: boolean;
   turboMode: boolean;
@@ -85,7 +83,6 @@ export interface Settings {
 
 export interface StopModal {
   reason: string;
-  suggestedGoal: string;
 }
 
 export interface ConfirmModal {
@@ -168,7 +165,6 @@ export interface Outcomes {
 
 export interface AutoStop {
   enabled: boolean;
-  goal: string;
   goalCheckEnabled: boolean;
   stopOnAllSkip: boolean;
   maxRoundsEnabled: boolean;
@@ -203,7 +199,8 @@ export interface DocumentVersion {
 export interface Scenario {
   title: string;
   premise: string;
-  objective: string;
+  task: string;
+  doneWhen: string;
   systems?: {
     stageDirections?: { enabled?: boolean; intensity?: string; maxTokenShare?: number };
     alignment?: { strictness?: string; anchorInPrompt?: boolean; nudgeStyle?: string };

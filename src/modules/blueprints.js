@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Blueprints & the curated actor library.
 //
-// A *blueprint* is a turnkey configuration: a scenario (premise/objective/systems +
+// A *blueprint* is a turnkey configuration: a scenario (premise/task/doneWhen/systems +
 // systems) bundled with a recommended cast. Applying one sets up a ready-to-run
 // forum in a single step.
 //
@@ -36,7 +36,7 @@ export const ACTOR_LIBRARY = [
   {
     key: 'director', group: 'Orchestration', label: '🎬 Director',
     name: 'Director', role: 'Discussion facilitator',
-    persona: 'Guide the discussion, keep it on objective, summarize progress, and invite quieter voices. You do not solve the problem yourself — you make the room productive.',
+    persona: 'Guide the discussion, keep it on task, summarize progress, and invite quieter voices. You do not solve the problem yourself — you make the room productive.',
     goal: 'Converge the group on clear, well-reasoned decisions.',
     voice: 'Calm, concise, neutral.',
     canDirect: true, canManageCast: true, canInject: true, directorMode: 'facilitator',
@@ -267,7 +267,8 @@ export const BLUEPRINTS = [
     scenario: {
       title: 'Code Review',
       premise: 'The panel is reviewing a code change. Paste the diff or import a PR/folder in the Documents panel as reference material.',
-      objective: 'Deliver a clear verdict (approve / request changes) with specific, actionable findings grouped by severity.',
+      task: 'Deliver a clear verdict (approve / request changes) with specific, actionable findings grouped by severity.',
+      doneWhen: 'A clear approve/request-changes verdict with specific findings has been delivered.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'strict', nudgeStyle: 'hard-redirect' },
@@ -275,7 +276,6 @@ export const BLUEPRINTS = [
         dmRole: { role: 'facilitator', narrates: false, canIntroduceElements: false },
       },
     },
-    autoStop: { goal: 'A clear approve/request-changes verdict with specific findings has been delivered.' },
   },
   {
     id: 'research', icon: '🌐', label: 'Research',
@@ -284,7 +284,8 @@ export const BLUEPRINTS = [
     scenario: {
       title: 'Research Investigation',
       premise: 'The panel is investigating the user\'s question, gathering current evidence and weighing it critically.',
-      objective: 'Produce a well-sourced synthesis: key findings, confidence levels, and open questions.',
+      task: 'Produce a well-sourced synthesis: key findings, confidence levels, and open questions.',
+      doneWhen: 'A well-sourced synthesis with key findings, confidence levels, and open questions has been produced.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'moderate', nudgeStyle: 'gentle-nudge' },
@@ -300,7 +301,7 @@ export const BLUEPRINTS = [
     scenario: {
       title: 'Brainstorm Session',
       premise: 'A diverse panel generates creative ideas around the user\'s topic without premature judgment.',
-      objective: 'Generate at least 10 distinct ideas, cluster them into themes, and identify the top 3 most promising.',
+      task: 'Generate at least 10 distinct ideas, cluster them into themes, and identify the top 3 most promising.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'moderate', nudgeStyle: 'gentle-nudge' },
@@ -316,7 +317,8 @@ export const BLUEPRINTS = [
     scenario: {
       title: 'Business Plan Review',
       premise: 'The panel is developing and pressure-testing a business idea or plan from the user.',
-      objective: 'Produce a plan covering market, unit economics, go-to-market, and the top risks with mitigations.',
+      task: 'Produce a plan covering market, unit economics, go-to-market, and the top risks with mitigations.',
+      doneWhen: 'A plan covering market, unit economics, go-to-market, and top risks with mitigations has been produced.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'strict', nudgeStyle: 'hard-redirect' },
@@ -332,7 +334,7 @@ export const BLUEPRINTS = [
     scenario: {
       title: 'Collaborative Story',
       premise: 'A group of characters finds themselves in an unfolding situation. The narrator describes the world.',
-      objective: 'Collaboratively build an engaging narrative with rising tension and a satisfying resolution.',
+      task: 'Collaboratively build an engaging narrative with rising tension and a satisfying resolution.',
       systems: {
         stageDirections: { enabled: true, intensity: 'immersive', maxTokenShare: 0.4 },
         alignment: { strictness: 'loose', anchorInPrompt: false, nudgeStyle: 'question' },
@@ -348,7 +350,7 @@ export const BLUEPRINTS = [
     scenario: {
       title: "Story Writers' Room",
       premise: 'The team is developing and writing a story from the user\'s concept. Brainstorm the premise, characters, and arc into the Story Outline, then draft the manuscript into the Story Draft document. This is a writing session about the story — the team does not act it out in character.',
-      objective: 'Produce a finished, well-structured story draft in the Story Draft document that realizes the user\'s concept.',
+      task: 'Produce a finished, well-structured story draft in the Story Draft document that realizes the user\'s concept.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'moderate', nudgeStyle: 'gentle-nudge' },
@@ -375,7 +377,7 @@ export const BLUEPRINTS = [
     scenario: {
       title: 'Structured Debate',
       premise: 'Two or more positions are presented. The panel must argue each side rigorously before reaching a verdict.',
-      objective: 'Steelman every position, identify the strongest objections, and converge on a reasoned verdict.',
+      task: 'Steelman every position, identify the strongest objections, and converge on a reasoned verdict.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'strict', nudgeStyle: 'hard-redirect' },
@@ -391,7 +393,8 @@ export const BLUEPRINTS = [
     scenario: {
       title: 'Risk Assessment',
       premise: 'The panel is analyzing a proposed plan or decision for risks, blind spots, and failure modes.',
-      objective: 'Identify all significant risks, rate likelihood and impact, and recommend mitigations for the top 3.',
+      task: 'Identify all significant risks, rate likelihood and impact, and recommend mitigations for the top 3.',
+      doneWhen: 'All significant risks have been identified, rated, and the top 3 have recommended mitigations.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'strict', nudgeStyle: 'hard-redirect' },
@@ -407,7 +410,7 @@ export const BLUEPRINTS = [
     scenario: {
       title: 'Project Retrospective',
       premise: 'The panel reviews a recently completed project or sprint to extract lessons.',
-      objective: 'Surface what went well, what went wrong, and produce a concrete list of process improvements.',
+      task: 'Surface what went well, what went wrong, and produce a concrete list of process improvements.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'moderate', nudgeStyle: 'gentle-nudge' },
@@ -423,7 +426,7 @@ export const BLUEPRINTS = [
     scenario: {
       title: 'Expert Panel Interview',
       premise: 'The user is interviewing a panel of specialists on their topic of choice.',
-      objective: 'Surface deep insights and disagreements between experts, then synthesize practical takeaways.',
+      task: 'Surface deep insights and disagreements between experts, then synthesize practical takeaways.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'moderate', nudgeStyle: 'gentle-nudge' },
@@ -439,7 +442,8 @@ export const BLUEPRINTS = [
     scenario: {
       title: 'Problem Solving',
       premise: 'The panel is focused on solving a well-defined problem with concrete constraints and a clear success criterion.',
-      objective: 'Arrive at a specific, actionable solution with implementation steps and trade-off rationale.',
+      task: 'Arrive at a specific, actionable solution with implementation steps and trade-off rationale.',
+      doneWhen: 'A specific, actionable solution with implementation steps and trade-off rationale has been agreed upon.',
       systems: {
         stageDirections: { enabled: false },
         alignment: { strictness: 'strict', anchorInPrompt: true, nudgeStyle: 'hard-redirect' },

@@ -127,6 +127,29 @@ let _stopFlag = false;
 // or fires the Alt+N/R/A shortcuts (which bypass button `disabled` state).
 let _pipelineActive = false;
 export function isPipelineActive() { return _pipelineActive; }
+
+// Set when a pause is resolved with a user response in non-auto mode.
+// Checked by pipeline exit points to schedule a deferred continuation so the
+// actors react to the user's answer.
+let _resumeAfterPause = false;
+
+/**
+ * Called from pipeline exit points (finally blocks of runNextTurn, runSingleResponse,
+ * runRound). If a pause was resolved with a user response during the pipeline, this
+ * schedules a deferred single-response turn so the actors react to the user's answer.
+ * Uses setTimeout(0) so the pipeline lock is fully released before re-entry.
+ */
+function _maybeResumeAfterPause() {
+  if (!_resumeAfterPause) return;
+  _resumeAfterPause = false;
+  // Defer so the current finally block finishes and _pipelineActive is false
+  setTimeout(() => {
+    if (_pipelineActive || state.autoRunning) return; // guard against races
+    console.debug('[turns] Resuming after pause response');
+    runSingleResponse().catch(err =>
+      console.warn('[turns] Post-pause continuation failed:', err?.message || err));
+  }, 50);
+}
 let _lastPromptParts = null;
 export function getLastPromptParts() { return _lastPromptParts; }
 
@@ -592,6 +615,7 @@ export async function runNextTurn(options = {}) {
     return await _runTurn(options);
   } finally {
     _pipelineActive = false;
+    _maybeResumeAfterPause();
   }
 }
 
@@ -619,6 +643,7 @@ export async function runSingleResponse(options = {}) {
     return await _runTurn({ summarizeCycle: false, isRoundContinuation: true, forceSpeak: false });
   } finally {
     _pipelineActive = false;
+    _maybeResumeAfterPause();
   }
 }
 
@@ -799,7 +824,10 @@ export async function runRound(options = {}) {
   try {
     return await _runRound(options);
   } finally {
-    if (ownLock) _pipelineActive = false;
+    if (ownLock) {
+      _pipelineActive = false;
+      _maybeResumeAfterPause();
+    }
   }
 }
 
@@ -2095,6 +2123,43 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
     }
   }
 
+  // Repetition safeguard — must run before adding the actor's message
+  const speakerMessages = state.messages.filter(m => m.speaker === speakerName && m.type !== "skip");
+  if (result.action !== "skip" && result.message && speakerMessages.length > 0) {
+    const lastMsg = speakerMessages[speakerMessages.length - 1];
+    if (lastMsg.content && lastMsg.content.trim() === result.message.trim()) {
+      console.warn(`[turns] Repetition safeguard triggered: forcing skip for ${speakerName}`);
+      result.action = "skip";
+    }
+  }
+
+  // Message type: canDirect actors use "dm" for backward compatibility with transcripts
+  const msgType = actor.canDirect ? "dm" : "actor";
+  const isBackground = (actor.actorMode || 'participant') === 'background';
+
+  if (result.action === "skip") {
+    logTransition("skip_decision", { speaker: speakerName, reason: result.thought });
+    actor.skipCount = (actor.skipCount || 0) + 1;
+    saveState();
+    if (isBackground) return; // silent skip — no transcript entry for background actors
+    return addMessage({ type: "skip", actorId: actor.id, speaker: actor.name, content: "Skipped.", thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, nextSpeaker: result.nextSpeaker || "" });
+  }
+
+  // Track cumulative words for speaking-time balance
+  if (result.message) {
+    const wc = result.message.trim().split(/\s+/).filter(Boolean).length;
+    _speakingTimeMap[actor.id] = (_speakingTimeMap[actor.id] || 0) + wc;
+  }
+
+  actor.turnCount = (actor.turnCount || 0) + 1;
+  saveState();
+
+  // Add the actor's message to the transcript BEFORE handling pause requests.
+  // This ensures the natural order: actor message → pause card → user response.
+  if (!isBackground) {
+    await addMessage({ type: msgType, actorId: actor.id, speaker: actor.name, content: result.message, thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, nextSpeaker: result.nextSpeaker || "" });
+  }
+
   // Pause infrastructure — actor requests user input
   if (result.pauseRequest && typeof result.pauseRequest === "object") {
     const pr = result.pauseRequest;
@@ -2178,43 +2243,16 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
         content: `[User responded to your question "${record.question}": "${userResponse}"]`,
         scope: "next_turn_only", insertedAt: new Date().toISOString()
       });
-      if (wasAutoRunning) state.autoRunning = true;
+      if (wasAutoRunning) {
+        state.autoRunning = true;
+      } else if (userResponse.trim()) {
+        // Non-auto mode: flag that the pipeline should schedule a continuation
+        // turn after releasing its lock, so actors react to the user's answer.
+        _resumeAfterPause = true;
+      }
     }
     } // end else (non-garbage pause)
   }
-
-  // Repetition safeguard
-  const speakerMessages = state.messages.filter(m => m.speaker === speakerName && m.type !== "skip");
-  if (result.action !== "skip" && result.message && speakerMessages.length > 0) {
-    const lastMsg = speakerMessages[speakerMessages.length - 1];
-    if (lastMsg.content && lastMsg.content.trim() === result.message.trim()) {
-      console.warn(`[turns] Repetition safeguard triggered: forcing skip for ${speakerName}`);
-      result.action = "skip";
-    }
-  }
-
-  // Message type: canDirect actors use "dm" for backward compatibility with transcripts
-  const msgType = actor.canDirect ? "dm" : "actor";
-  const isBackground = (actor.actorMode || 'participant') === 'background';
-
-  if (result.action === "skip") {
-    logTransition("skip_decision", { speaker: speakerName, reason: result.thought });
-    actor.skipCount = (actor.skipCount || 0) + 1;
-    saveState();
-    if (isBackground) return; // silent skip — no transcript entry for background actors
-    return addMessage({ type: "skip", actorId: actor.id, speaker: actor.name, content: "Skipped.", thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, nextSpeaker: result.nextSpeaker || "" });
-  }
-
-  // Track cumulative words for speaking-time balance
-  if (result.message) {
-    const wc = result.message.trim().split(/\s+/).filter(Boolean).length;
-    _speakingTimeMap[actor.id] = (_speakingTimeMap[actor.id] || 0) + wc;
-  }
-
-  actor.turnCount = (actor.turnCount || 0) + 1;
-  saveState();
-  if (isBackground) return; // side effects applied; background actors don't produce transcript entries
-  return addMessage({ type: msgType, actorId: actor.id, speaker: actor.name, content: result.message, thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, nextSpeaker: result.nextSpeaker || "" });
 }
 
 export function scenarioBlock() {

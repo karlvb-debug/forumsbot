@@ -49,7 +49,7 @@ const NAV = [
   { id: 'participation', label: 'You',          icon: 'MessageSquare', tier: 'advanced' },
   { id: 'memory',        label: 'Memory',       icon: 'Brain',         tier: 'advanced' },
   { id: 'telemetry',     label: 'Telemetry',    icon: 'Gauge',         tier: 'advanced' },
-  { id: 'goal',          label: 'Goal',         icon: 'Sliders',       tier: 'advanced' },
+  { id: 'goal',          label: 'Auto Stop',    icon: 'Sliders',       tier: 'advanced' },
   { id: 'documents',     label: 'Documents',    icon: 'Doc',           tier: 'advanced' },
   { id: 'library',       label: 'Library',      icon: 'Stage',         tier: 'advanced' },
   { id: 'sessions',      label: 'Sessions',     icon: 'Sessions',      tier: 'advanced' },
@@ -57,13 +57,13 @@ const NAV = [
 ];
 
 const NAV_TITLES = {
-  scenario:      { title: 'Scenario',      sub: 'premise · objective · systems' },
+  scenario:      { title: 'Scenario',      sub: 'premise · task · systems' },
   actors:        { title: 'Actors',        sub: 'panel composition' },
   participation: { title: 'Participation', sub: 'your role · pause policy' },
   memory:        { title: 'Memory',        sub: 'facts · summary · anchors · outcomes' },
   telemetry:     { title: 'Telemetry',     sub: 'alignment · drift · influence' },
   documents:     { title: 'Documents',     sub: 'working docs · references · links' },
-  goal:          { title: 'Goal',          sub: 'auto-stop & judges' },
+  goal:          { title: 'Auto Stop',    sub: 'completion criteria · judges' },
   library:       { title: 'Library',       sub: 'blueprints · saved setups' },
   sessions:      { title: 'Sessions',      sub: 'save · load · export' },
   connection:    { title: 'Connection',    sub: 'LM Studio · model · generation' },
@@ -412,9 +412,8 @@ export default function App() {
       {stopModal && (
         <StopModal
           reason={stopModal.reason}
-          suggestedGoal={stopModal.suggestedGoal}
           onStop={() => import('./modules/turns.js').then(m => m.resolveStopOrContinue(true))}
-          onContinue={(g) => import('./modules/turns.js').then(m => m.resolveStopOrContinue(false, g))}
+          onContinue={() => import('./modules/turns.js').then(m => m.resolveStopOrContinue(false))}
         />
       )}
       {pauseModal && (

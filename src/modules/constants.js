@@ -155,7 +155,6 @@ export const defaultState = {
   },
   autoStop: {
     enabled: true,
-    goal: "",
     goalCheckEnabled: true,
     stopOnAllSkip: true,
     maxRoundsEnabled: false,
@@ -176,7 +175,8 @@ export const defaultState = {
   scenario: {
     title: "Untitled forum",
     premise: "",
-    objective: "",
+    task: "",
+    doneWhen: "",
     systems: {
       stageDirections: {
         enabled: false,

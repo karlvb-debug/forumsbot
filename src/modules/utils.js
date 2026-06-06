@@ -694,7 +694,7 @@ export function normalizeQuickStartConfig(config, assignFreshIds = true) {
   if (srcAutoStop) {
     autoStop = {};
     if (typeof srcAutoStop.enabled === "boolean") autoStop.enabled = srcAutoStop.enabled;
-    if (srcAutoStop.goal !== undefined) autoStop.goal = String(srcAutoStop.goal);
+
     if (typeof srcAutoStop.goalCheckEnabled === "boolean") autoStop.goalCheckEnabled = srcAutoStop.goalCheckEnabled;
     if (typeof srcAutoStop.stopOnAllSkip === "boolean") autoStop.stopOnAllSkip = srcAutoStop.stopOnAllSkip;
     if (typeof srcAutoStop.maxRoundsEnabled === "boolean") autoStop.maxRoundsEnabled = srcAutoStop.maxRoundsEnabled;
@@ -706,7 +706,8 @@ export function normalizeQuickStartConfig(config, assignFreshIds = true) {
     scenario: {
       title: cleanConfigText(scenario.title, "Untitled forum", 80),
       premise: cleanConfigText(scenario.premise, "", 700),
-      objective: cleanConfigText(scenario.objective, "", 500),
+      task: cleanConfigText(scenario.task || scenario.objective, "", 500),
+      doneWhen: cleanConfigText(scenario.doneWhen, "", 500),
       systems
     },
     dm: {

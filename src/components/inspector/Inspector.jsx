@@ -5,7 +5,7 @@ import { ScenarioPanel } from './ScenarioPanel';
 import { ActorsPanel } from './ActorsPanel';
 import { MemoryPanel } from './MemoryPanel';
 import { TelemetryPanel } from './TelemetryPanel';
-import { GoalPanel } from './GoalPanel';
+import AutoStopPanel from './AutoStopPanel';
 import { SessionsPanel } from './SessionsPanel';
 import { LibraryPanel } from './LibraryPanel';
 import { DocumentsPanel } from './DocumentsPanel';
@@ -20,7 +20,7 @@ const PANELS = {
   participation: ParticipationPanel,
   memory: MemoryPanel,
   telemetry: TelemetryPanel,
-  goal: GoalPanel,
+  goal: AutoStopPanel,
   library: LibraryPanel,
   sessions: SessionsPanel,
   documents: DocumentsPanel,

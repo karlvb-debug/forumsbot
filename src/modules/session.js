@@ -77,7 +77,8 @@ export async function exportSession(mode = 'debug') {
     const lines = [
       `# ${state.scenario.title || 'Forum Session'}`,
       state.scenario.premise ? `**Premise:** ${state.scenario.premise}` : '',
-      state.scenario.objective ? `**Objective:** ${state.scenario.objective}` : '',
+      state.scenario.task ? `**Task:** ${state.scenario.task}` : '',
+      state.scenario.doneWhen ? `**Done When:** ${state.scenario.doneWhen}` : '',
       '---'
     ].filter(Boolean);
 
@@ -138,7 +139,6 @@ export async function exportSession(mode = 'debug') {
       },
       scenario: scenarioWithoutMode(state.scenario),
       autoStop: {
-        goal: state.autoStop.goal,
         roundsRun: state.autoStop.roundsRun
       },
       sessionMetrics: calculateSessionMetrics(messages),
@@ -233,7 +233,8 @@ export async function copySessionToClipboard() {
     `# Forum Session Digest`,
     `**Title:** ${state.scenario.title || 'Untitled'}`,
     `**Premise:** ${state.scenario.premise || 'None'}`,
-    `**Objective:** ${state.scenario.objective || 'None'}`,
+    `**Task:** ${state.scenario.task || 'None'}`,
+    `**Done When:** ${state.scenario.doneWhen || 'None'}`,
     `---`,
     `## Memory State`,
     `**Pinned Facts:**\n${(Array.isArray(state.memory.pinnedFacts) ? state.memory.pinnedFacts.join("\n") : state.memory.pinnedFacts) || 'None'}`,
@@ -449,7 +450,7 @@ export async function generateQuickStart(promptOverride = "") {
     },
     documentWriting: { ...(state.documentWriting || {}) },
     documents: (state.documents || []).map(d => ({ id: d.id, title: d.title, aiEditable: d.aiEditable, enabled: d.enabled, purpose: d.purpose, format: d.format, writerId: d.writerId })),
-    autoStop: { enabled: state.autoStop.enabled, goal: state.autoStop.goal, goalCheckEnabled: state.autoStop.goalCheckEnabled, stopOnAllSkip: state.autoStop.stopOnAllSkip, maxRoundsEnabled: state.autoStop.maxRoundsEnabled, maxRounds: state.autoStop.maxRounds },
+    autoStop: { enabled: state.autoStop.enabled, goalCheckEnabled: state.autoStop.goalCheckEnabled, stopOnAllSkip: state.autoStop.stopOnAllSkip, maxRoundsEnabled: state.autoStop.maxRoundsEnabled, maxRounds: state.autoStop.maxRounds },
     memory: {
       pinnedFacts: Array.isArray(state.memory.pinnedFacts) ? state.memory.pinnedFacts : [],
       sharedSummary: state.memory.sharedSummary || "",
@@ -468,15 +469,15 @@ export async function generateQuickStart(promptOverride = "") {
   "addActors": [{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"authority":50,"canDirect":false,"canManageCast":false,"canResearch":false,"canWriteDocuments":false,"canSeeThoughts":false,"directorMode":"facilitator|narrator|arbiter|observer"}],
   "removeActors": ["ActorName"],
   "modifyActors": [{"find":"ActorName","name":"...","role":"...","persona":"...","goal":"...","voice":"...","enabled":true,"temperature":0.9,"authority":70,"canDirect":false,"canManageCast":false,"canResearch":false,"canWriteDocuments":false,"canSeeThoughts":false,"directorMode":"facilitator|narrator|arbiter|observer"}],
-  "scenario": {"title":"...","premise":"...","objective":"...","systems":{"stageDirections":{"enabled":false,"intensity":"minimal|moderate|immersive","maxTokenShare":0.2},"alignment":{"strictness":"strict|moderate|loose|off","anchorInPrompt":false,"nudgeStyle":"hard-redirect|gentle-nudge|question"},"turnRouting":{"strategy":"sequential|agentic","allowDirectAddress":true},"dmRole":{"role":"narrator|facilitator|arbiter|observer","narrates":false,"canIntroduceElements":false}}},
+  "scenario": {"title":"...","premise":"...","task":"...","doneWhen":"...","systems":{"stageDirections":{"enabled":false,"intensity":"minimal|moderate|immersive","maxTokenShare":0.2},"alignment":{"strictness":"strict|moderate|loose|off","anchorInPrompt":false,"nudgeStyle":"hard-redirect|gentle-nudge|question"},"turnRouting":{"strategy":"sequential|agentic","allowDirectAddress":true},"dmRole":{"role":"narrator|facilitator|arbiter|observer","narrates":false,"canIntroduceElements":false}}},
   "dm": {"enabled":true,"name":"...","persona":"...","canSeeThoughts":false},
   "settings": {"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"seed":-1,"seedEnabled":false,"toolsEnabled":false,"globalStyleEnabled":true,"globalStylePrompt":"Use plain everyday language unless the user, scenario, or actor voice asks for a different style.","streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":false,"preflightThreshold":0.35,"enableCrossSessionMemory":false,"roundSnapshotEnabled":true,"gravitySensitivity":50,"turnDelay":0},
   "memory": {"addFacts":["fact text"],"removeFacts":["text to match and remove"],"sharedSummary":"...","openQuestions":"...","dmState":"..."},
-  "autoStop": {"enabled":true,"goal":"...","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5},
+  "autoStop": {"enabled":true,"goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5},
   "userContext": {"interactionMode":"sponsor|collaborator|observer","displayName":"","storyRole":""}
 }`;
 
-  const fullSetupShape = `{"scenario":{"title":"","premise":"","objective":"","systems":{"stageDirections":{"enabled":false,"intensity":"moderate","maxTokenShare":0.2},"alignment":{"strictness":"moderate","anchorInPrompt":false,"nudgeStyle":"gentle-nudge"},"turnRouting":{"strategy":"sequential","allowDirectAddress":true},"dmRole":{"role":"facilitator","narrates":false,"canIntroduceElements":false}}},"dm":{"enabled":true,"name":"","persona":"","canSeeThoughts":false},"actors":[{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"authority":50,"canDirect":false,"canManageCast":false,"canResearch":false,"canWriteDocuments":false,"canSeeThoughts":false,"directorMode":"facilitator|narrator|arbiter|observer"}],"memory":{"pinnedFacts":[],"sharedSummary":"","openQuestions":"","dmState":""},"settings":{"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"seed":-1,"seedEnabled":false,"toolsEnabled":false,"globalStyleEnabled":true,"globalStylePrompt":"Use plain everyday language unless the user, scenario, or actor voice asks for a different style.","streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":false,"preflightThreshold":0.35,"enableCrossSessionMemory":false,"roundSnapshotEnabled":true,"gravitySensitivity":50,"turnDelay":0},"autoStop":{"enabled":false,"goal":"","goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5},"userContext":{"interactionMode":"collaborator","displayName":"","storyRole":""}}`;
+  const fullSetupShape = `{"scenario":{"title":"","premise":"","task":"","doneWhen":"","systems":{"stageDirections":{"enabled":false,"intensity":"moderate","maxTokenShare":0.2},"alignment":{"strictness":"moderate","anchorInPrompt":false,"nudgeStyle":"gentle-nudge"},"turnRouting":{"strategy":"sequential","allowDirectAddress":true},"dmRole":{"role":"facilitator","narrates":false,"canIntroduceElements":false}}},"dm":{"enabled":true,"name":"","persona":"","canSeeThoughts":false},"actors":[{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"authority":50,"canDirect":false,"canManageCast":false,"canResearch":false,"canWriteDocuments":false,"canSeeThoughts":false,"directorMode":"facilitator|narrator|arbiter|observer"}],"memory":{"pinnedFacts":[],"sharedSummary":"","openQuestions":"","dmState":""},"settings":{"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"seed":-1,"seedEnabled":false,"toolsEnabled":false,"globalStyleEnabled":true,"globalStylePrompt":"Use plain everyday language unless the user, scenario, or actor voice asks for a different style.","streamingEnabled":true,"showThoughts":false,"turboMode":false,"enablePreflightRouter":false,"preflightThreshold":0.35,"enableCrossSessionMemory":false,"roundSnapshotEnabled":true,"gravitySensitivity":50,"turnDelay":0},"autoStop":{"enabled":false,"goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5},"userContext":{"interactionMode":"collaborator","displayName":"","storyRole":""}}`;
 
   const system = [
     "You are the AI Assistant for Forum, a local multi-agent AI discussion app running LLM actors via LM Studio.",
@@ -497,10 +498,10 @@ export async function generateQuickStart(promptOverride = "") {
     "Actors are separate LLM personas. A round runs each enabled actor once. Director (canDirect) moderates. Manager (canManageCast) adds/removes actors. Researcher (canResearch) can search web. Writer (canWriteDocuments) handles explicit document-writing tasks.",
     "",
     "## ACTOR FIELDS",
-    "name, role, persona (up to 700 chars, 2nd person), goal (up to 500 chars), voice (up to 120 chars), enabled, temperature (0-2, default 0.8), authority (0-100, default 50), canDirect, canManageCast, canResearch, canWriteDocuments, canSeeThoughts, directorMode for canDirect actors.",
+    "name, role, persona (up to 700 chars, 2nd person), goal (the actor's personal responsibility, up to 500 chars), voice (up to 120 chars), enabled, temperature (0-2, default 0.8), authority (0-100, default 50), canDirect, canManageCast, canResearch, canWriteDocuments, canSeeThoughts, directorMode for canDirect actors.",
     "",
     "## SCENARIO",
-    "title, premise (context), objective (goal). systems: stageDirections (enabled,intensity,maxTokenShare), alignment (strictness,anchorInPrompt,nudgeStyle), turnRouting (strategy:'sequential|agentic',allowDirectAddress), dmRole (role,narrates,canIntroduceElements).",
+    "title, premise (context), task (what to accomplish), doneWhen (completion criteria, optional). systems: stageDirections (enabled,intensity,maxTokenShare), alignment (strictness,anchorInPrompt,nudgeStyle), turnRouting (strategy:'sequential|agentic',allowDirectAddress), dmRole (role,narrates,canIntroduceElements).",
     "",
     "## ROLEPLAY CHECKLIST",
     "For stories/roleplay: set stageDirections.enabled=true, dmRole.role='narrator', dmRole.narrates=true, dmRole.canIntroduceElements=true, turnRouting.strategy='agentic', alignment.strictness='loose'. Create character actors with temp 1.0-1.2. ALWAYS include actors in fullSetup.",
@@ -746,7 +747,7 @@ async function _applyDraft(draft) {
   if (normalized.autoStop) {
     const nas = normalized.autoStop;
     if (typeof nas.enabled === "boolean") state.autoStop.enabled = nas.enabled;
-    if (nas.goal !== undefined) state.autoStop.goal = String(nas.goal);
+
     if (typeof nas.goalCheckEnabled === "boolean") state.autoStop.goalCheckEnabled = nas.goalCheckEnabled;
     if (typeof nas.stopOnAllSkip === "boolean") state.autoStop.stopOnAllSkip = nas.stopOnAllSkip;
     if (typeof nas.maxRoundsEnabled === "boolean") state.autoStop.maxRoundsEnabled = nas.maxRoundsEnabled;
@@ -1141,7 +1142,8 @@ export async function copyMarkdownToClipboard() {
   const lines = [
     `# ${state.scenario.title || 'Forum Session'}`,
     state.scenario.premise ? `**Premise:** ${state.scenario.premise}` : '',
-    state.scenario.objective ? `**Objective:** ${state.scenario.objective}` : '',
+    state.scenario.task ? `**Task:** ${state.scenario.task}` : '',
+    state.scenario.doneWhen ? `**Done When:** ${state.scenario.doneWhen}` : '',
     '---'
   ].filter(Boolean);
 
