@@ -170,6 +170,45 @@ reading papers.
 Running notes from auditing the Inspector panels for (a) controls bound to
 dead/removed systems, and (b) live systems with no UI control.
 
+### Memory panel — well-wired but missing controls for live engine state
+
+All controls are bound to live consumers — no dead UI. The findings
+here are missing UI for state the engine actively uses, plus several
+UX gaps.
+
+Missing UI for live state:
+- [ ] `memory.enabled` toggle — used at 5 sites in `turns.js`
+  (lines 702, 830, 1595, 1751, 1858) and `memory.js:126` to gate
+  summarization, recall, and archiving. Default true. No UI to turn
+  memory off without editing state directly. Add a top-level toggle.
+- [ ] `outcomes.rationale` and `outcomes.rejectedOptions` are
+  populated by `extractOutcomes` (`memory.js:606-607`), used in
+  `formatCurrentOutcomes()` which feeds re-extraction, but absent from
+  the Outcomes tab. User sees 4 of 6 outcome categories.
+- [ ] `turnsSinceSummary` tracked at `turns.js:703-705`, not shown.
+  Useful diagnostic for the Archive card.
+- [ ] `outcomes.lastExtractedAt` stored, never displayed. Show as
+  "Last extracted: HH:MM" near the Outcomes tab.
+- [ ] `enableCrossSessionMemory` setting lands here (relocated from
+  Connection panel orphan).
+
+UX issues:
+- [ ] Pending pinned facts have no preview before Save — black box.
+  Show the pending list as a sub-list or under a Review disclosure.
+- [ ] Open Questions are terminal: only remove. Add edit / mark
+  answered / convert-to-fact affordances.
+- [ ] No way to view archived chunk contents. Add a "View archive"
+  disclosure listing recent chunks for debugging recall issues.
+- [ ] Facts tab is overloaded (Pinned Facts + Open Questions +
+  Archive). Rename or split.
+- [ ] Outcomes tab uses newline-split textareas for arrays. Inconsistent
+  with the chevron-list pattern used elsewhere.
+- [ ] Anchors architecture quirk: pending lives in
+  `memory.pendingAnchors`, approved lives in top-level `state.anchors`.
+  Costs nothing to harmonize.
+- [ ] Add "(model call)" hint on Summarize / Extract / Rebuild /
+  Compact buttons so users know they fire LLM requests.
+
 ### Participation panel — small surface, one prompt/enforcement mismatch
 
 Every control binds to a live consumer. No dead UI, no missing UI for
