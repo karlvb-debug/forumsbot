@@ -49,10 +49,24 @@ export function PauseCard({ msg, interactive = false }) {
 
 function PauseForm({ record }) {
   const [freeText, setFreeText] = useState('');
+  const [submitted, setSubmitted] = useState(false);
 
   const submit = (response) => {
+    if (submitted) return;
+    setSubmitted(true);
     import('../modules/turns.js').then(m => m.resolvePause(response));
   };
+
+  if (submitted) {
+    return (
+      <div className="pause-card honored">
+        <div className="pause-header">
+          <span className="pause-icon">✓</span>
+          <span>Response sent — resuming…</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="pause-card honored">

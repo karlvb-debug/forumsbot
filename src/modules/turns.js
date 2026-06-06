@@ -911,6 +911,14 @@ export function stopGeneration() {
   // release it. Clearing it prematurely causes a race where a new pipeline
   // starts while the old finally is still running.
   abortController?.abort();
+  // Resolve any pending pause so the pipeline promise doesn't hang
+  if (_pauseResolve) {
+    const resolve = _pauseResolve;
+    _pauseResolve = null;
+    _pauseRecordId = null;
+    resolve('');
+  }
+  mutateState(s => { s.ui.pauseModal = null; s.ui.awaitingUserInput = false; });
   forceRemoveStreamingBubble();
   clearBackgroundActivities();
   setAutoStopStatus("Stopped.");

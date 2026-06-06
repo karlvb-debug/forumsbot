@@ -140,7 +140,11 @@ export default function App() {
             s.ui.stopModal = null;
             import('./modules/turns.js').then(m => m.resolveStopOrContinue(false)).catch(() => {});
           } else if (s.ui.pauseModal) {
+            // Resolve with default so the pipeline doesn't hang
+            const defaultResp = s.ui.pauseModal.pauseRecord?.defaultIfNoResponse || '';
             s.ui.pauseModal = null;
+            s.ui.awaitingUserInput = false;
+            import('./modules/turns.js').then(m => m.resolvePause(defaultResp)).catch(() => {});
           }
         });
         e.preventDefault();
