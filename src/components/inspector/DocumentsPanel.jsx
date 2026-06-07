@@ -363,6 +363,7 @@ export function DocumentsPanel() {
   const [dragOverId, setDragOverId] = useState(null);
   const dragSrcRef = useRef(null);
   const fileInputRef = useRef(null);
+  const folderInputRef = useRef(null);
 
   const pendingByDoc = {};
   for (const e of pendingDocumentEdits) {
@@ -506,11 +507,21 @@ export function DocumentsPanel() {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
     const mod = await import('../../modules/knowledge.js');
+    const textFileRegex = /\.(txt|md|markdown|js|jsx|ts|tsx|json|css|html|yaml|yml|sh|py|go|rs|c|cpp|h)$/i;
     for (const file of files) {
-      const text = await file.text();
-      const title = file.name.replace(/\.(md|txt|markdown)$/i, '');
-      const entry = mod.newDocument({ title, content: text, aiEditable: newDocWritable });
-      await persistEntry(entry, {});
+      if (!textFileRegex.test(file.name)) {
+        continue;
+      }
+      try {
+        const text = await file.text();
+        const title = file.webkitRelativePath
+          ? file.webkitRelativePath.replace(/\.(txt|md|markdown|js|jsx|ts|tsx|json|css|html|yaml|yml|sh|py|go|rs|c|cpp|h)$/i, '')
+          : file.name.replace(/\.(txt|md|markdown|js|jsx|ts|tsx|json|css|html|yaml|yml|sh|py|go|rs|c|cpp|h)$/i, '');
+        const entry = mod.newDocument({ title, content: text, aiEditable: newDocWritable });
+        await persistEntry(entry, {});
+      } catch (err) {
+        console.warn('[import] Failed to read file:', file.name, err);
+      }
     }
     e.target.value = '';
   }, [newDocWritable, persistEntry]);
@@ -666,6 +677,9 @@ export function DocumentsPanel() {
           <button className="btn sm ghost" onClick={() => fileInputRef.current?.click()} title="Import from file">
             <Ic.Upload width={11} height={11} /> Import
           </button>
+          <button className="btn sm ghost" onClick={() => folderInputRef.current?.click()} title="Import an entire folder">
+            <Ic.Upload width={11} height={11} /> Folder
+          </button>
           <button className="btn sm ghost" onClick={importClipboard} title="Paste from clipboard">
             Paste
           </button>
@@ -673,6 +687,15 @@ export function DocumentsPanel() {
             ref={fileInputRef}
             type="file"
             accept=".txt,.md,.markdown"
+            multiple
+            style={{ display: 'none' }}
+            onChange={importFiles}
+          />
+          <input
+            ref={folderInputRef}
+            type="file"
+            webkitdirectory=""
+            directory=""
             multiple
             style={{ display: 'none' }}
             onChange={importFiles}
