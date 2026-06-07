@@ -7,6 +7,30 @@ This plan covers ten features drawn from AutoGen, Agnai, and CrewAI, plus the pr
 
 ---
 
+## Instructions for the implementing agent (read first)
+
+This spec is detailed enough that the model/IDE is not the risk — the risk is an executor that drifts outside the named edits. Follow these rules; they matter more than speed.
+
+1. **No refactors outside the named edits.** Implement only what each feature section specifies. Do **not** "improve while you're in there." This codebase has subtle prompt-budget/degradation logic and a mutable singleton-state pattern (`src/modules/state.js`); incidental cleanups silently change behaviour. If you spot a real bug outside scope, note it in your summary — do not fix it in the same commit.
+
+2. **Anchor on symbol names, not line numbers.** Every line number here was verified against commit `3d3c8f6`, but **line numbers drift the moment you start editing**. Locate each edit by its function/const name (`resolveIntent`, `applyAiResult`, `buildPromptContext`, `askActor`, `scoreCandidates`, `getPromptBudget`, `INTENT_SCHEMA`, `buildActorSchema`, `normalizeState`) and treat the cited numbers as a starting hint only.
+
+3. **Preserve byte-parity until a gate fires.** Every feature must leave existing sessions behaving **identically** until its new field/gate is actually used. Default prose, default state, and default control flow stay unchanged. When filling defaults, copy current wording verbatim — do not paraphrase existing prompt strings.
+
+4. **Add a `normalizeState` default for every new state field.** New fields (`exampleDialogue`, `scenario.plan`, the extended `pendingInjections` entry shape, any schema additions) **must** get a default in `state.js` `normalizeState` (mirror the merge patterns at `state.js:85` and the actor block `288–326`), or loading an existing saved session will break. Test this explicitly (load a legacy state with the field absent → no throw, default present).
+
+5. **Respect mode and cost gates.** The features that add API calls (E planning pre-pass, F/H retries, G emergency summarize) must honour their guards — `hasTask()`, `isRoleplayMode()`, `state.settings.turboMode`, and the over-budget / `isSummarizing` checks. Never run a paid pre-pass or retry unconditionally.
+
+6. **One feature per commit, in the suggested order.** After each feature, run `npm run test` **and** `npm run build`, and only then commit and move on. Keep commits self-contained so any one can be reverted without unpicking the others.
+
+7. **Prove parity on the cheap features first.** Implement and push **I → D → C → B** before touching anything that adds API calls (E) or edits the turn loop / memory (F, G, H). These four are low-risk and exercise the field-wiring, prompt-assembly, and schema patterns the later features reuse — they're the checkpoint for confirming the parity discipline above is being followed. Do not start E/F/G/H until the first four are green.
+
+8. **Coordinate the schema and `askActor` touch-points.** F and H both extend `askActor`'s `options` — land F first so `options.correction` exists, then H adds `options.maxTokensOverride` alongside it. A and H both edit `INTENT_SCHEMA` — make those additions (`stuck`, optional `expectedOutput`) in a single coherent edit if doing them close together.
+
+9. **If the prompt-editing registry (`PROMPT_EDITING_PLAN.md`) is being built in parallel,** author feature **I**'s prose as registry defaults rather than inline literals, so the wording isn't written twice. If this plan ships first, the registry work lifts them later.
+
+---
+
 ## 0. Consolidated feature index
 
 | ID | Feature | Source | Mode | Adds API calls? | Effort |
