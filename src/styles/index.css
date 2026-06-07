@@ -930,12 +930,6 @@ input[type="range"]::-webkit-slider-thumb {
   margin-top: 6px;
 }
 
-.kb-entry {
-  border: 1px solid var(--border-soft);
-  border-radius: var(--r);
-  margin-bottom: 8px;
-  padding: 10px;
-}
 
 /* ── File-browser Documents Panel ── */
 .doc-file-list {
@@ -1581,61 +1575,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .mini-icon-btn:hover { background: var(--bg-input); color: var(--fg); }
 
-/* ───── Telemetry visuals ───── */
-.dial-wrap {
-  display: grid;
-  grid-template-columns: 96px 1fr;
-  gap: 14px;
-  align-items: center;
-  padding: 4px 0;
-}
-.dial {
-  position: relative;
-  width: 96px; height: 96px;
-}
-.dial svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-.dial-bg { fill: none; stroke: var(--bg-input); stroke-width: 8; }
-.dial-fg { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset .6s, stroke .3s; }
-.dial-center {
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center;
-}
-.dial-center .num { font-size: 22px; font-weight: 700; font-family: var(--font-mono); letter-spacing: -0.02em; }
-.dial-center .lbl { font-size: 10px; color: var(--fg-mute); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; margin-top: -2px; }
 
-.metric-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-.metric-tile {
-  background: var(--bg-input);
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  padding: 10px;
-  position: relative;
-  overflow: hidden;
-}
-.metric-tile .mt-icon { font-size: 14px; color: var(--fg-mute); }
-.metric-tile .mt-val { font-size: 18px; font-weight: 700; font-family: var(--font-mono); letter-spacing: -0.02em; margin-top: 2px; }
-.metric-tile .mt-lbl { font-size: 10.5px; color: var(--fg-mute); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
-.metric-tile.ok .mt-val { color: var(--ok); }
-.metric-tile.warn .mt-val { color: var(--warn); }
-.metric-tile.err .mt-val { color: var(--danger); }
-
-.spark {
-  display: flex; align-items: flex-end; gap: 2px;
-  height: 32px;
-  margin-top: 4px;
-}
-.spark .bar {
-  flex: 1;
-  background: var(--accent-soft);
-  border-radius: 2px 2px 0 0;
-  min-height: 2px;
-}
-.spark .bar.active { background: var(--accent); }
 
 .influence-row {
   display: flex; align-items: center; gap: 8px;

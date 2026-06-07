@@ -1002,18 +1002,6 @@ export function startConnectionPing() {
   }, 30000);
 }
 
-export function restoreLastConnection() {
-  try {
-    const lastUrl = sessionStorage.getItem("forum-last-baseurl");
-    const lastModel = sessionStorage.getItem("forum-last-model");
-    if (lastUrl && !state.settings.baseUrl) {
-      state.settings.baseUrl = lastUrl;
-    }
-    if (lastModel && !state.settings.model) {
-      state.settings.model = lastModel;
-    }
-  } catch (_) {}
-}
 
 export function getEmbedding(text) {
   return scheduleEmbed(() => _getEmbeddingDirect(text));

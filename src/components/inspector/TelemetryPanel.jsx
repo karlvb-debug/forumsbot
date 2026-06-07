@@ -38,7 +38,6 @@ export function TelemetryPanel() {
           <span className="disclosure-sub">sampling · diagnostics</span>
         </summary>
         <div className="disclosure-body">
-          <Toggle checked={settings.roundSnapshotEnabled !== false} onChange={(v) => mutateState(s => { s.settings.roundSnapshotEnabled = v; })} label="Round snapshot · KV cache reuse" />
           <Toggle checked={settings.includeTraces !== false} onChange={(v) => mutateState(s => { s.settings.includeTraces = v; })} label="Include prompt traces in diagnostics" />
         </div>
       </details>

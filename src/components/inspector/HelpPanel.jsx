@@ -105,7 +105,7 @@ export function HelpPanel() {
             <strong>Stop (Esc)</strong> — halts generation at the end of the current streaming token.
           </li>
           <li>
-            <strong>⚡ Turbo</strong> — skips memory cycles, alignment scoring, and private
+            <strong>⚡ Turbo</strong> — skips memory cycles and private
             thoughts. Faster but shallower output.
           </li>
           <li>
@@ -156,9 +156,7 @@ export function HelpPanel() {
             ("surface decisions, invite quieter actors…"). Usually matches Stage Directions.
           </li>
           <li>
-            <strong>Alignment Strictness</strong> — how firmly actors are nudged back to the
-            objective when drifting. Strict = hard redirects in prompt. Loose = free exploration.
-            Off = no alignment signals at all.
+            <strong>Alignment Strictness</strong> — controls periodic task reminders. Strict = reminder every 3 turns. Moderate = every 5 turns. Loose = every 8 turns. Off = disabled.
           </li>
           <li>
             <strong>Speaking Order</strong> — Sequential rotates through the visible queue.
@@ -216,7 +214,7 @@ export function HelpPanel() {
             one Director per session.
           </li>
           <li>
-            <strong>Manage Cast (canManageCast)</strong> — can create, silence, and resume actors
+            <strong>Manage Cast (canManageCast)</strong> — can create new specialist actors
             mid-session via JSON output. Also unlocks CAP-1 (prompt injection) and CAP-2 (private
             messages).
           </li>
@@ -269,47 +267,23 @@ export function HelpPanel() {
 
       {/* Telemetry */}
       <HelpSection id="telemetry" title="Telemetry" openId={openId} setOpenId={setOpenId}>
-        <ul style={{ margin: '4px 0 8px 0', paddingLeft: 16, lineHeight: 1.6 }}>
-          <li>
-            <strong>Alignment Score (0–100%)</strong> — how closely the conversation aligns with
-            the Objective. Computed via embedding cosine similarity (if an embedding model is
-            configured) or keyword overlap.
-          </li>
-          <li>
-            <strong>Drift</strong> — change in alignment since the last turn. The sparkline shows
-            the last 10 turns.
-          </li>
-        </ul>
         <p style={{ marginBottom: 8 }}>
           <strong>Session Health tiles:</strong>
         </p>
         <ul style={{ margin: '4px 0 8px 0', paddingLeft: 16, lineHeight: 1.6 }}>
           <li>
-            <strong>Skip Rate</strong> — % of AI turns that chose to skip. High = actors are
-            being efficient; very high = they may be stuck.
+            <strong>Skip Rate</strong> — % of AI turns that chose to skip. High = actors are being efficient; very high = they may be stuck.
           </li>
           <li>
             <strong>Extract Rate</strong> — % of outcome extraction attempts that succeeded.
           </li>
-          <li>
-            <strong>Mem Dups</strong> — memory deduplication events detected.
-          </li>
-          <li>
-            <strong>Aligned</strong> — current alignment % at a glance.
-          </li>
-          <li>
-            <strong>Repeats</strong> — turns flagged as repetitive via quality signals. Two flags
-            in 20 turns triggers an automatic loop-breaking hint.
-          </li>
         </ul>
+        <p style={{ marginBottom: 8 }}>
+          <strong>Optimization:</strong>
+        </p>
         <ul style={{ margin: '4px 0 8px 0', paddingLeft: 16, lineHeight: 1.6 }}>
           <li>
-            <strong>Optimization toggles</strong>: preflight skip router, round snapshot (KV cache
-            reuse), and prompt traces in diagnostics.
-          </li>
-          <li>
-            <strong>Gravity Sensitivity slider</strong> — at 100 = constant drift warnings; at 0 =
-            silent. Default 50 fires nudges when alignment drops below halfway.
+            <strong>Include prompt traces in diagnostics</strong> — saves the exact prompt context for the last generated turn, accessible in session logs.
           </li>
         </ul>
       </HelpSection>

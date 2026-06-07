@@ -27,9 +27,6 @@ export async function initializeMemoryStorage() {
     state.messages = fallbackMessages.slice(-80);
     console.warn(error);
   }
-  if (!state.ui.activeTab) {
-    state.ui.activeTab = state.messages.length ? "conversation" : "setup";
-  }
   // saveState is called by the caller (main.js) after initializeMemoryStorage
 }
 
@@ -217,26 +214,7 @@ export async function putActorMemory(actorName, memory) {
   }
 }
 
-export async function clearActorMemory(actorName) {
-  if (!storageAvailable || !db) return;
-  try {
-    const tx = db.transaction(ACTOR_MEMORY_STORE, 'readwrite');
-    tx.objectStore(ACTOR_MEMORY_STORE).delete(actorName);
-    await idbDone(tx);
-  } catch (err) {
-    console.warn('[actor-memory] clearActorMemory failed:', err.message);
-  }
-}
 
-export async function getAllActorMemories() {
-  if (!storageAvailable || !db) return [];
-  try {
-    const tx = db.transaction(ACTOR_MEMORY_STORE, 'readonly');
-    return await idbRequest(tx.objectStore(ACTOR_MEMORY_STORE).getAll());
-  } catch {
-    return [];
-  }
-}
 
 // ──────────────────────────────────────────────────────────────
 // Session History Store

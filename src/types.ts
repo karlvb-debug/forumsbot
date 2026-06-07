@@ -89,7 +89,6 @@ export interface Settings {
   enableCrossSessionMemory: boolean;
   streamingEnabled: boolean;
   turboMode: boolean;
-  roundSnapshotEnabled: boolean;
   turnDelay: number;
 }
 
@@ -108,7 +107,6 @@ export interface EmbeddingProbeResult {
 }
 
 export interface UI {
-  activeTab: string;
   quickStartPrompt: string;
   quickStartDraft: unknown | null;
   quickStartStatus: string;
@@ -132,7 +130,6 @@ export interface Memory {
   sharedSummary: string;
   openQuestions: string[];
   dmState: string;
-  pendingPinnedFacts: string[];
   pendingAnchors: Anchor[];
   cycleCount: number;
   turnsSinceSummary: number;
@@ -153,11 +150,8 @@ export interface Anchor {
 }
 
 export interface Telemetry {
-  objectiveEmbedding: number[] | null;
   embeddedObjectiveText: string;
-  currentAlignmentScore: number;
   alignmentMode: 'embedding' | 'keyword' | 'none';
-  alignmentHistory: number[];
   nudgeTriggered: boolean;
 }
 

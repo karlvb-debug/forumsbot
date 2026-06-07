@@ -54,13 +54,7 @@ export function useForumState<T>(selector: (s: ForumState) => T): T {
   return selector(state as ForumState);
 }
 
-/**
- * Get the raw state object for imperative reads (not reactive).
- * Use sparingly — prefer useForumState for reactive subscriptions.
- */
-export function getState(): ForumState {
-  return state as ForumState;
-}
+
 
 /**
  * Mutate state and notify React.

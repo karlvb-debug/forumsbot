@@ -1,4 +1,4 @@
-import { STORAGE_KEY, VALID_TABS, defaultState, colors } from './constants.js';
+import { STORAGE_KEY, defaultState, colors } from './constants.js';
 import { DEFAULT_SYSTEMS, legacySystemsFromMode, normalizeQuickStartConfig, cleanStoredMessage, normalizeStringArray, normalizeCadence, normalizeSpeakingOrderStrategy } from './utils.js';
 
 function normalizeDocumentEntry(e) {
@@ -155,7 +155,6 @@ function normalizeState(value = {}) {
   if (!Array.isArray(merged.documentTasks)) merged.documentTasks = [];
   if (!Array.isArray(merged.pendingDocumentEdits)) merged.pendingDocumentEdits = [];
 
-  if (!Array.isArray(merged.telemetry.alignmentHistory)) merged.telemetry.alignmentHistory = [];
   if (!Array.isArray(merged.diagnostics.transitions)) merged.diagnostics.transitions = [];
   if (!Array.isArray(merged.diagnostics.warnings)) merged.diagnostics.warnings = [];
   if (!Array.isArray(merged.diagnostics.sessionsIndex)) merged.diagnostics.sessionsIndex = [];
@@ -192,18 +191,12 @@ function normalizeState(value = {}) {
     merged.settings.intentPass = "auto";
   }
   delete merged.settings.plainLanguageDefault;
-  if (!VALID_TABS.includes(merged.ui.activeTab)) {
-    merged.ui.activeTab = "";
-  }
   if (merged.ui.quickStartDraft) {
     if (merged.ui.quickStartDraft.type === "patch") {
       // Keep patch draft as-is
     } else {
       merged.ui.quickStartDraft = normalizeQuickStartConfig(merged.ui.quickStartDraft, false);
     }
-  }
-  if (!Array.isArray(merged.memory.pendingPinnedFacts)) {
-    merged.memory.pendingPinnedFacts = [];
   }
   if (!Array.isArray(merged.memory.pendingAnchors)) {
     merged.memory.pendingAnchors = [];

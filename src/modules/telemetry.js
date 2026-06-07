@@ -40,7 +40,6 @@ export function calculateSessionMetrics(messages) {
     chunkCoveragePct: totalCompleted ? Math.round((state.memory.archivedCount || 0) * 10) : 0,
     skipRateOverall: Number(skipRateOverall.toFixed(2)),
     skipRateByActor,
-    premiseDriftFinal: state.telemetry?.currentAlignmentScore ? Number((1 - state.telemetry.currentAlignmentScore / 100).toFixed(2)) : 0.0,
     outcomesPopulated: !!state.outcomes.finalRecommendation,
     totalLatencyMs
   };

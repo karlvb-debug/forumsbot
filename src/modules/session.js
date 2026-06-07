@@ -37,29 +37,6 @@ async function requestConfirm(message, confirmLabel = "Confirm") {
   });
 }
 
-export function savePreset() {
-  const preset = {
-    version: PRESET_VERSION,
-    settings: state.settings,
-    memory: {
-      enabled: state.memory.enabled,
-      pinnedFacts: state.memory.pinnedFacts,
-      sharedSummary: state.memory.sharedSummary,
-      openQuestions: state.memory.openQuestions,
-      dmState: state.memory.dmState
-    },
-    scenario: scenarioWithoutMode(state.scenario),
-    actors: state.actors,
-    documentWriting: { ...(state.documentWriting || {}) },
-    documents: (state.documents || []).map(d => ({ ...d })),
-    autoStop: {
-      ...state.autoStop,
-      roundsRun: 0,
-      status: "Auto-stop ready."
-    }
-  };
-  downloadJson(`forum-preset-${slugDate()}.json`, preset);
-}
 
 const EXPORT_MODES = new Set(['debug', 'shareable', 'markdown', 'eval']);
 
@@ -142,10 +119,7 @@ export async function exportSession(mode = 'debug') {
         roundsRun: state.autoStop.roundsRun
       },
       sessionMetrics: calculateSessionMetrics(messages),
-      telemetry: {
-        currentAlignmentScore: state.telemetry?.currentAlignmentScore,
-        alignmentHistory: state.telemetry?.alignmentHistory
-      },
+      telemetry: {},
       diagnostics: {
         transitions: state.diagnostics?.transitions || [],
         warnings: state.diagnostics?.warnings || [],
@@ -175,11 +149,6 @@ export async function exportSession(mode = 'debug') {
     if (cleanState.memory) {
       cleanState.memory = { ...cleanState.memory };
       delete cleanState.memory.dmState;
-    }
-    // Strip telemetry embedding vectors (large, private, non-reproducible)
-    if (cleanState.telemetry) {
-      cleanState.telemetry = { ...cleanState.telemetry };
-      delete cleanState.telemetry.objectiveEmbedding;
     }
     // Strip UI quick-start draft history (contains raw LLM output, not session content)
     if (cleanState.ui) {
@@ -226,47 +195,6 @@ export async function exportSession(mode = 'debug') {
   downloadJson(`forum-session-${mode}-${slugDate()}.json`, payload);
 }
 
-export async function copySessionToClipboard() {
-  const messages = await getAllMessages();
-  
-  const header = [
-    `# Forum Session Digest`,
-    `**Title:** ${state.scenario.title || 'Untitled'}`,
-    `**Premise:** ${state.scenario.premise || 'None'}`,
-    `**Task:** ${state.scenario.task || 'None'}`,
-    `**Done When:** ${state.scenario.doneWhen || 'None'}`,
-    `---`,
-    `## Memory State`,
-    `**Pinned Facts:**\n${(Array.isArray(state.memory.pinnedFacts) ? state.memory.pinnedFacts.join("\n") : state.memory.pinnedFacts) || 'None'}`,
-    `**Shared Summary:**\n${state.memory.sharedSummary || 'None'}`,
-    `**Open Questions:**\n${(Array.isArray(state.memory.openQuestions) ? state.memory.openQuestions.join("\n") : state.memory.openQuestions) || 'None'}`,
-    `**DM State:**\n${state.memory.dmState || 'None'}`,
-    `---`,
-    `## Transcript`
-  ].join("\n");
-
-  const formattedMessages = messages.map((msg) => {
-    const timeStr = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
-    const typeLabel = msg.type || 'actor';
-    const headerStr = `### ${msg.speaker || 'Unknown'} (${typeLabel}) - ${timeStr}`;
-    
-    const includeThought = msg.thought && state.settings.showThoughts;
-    const thoughtStr = includeThought ? `**Thought:**\n${msg.thought}\n` : '';
-    const contentStr = `**Message:**\n${msg.content || ''}`;
-
-    return [headerStr, thoughtStr, contentStr].filter(Boolean).join('\n');
-  }).join("\n\n");
-
-  const fullText = [header, formattedMessages].join("\n\n");
-
-  try {
-    await navigator.clipboard.writeText(fullText);
-    setStatus("Session copied to clipboard!", "ok");
-  } catch (err) {
-    setStatus("Copy failed. Check browser permissions.", "error");
-    console.error("Clipboard copy failed:", err);
-  }
-}
 
 export function downloadJson(filename, payload) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -392,24 +320,6 @@ export function addActor(isResearcher = false) {
   saveState();
 }
 
-export function addManager() {
-  state.actors.push({
-    id: crypto.randomUUID(),
-    name: "Manager",
-    role: "Orchestrator",
-    persona: "Observe the discussion and the current roster. Create specialized actors when the conversation needs expertise that isn't present. Silence actors who have finished contributing. Resume actors when they become relevant again.",
-    goal: "Ensure the right perspectives are in the room at the right time.",
-    voice: "Decisive and brief. State what you're doing and why in one sentence.",
-    thoughts: "",
-    enabled: true,
-    canDirect: false,
-    canManageCast: true,
-    canResearch: false,
-    canSeeThoughts: false,
-    color: "#1a7a6e"
-  });
-  saveState();
-}
 
 
 
@@ -470,14 +380,13 @@ export async function generateQuickStart(promptOverride = "") {
   "removeActors": ["ActorName"],
   "modifyActors": [{"find":"ActorName","name":"...","role":"...","persona":"...","goal":"...","voice":"...","enabled":true,"temperature":0.9,"authority":70,"canDirect":false,"canManageCast":false,"canResearch":false,"canWriteDocuments":false,"canSeeThoughts":false,"canInject":false,"canPause":true,"canAnchor":true,"canPinFacts":true,"canSuggestSpeaker":true,"canUpdateStyle":true,"directorMode":"facilitator|narrator|arbiter|observer"}],
   "scenario": {"title":"...","premise":"...","task":"...","doneWhen":"...","systems":{"stageDirections":{"enabled":false,"intensity":"minimal|moderate|immersive","maxTokenShare":0.2},"alignment":{"strictness":"strict|moderate|loose|off"},"turnRouting":{"strategy":"sequential|agentic","allowDirectAddress":true},"dmRole":{"role":"narrator|facilitator|arbiter|observer","narrates":false,"canIntroduceElements":false}}},
-  "dm": {"enabled":true,"name":"...","persona":"...","canSeeThoughts":false},
-  "settings": {"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"seed":-1,"seedEnabled":false,"toolsEnabled":false,"globalStyleEnabled":true,"globalStylePrompt":"Use plain everyday language unless the user, scenario, or actor voice asks for a different style.","streamingEnabled":true,"showThoughts":false,"turboMode":false,"enableCrossSessionMemory":false,"roundSnapshotEnabled":true,"turnDelay":0},
+  "settings": {"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"seed":-1,"seedEnabled":false,"toolsEnabled":false,"globalStyleEnabled":true,"globalStylePrompt":"Use plain everyday language unless the user, scenario, or actor voice asks for a different style.","streamingEnabled":true,"showThoughts":false,"turboMode":false,"enableCrossSessionMemory":false,"turnDelay":0},
   "memory": {"addFacts":["fact text"],"removeFacts":["text to match and remove"],"sharedSummary":"...","openQuestions":"...","dmState":"..."},
   "autoStop": {"enabled":true,"goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5},
   "userContext": {"interactionMode":"sponsor|collaborator|observer","displayName":"","storyRole":""}
 }`;
 
-  const fullSetupShape = `{"scenario":{"title":"","premise":"","task":"","doneWhen":"","systems":{"stageDirections":{"enabled":false,"intensity":"moderate","maxTokenShare":0.2},"alignment":{"strictness":"moderate"},"turnRouting":{"strategy":"sequential","allowDirectAddress":true},"dmRole":{"role":"facilitator","narrates":false,"canIntroduceElements":false}}},"dm":{"enabled":true,"name":"","persona":"","canSeeThoughts":false},"actors":[{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"authority":50,"canDirect":false,"canManageCast":false,"canResearch":false,"canWriteDocuments":false,"canSeeThoughts":false,"canInject":false,"canPause":true,"canAnchor":true,"canPinFacts":true,"canSuggestSpeaker":true,"canUpdateStyle":true,"directorMode":"facilitator|narrator|arbiter|observer"}],"memory":{"pinnedFacts":[],"sharedSummary":"","openQuestions":"","dmState":""},"settings":{"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"seed":-1,"seedEnabled":false,"toolsEnabled":false,"globalStyleEnabled":true,"globalStylePrompt":"Use plain everyday language unless the user, scenario, or actor voice asks for a different style.","streamingEnabled":true,"showThoughts":false,"turboMode":false,"enableCrossSessionMemory":false,"roundSnapshotEnabled":true,"turnDelay":0},"autoStop":{"enabled":false,"goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5},"userContext":{"interactionMode":"collaborator","displayName":"","storyRole":""}}`;
+  const fullSetupShape = `{"scenario":{"title":"","premise":"","task":"","doneWhen":"","systems":{"stageDirections":{"enabled":false,"intensity":"moderate","maxTokenShare":0.2},"alignment":{"strictness":"moderate"},"turnRouting":{"strategy":"sequential","allowDirectAddress":true},"dmRole":{"role":"facilitator","narrates":false,"canIntroduceElements":false}}},"actors":[{"name":"","role":"","persona":"","goal":"","voice":"","enabled":true,"temperature":0.8,"authority":50,"canDirect":false,"canManageCast":false,"canResearch":false,"canWriteDocuments":false,"canSeeThoughts":false,"canInject":false,"canPause":true,"canAnchor":true,"canPinFacts":true,"canSuggestSpeaker":true,"canUpdateStyle":true,"directorMode":"facilitator|narrator|arbiter|observer"}],"memory":{"pinnedFacts":[],"sharedSummary":"","openQuestions":"","dmState":""},"settings":{"temperature":0.8,"maxTokens":2000,"topP":0.95,"repeatPenalty":1.1,"seed":-1,"seedEnabled":false,"toolsEnabled":false,"globalStyleEnabled":true,"globalStylePrompt":"Use plain everyday language unless the user, scenario, or actor voice asks for a different style.","streamingEnabled":true,"showThoughts":false,"turboMode":false,"enableCrossSessionMemory":false,"turnDelay":0},"autoStop":{"enabled":false,"goalCheckEnabled":true,"stopOnAllSkip":true,"maxRoundsEnabled":false,"maxRounds":5},"userContext":{"interactionMode":"collaborator","displayName":"","storyRole":""}}`;
 
   const system = [
     "You are the AI Assistant for Forum, a local multi-agent AI discussion app running LLM actors via LM Studio.",
@@ -653,37 +562,9 @@ export async function generateQuickStart(promptOverride = "") {
 }
 
 
-export function parseQuickStartConfig(content) {
-  const cleaned = sanitizeJsonString(stripCodeFence(content));
-  try {
-    const parsed = JSON.parse(cleaned);
-    if (parsed && typeof parsed === "object") return parsed;
-  } catch {
-    for (const candidate of extractBalancedObjects(cleaned)) {
-      try {
-        const parsed = JSON.parse(candidate);
-        if (parsed && typeof parsed === "object") return parsed;
-      } catch {
-        // Try the next object-shaped response.
-      }
-    }
-  }
-  throw new Error("The model did not return usable setup JSON.");
-}
 
 export { normalizeQuickStartConfig, normalizeQuickStartActor, cleanConfigText };
 
-export async function applyQuickStartConfig() {
-  const draft = state.ui.quickStartDraft;
-  if (!draft) {
-    setQuickStartStatus("Generate a setup first.", "warn");
-    return;
-  }
-  await _applyDraft(draft);
-  state.ui.quickStartDraft = null;
-
-  saveState();
-}
 
 export async function applyQuickStartAtIndex(index) {
   console.debug('[applyQuickStartAtIndex] called with index:', index);
@@ -808,7 +689,6 @@ async function _applyDraft(draft) {
     sharedSummary: normalized.memory.sharedSummary,
     openQuestions: normalized.memory.openQuestions,
     dmState: normalized.memory.dmState,
-    pendingPinnedFacts: [],
     turnsSinceSummary: 0,
     lastSummaryMessageId: ""
   };
@@ -1376,7 +1256,6 @@ export function saveConfiguration(name) {
       turboMode: !!state.settings?.turboMode,
 
       enableCrossSessionMemory: !!state.settings?.enableCrossSessionMemory,
-      roundSnapshotEnabled: state.settings?.roundSnapshotEnabled !== false,
 
       turnDelay: state.settings?.turnDelay,
       seed: state.settings?.seed,

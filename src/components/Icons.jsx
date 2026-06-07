@@ -175,11 +175,6 @@ export const Anchor = (props) => (
   </svg>
 );
 
-export const Thumb = (props) => (
-  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M3 10h3v6H3zM6 10l3-6c1 0 2 .5 2 2v2h4a1.5 1.5 0 0 1 1.5 2L15 16a2 2 0 0 1-2 1H6" />
-  </svg>
-);
 
 export const Globe = (props) => (
   <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -251,11 +246,6 @@ export const Robot = (props) => (
   </svg>
 );
 
-export const Wrench = (props) => (
-  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M14 3a3 3 0 0 0-3 4l-7 7 2 2 7-7a3 3 0 0 0 4-3l-2 2-2-2 1-3z" />
-  </svg>
-);
 
 export const Expand = (props) => (
   <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>

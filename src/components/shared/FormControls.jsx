@@ -46,10 +46,4 @@ export const Range = ({ value, onChange, min = 0, max = 1, step = 0.05, format =
   </div>
 );
 
-export const Seg = ({ options, value, onChange, full }) => (
-  <div className={"seg" + (full ? " full" : "")}>
-    {options.map((o) => (
-      <button key={o.value} className={value === o.value ? "active" : ""} onClick={() => onChange?.(o.value)}>{o.label}</button>
-    ))}
-  </div>
-);
+

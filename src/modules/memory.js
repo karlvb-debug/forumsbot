@@ -504,26 +504,6 @@ export async function archiveMemoryChunk(update, sourceMessages) {
   }
 }
 
-export function approvePinnedFacts(approvedIndices) {
-  // approvedIndices is an array of indexes into pendingPinnedFacts to approve
-  // (passed from the React component's checkboxes)
-  const indices = approvedIndices || [];
-  const approved = indices
-    .map((i) => state.memory.pendingPinnedFacts[i])
-    .filter(Boolean);
-  if (!approved.length) return;
-  state.memory.pinnedFacts = [...state.memory.pinnedFacts, ...approved];
-  state.memory.pendingPinnedFacts = state.memory.pendingPinnedFacts.filter((fact) => !approved.includes(fact));
-  approved.forEach(fact => {
-    logTransition("fact_promoted", { fact });
-  });
-  saveState();
-  // Warn if approaching the word cap
-  const wordCount = state.memory.pinnedFacts.join("\n").trim().split(/\s+/).length;
-  if (wordCount > PINNED_FACTS_WORD_CAP * 0.8) {
-    setStatus(`Pinned facts are ${wordCount} words — approaching the ${PINNED_FACTS_WORD_CAP}‑word cap. Consider compacting.`, "warn");
-  }
-}
 
 /**
  * Ask the model to merge duplicate/redundant pinned facts and return a

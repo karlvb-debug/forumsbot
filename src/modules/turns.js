@@ -130,10 +130,6 @@ async function promptPause(pauseRecord) {
 let _sessionController = null;
 export let abortController = null;
 
-// Backward compat — components check abortController?.signal.aborted
-export function getSessionSignal() {
-  return _sessionController?.signal ?? null;
-}
 
 function ensureSessionController() {
   if (!_sessionController || _sessionController.signal.aborted) {
@@ -148,7 +144,6 @@ let _stopFlag = false;
 // Prevents concurrent turn pipelines when the user double-clicks Next/Round/Auto
 // or fires the Alt+N/R/A shortcuts (which bypass button `disabled` state).
 let _pipelineActive = false;
-export function isPipelineActive() { return _pipelineActive; }
 
 // Set when a pause is resolved with a user response in non-auto mode.
 // Checked by pipeline exit points to schedule a deferred continuation so the
@@ -175,9 +170,6 @@ function _maybeResumeAfterPause() {
 let _lastPromptParts = null;
 export function getLastPromptParts() { return _lastPromptParts; }
 
-// Per-actor cumulative word count for speaking-time balance (runtime-only).
-// Keyed by actor.id. Passed to preflightSkipCheck to bias the skip threshold.
-const _speakingTimeMap = {};
 
 // Rolling window of recent tok/s samples for the speed display.
 const _tokSpeedWindow = [];
@@ -189,7 +181,6 @@ const _tokSpeedWindow = [];
 // Cumulative count of completed visible turns this session run. Drives turn-based
 // cadence firing for background actors. Reset when a fresh auto-loop starts.
 let _globalTurnIndex = 0;
-export function resetTurnIndex() { _globalTurnIndex = 0; }
 
 // Actors that just ran as on_user_message triggers. If a user message
 // immediately kicks off a round, don't run the same director/manager again at
@@ -1456,9 +1447,8 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
             ? "CAST MANAGEMENT: As the narrative DM you control who is in the scene."
             : "CAST MANAGEMENT: You control the roster of participants.",
           "To introduce a new character, include an optional \"manageActors\" field in your JSON with a \"create\" array — give each character a name, role (character archetype), persona, goal, and voice.",
-          "To retire a character who has left the scene or is no longer relevant, add their name to \"silence\". To bring a retired character back, add them to \"resume\".",
-          "Maximum 2 new characters per turn. You cannot silence yourself.",
-          "Example: \"manageActors\":{\"create\":[{\"name\":\"Old Mirren\",\"role\":\"Village elder\",\"persona\":\"Weathered and cryptic. Knows the forest's secrets.\",\"goal\":\"Protect the village at any cost.\",\"voice\":\"Slow, deliberate, speaks in half-riddles.\"}],\"silence\":[\"Guard Captain\"]}"
+          "Maximum 2 new characters per turn.",
+          "Example: \"manageActors\":{\"create\":[{\"name\":\"Old Mirren\",\"role\":\"Village elder\",\"persona\":\"Weathered and cryptic. Knows the forest's secrets.\",\"goal\":\"Protect the village at any cost.\",\"voice\":\"Slow, deliberate, speaks in half-riddles.\"}]}"
         ].join("\n")
       : "";
 
@@ -1522,7 +1512,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
 
     const baseUser = await buildPromptContext({ kind: "actor", actor, privateThoughts });
     const rosterLabel = sysCfg.stageDirectionsEnabled ? "Current cast" : "Current actor roster";
-    const rosterLines = state.actors.map(a => `- ${a.name} (${a.role || (sysCfg.stageDirectionsEnabled ? "Character" : "Participant")})${a.enabled ? "" : (sysCfg.stageDirectionsEnabled ? " [offstage]" : " [SILENCED]")}`).join("\n");
+    const rosterLines = state.actors.map(a => `- ${a.name} (${a.role || (sysCfg.stageDirectionsEnabled ? "Character" : "Participant")})${a.enabled ? "" : (sysCfg.stageDirectionsEnabled ? " [offstage]" : " [disabled]")}`).join("\n");
     const user = `${baseUser}\n\n### ${rosterLabel}\n${rosterLines}`;
     const promptParts = {
       ..._lastPromptParts,
@@ -1550,7 +1540,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
 
   if (actor.canManageCast) {
     const rosterLines = state.actors
-      .map(a => `- ${a.name} (${a.role || "Participant"})${a.enabled ? "" : " [SILENCED]"}`)
+      .map(a => `- ${a.name} (${a.role || "Participant"})${a.enabled ? "" : " [disabled]"}`)
       .join("\n");
 
     const system = [
@@ -1562,10 +1552,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
       "Your job is to keep the right expertise in the room at the right time.",
       "Each turn, observe the discussion and decide whether the current roster needs adjustment:",
       "  CREATE a new actor when the conversation needs a skill or perspective that nobody present can provide.",
-      "  SILENCE an actor when they have exhausted their contribution and are no longer adding value.",
-      "  RESUME a silenced actor when the topic swings back into their area.",
       "CREATION RULES: Be sparing. Create at most 2 actors per turn. Provide a realistic name, a one-line role, a focused persona, a clear goal, and a brief voice description.",
-      "SILENCE RULES: You may not silence yourself or the Director. Silenced actors are disabled but not deleted; you can resume them.",
       forceSpeak
         ? "You have been selected by the speaking-order router to speak this turn. Do not skip; either make a useful roster adjustment or briefly explain why the current roster should continue as-is."
         : "SKIP RULE: If the current roster is appropriate and you have nothing useful to say publicly, set action to 'skip'.",
@@ -2380,11 +2367,6 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
     return addMessage({ type: "skip", actorId: actor.id, speaker: actor.name, content: "Skipped.", thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, nextSpeaker: result.nextSpeaker || "", routeInfo });
   }
 
-  // Track cumulative words for speaking-time balance
-  if (result.message) {
-    const wc = result.message.trim().split(/\s+/).filter(Boolean).length;
-    _speakingTimeMap[actor.id] = (_speakingTimeMap[actor.id] || 0) + wc;
-  }
 
   actor.turnCount = (actor.turnCount || 0) + 1;
   saveState();
@@ -2517,9 +2499,6 @@ export function scenarioBlock() {
   ].filter(Boolean).join("\n");
 }
 
-export function publicTranscript() {
-  return formatTranscript(state.messages.slice(-PROMPT_MESSAGE_LIMIT), WORD_LIMITS.recentTranscript, state.actors);
-}
 
 export function privateThoughtDigest() {
   const actorNotes = state.actors

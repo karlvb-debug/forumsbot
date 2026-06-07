@@ -21,40 +21,9 @@ export const WORD_LIMITS = {
   chunk: 180,
   recentTranscript: 2600
 };
-export const VALID_TABS = ["setup", "conversation", "memory"];
 
 export const colors = ["#18726d", "#b84738", "#a2611a", "#355f9f", "#6e4c99", "#4f7d2d", "#9a4668"];
 
-export const AVAILABLE_TOOLS = [
-  {
-    type: "function",
-    function: {
-      name: "web_search",
-      description: "Search the web for current information. Use when you need facts, news, documentation, or data you don't have.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: { type: "string", description: "The search query" }
-        },
-        required: ["query"]
-      }
-    }
-  },
-  {
-    type: "function",
-    function: {
-      name: "web_read",
-      description: "Fetch and read the text content of a specific URL. Use to read articles, documentation, or other web content.",
-      parameters: {
-        type: "object",
-        properties: {
-          url: { type: "string", description: "The URL to read" }
-        },
-        required: ["url"]
-      }
-    }
-  }
-];
 export const MAX_TOOL_ROUNDS = 3;
 export const DEFAULT_GLOBAL_STYLE_PROMPT = "Use plain everyday language unless the user, scenario, or actor voice asks for a different style. Prefer short common words, concrete claims, and direct sentences. Avoid ornate, academic, or thesaurus-like wording.";
 
@@ -88,8 +57,6 @@ export const defaultState = {
     streamingEnabled: true,
     // Turbo Mode: skip memory cycles, thoughts, alignment, and cross-session memory
     turboMode: false,
-    // KV cache: freeze transcript at round start so all actors share a byte-identical prefix
-    roundSnapshotEnabled: true,
     // Pause between turns when auto-running (seconds, 0 = instant)
     turnDelay: 0,
     // Director intent pass: how the resolver reasons about who speaks next.
@@ -99,7 +66,6 @@ export const defaultState = {
     intentPass: "auto"
   },
   ui: {
-    activeTab: "",
     quickStartPrompt: "",
     quickStartDraft: null,
     quickStartStatus: "No generated setup yet.",
@@ -121,7 +87,6 @@ export const defaultState = {
     sharedSummary: "",
     openQuestions: [],
     dmState: "",
-    pendingPinnedFacts: [],
     pendingAnchors: [],    // anchor suggestions from DM, pending user approval
     cycleCount: 0,         // total summarization cycles run
     turnsSinceSummary: 0,
@@ -133,11 +98,8 @@ export const defaultState = {
     distillingActor: ""
   },
   telemetry: {
-    objectiveEmbedding: null,
     embeddedObjectiveText: "",
-    currentAlignmentScore: 100,
     alignmentMode: "none",      // "embedding" | "keyword" | "none" — shown in UI
-    alignmentHistory: [],
     nudgeTriggered: false
   },
   diagnostics: {

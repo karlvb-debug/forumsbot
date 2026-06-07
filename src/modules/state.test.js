@@ -9,7 +9,6 @@ vi.mock('./constants.js', async () => {
   const { defaultState: ds } = await import('./constants.js');
   return {
     STORAGE_KEY: 'forum-state-v1',
-    VALID_TABS: ['setup', 'conversation', 'memory'],
     colors: ['#18726d', '#b84738'],
     defaultState: ds,
   };

@@ -75,9 +75,6 @@ function isDocVisible(entry) {
   return entry.enabled !== false;
 }
 
-export async function getKbEntriesForActor() {
-  return (state.documents || []).filter(isDocVisible);
-}
 
 export async function getKbEntriesForDirector() {
   return (state.documents || []).filter(isDocVisible);
@@ -141,9 +138,6 @@ export function ensureDefaultWriter() {
   return writer;
 }
 
-export function getDocumentsForActor() {
-  return (state.documents || []).filter(isDocVisible);
-}
 
 // ── Prompt injection ─────────────────────────────────────────────────────────
 

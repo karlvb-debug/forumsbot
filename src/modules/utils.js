@@ -682,8 +682,8 @@ export function normalizeQuickStartConfig(config, assignFreshIds = true) {
   let settings = undefined;
   if (srcSettings) {
     settings = {};
-    const numKeys = ["temperature", "maxTokens", "topP", "repeatPenalty", "seed", "preflightThreshold", "turnDelay"];
-    const boolKeys = ["toolsEnabled", "globalStyleEnabled", "plainLanguageDefault", "streamingEnabled", "showThoughts", "turboMode", "seedEnabled", "enablePreflightRouter", "enableCrossSessionMemory", "roundSnapshotEnabled"];
+    const numKeys = ["temperature", "maxTokens", "topP", "repeatPenalty", "seed", "turnDelay"];
+    const boolKeys = ["toolsEnabled", "globalStyleEnabled", "plainLanguageDefault", "streamingEnabled", "showThoughts", "turboMode", "seedEnabled", "enableCrossSessionMemory"];
     const stringKeys = ["globalStylePrompt"];
     for (const k of numKeys) { if (typeof srcSettings[k] === "number") settings[k] = srcSettings[k]; }
     for (const k of boolKeys) { if (typeof srcSettings[k] === "boolean") settings[k] = srcSettings[k]; }

@@ -7,7 +7,6 @@ export function MemoryPanel() {
   const [section, setSection] = useState('facts');
   const [actionBusy, setActionBusy] = useState('');
   const pinnedFacts = useForumState(s => s.memory?.pinnedFacts || []);
-  const pendingFacts = useForumState(s => s.memory?.pendingPinnedFacts || []);
   const openQuestions = useForumState(s => s.memory?.openQuestions || []);
   const sharedSummary = useForumState(s => s.memory?.sharedSummary || '');
   const dmState = useForumState(s => s.memory?.dmState || '');
