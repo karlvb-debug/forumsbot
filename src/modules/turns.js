@@ -2023,6 +2023,18 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
       ? `[Open questions pending user review: ${openDeferred.map(p => `${p.requesterName}: "${p.question || p.context}"`).join("; ")}. Address them in-conversation if you can; the user will see them at round end.]`
       : "";
 
+    // Roster of other participants so each actor knows who else is in the room and why.
+    // Includes role and goal when set — helps actors direct questions to the right person.
+    const othersBlock = kind === "actor" ? (() => {
+      const others = state.actors.filter(a => a.enabled && a.id !== actor.id && isQueueActor(a));
+      if (!others.length) return "";
+      const lines = others.map(a => {
+        const desc = [a.role, a.goal ? `goal: ${a.goal}` : ""].filter(Boolean).join("; ");
+        return desc ? `${a.name} (${desc})` : a.name;
+      }).join(", ");
+      return `Other participants: ${lines}.`;
+    })() : "";
+
     return [
       scenarioBlock(),
       state.memory.enabled ? memoryBlock(chunks) : "",
@@ -2038,6 +2050,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
       nudgeReminder,
       directAddressNote,
       authorityBlock,
+      othersBlock,
       roleReminder,
       styleReminder,
       kind === "actor"
