@@ -411,14 +411,26 @@ async function resolveIntent(eligible, alreadySpokeThisRound, signal) {
       'What does the discussion need next, and who is best placed to provide it?'
     ].filter(v => v !== null).join('\n');
 
+    const validNames = available.map(a => a.name);
     let data;
-    try {
-      data = await chatStructured(getIntentSystem(), user, INTENT_SCHEMA, {
-        temperature: 0.2, maxTokens: 160, signal, tier: 'reason', purpose: 'intentPass'
-      });
-    } catch (err) {
-      console.warn('[resolver] intent pass failed, using fallback:', err.message);
-      return null;
+    let correction = '';
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const userMsg = correction ? `${user}\n\n${correction}` : user;
+        data = await chatStructured(getIntentSystem(), userMsg, INTENT_SCHEMA, {
+          temperature: 0.2, maxTokens: 160, signal, tier: 'reason', purpose: 'intentPass'
+        });
+      } catch (err) {
+        console.warn('[resolver] intent pass failed, using fallback:', err.message);
+        return null;
+      }
+
+      const name = String(data?.speaker || '').trim();
+      const isNone = !name || name.toUpperCase() === 'NONE';
+      const matched = isNone ? null : available.find(a => a.name.toLowerCase() === name.toLowerCase());
+      if (isNone || matched) break; // good pick
+      correction = `"${name}" is not a participant. Choose exactly one of: ${validNames.join(', ')} — or NONE. Return the name verbatim.`;
+      console.warn(`[intent] corrective retry: "${name}" not in roster`);
     }
 
     const need = String(data?.need || '').trim();
