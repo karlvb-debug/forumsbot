@@ -313,7 +313,7 @@ async function tinyRouter(candidates, alreadySpokeThisRound, signal) {
 
   try {
     const result = await chatStructured(system, user, TINY_ROUTER_SCHEMA, {
-      temperature: 0, maxTokens: 30, signal, tier: 'fast'
+      temperature: 0, maxTokens: 30, signal, tier: 'fast', purpose: 'tinyRouter'
     });
     if (!result?.speaker || result.speaker === 'NONE') return null;
     return available.find(a => a.name.toLowerCase() === result.speaker.toLowerCase()) || null;
@@ -411,7 +411,7 @@ async function resolveIntent(eligible, alreadySpokeThisRound, signal) {
     let data;
     try {
       data = await chatStructured(INTENT_SYSTEM, user, INTENT_SCHEMA, {
-        temperature: 0.2, maxTokens: 160, signal, tier: 'reason'
+        temperature: 0.2, maxTokens: 160, signal, tier: 'reason', purpose: 'intentPass'
       });
     } catch (err) {
       console.warn('[resolver] intent pass failed, using fallback:', err.message);
@@ -1020,7 +1020,7 @@ async function _runRound(options = {}) {
     // Place resolved actor at front for _runTurn's nextParticipant()
     state.turnQueue = [resolved.actor.id, ...state.turnQueue.filter(id => id !== resolved.actor.id)];
     const ok = await runNextTurn({ summarizeCycle: false, isRoundContinuation: true, forceSpeak: false });
-    if (!ok) break;
+    if (!ok) { state._pendingTurnIntent = null; break; }
     alreadySpokeThisRound.add(resolved.actor.id);
     completedTurns++;
     // Configurable inter-turn pause when auto-running
@@ -1216,7 +1216,7 @@ export async function judgeGoal(roundMessages = [], options = {}) {
 
   try {
     const result = await chatStructured(system, user, schema, {
-      temperature: 0.1, maxTokens: 200, tier: 'reason'
+      temperature: 0.1, maxTokens: 200, tier: 'reason', purpose: 'goalCheck'
     });
     const verdict = {
       status: ['complete', 'blocked', 'continue'].includes(result?.status) ? result.status : 'continue',
@@ -1491,7 +1491,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
 
     const directorUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
     const schema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak });
-    const result = await chatJson(directorSystem, directorUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || 600, schema, { toolsAllowed: !!actor.canResearch, tier: thinkingTier });
+    const result = await chatJson(directorSystem, directorUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || 600, schema, { toolsAllowed: !!actor.canResearch, tier: thinkingTier, purpose: actor.name });
     result._promptParts = promptParts;
     return result;
   }
@@ -1540,7 +1540,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     }
     const managerUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
     const managerSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak });
-    return chatJson(managerSystem, managerUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || 600, managerSchema, { toolsAllowed: false, tier: thinkingTier });
+    return chatJson(managerSystem, managerUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || 600, managerSchema, { toolsAllowed: false, tier: thinkingTier, purpose: actor.name });
   }
 
   if (actor.canResearch) {
@@ -1607,7 +1607,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     }
     const researchUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
     const researchSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak });
-    return chatJson(researchSystem, researchUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || null, researchSchema, { toolsAllowed: researcherToolsEnabled, tier: thinkingTier });
+    return chatJson(researchSystem, researchUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || null, researchSchema, { toolsAllowed: researcherToolsEnabled, tier: thinkingTier, purpose: actor.name });
   }
 
   const contextLine = sysCfg.stageDirectionsEnabled
@@ -1721,7 +1721,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
 
   const actorUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
   const actorSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak });
-  const result = await chatJson(actorSystem, actorUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || null, actorSchema, { toolsAllowed: !!actor.canResearch, tier: thinkingTier });
+  const result = await chatJson(actorSystem, actorUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || null, actorSchema, { toolsAllowed: !!actor.canResearch, tier: thinkingTier, purpose: actor.name });
   result._promptParts = promptParts;
   return result;
 }
@@ -1764,7 +1764,7 @@ export async function runDirectorBrief() {
     ].filter(Boolean).join("\n");
     const user = await buildPromptContext({ kind: "actor", actor: director, privateThoughts: "" });
 
-    const result = await chatJson(system, user, state.settings.temperature, abortController.signal, onStream, null, briefSchema, { toolsAllowed: !!director.canResearch, tier: 'reason' });
+    const result = await chatJson(system, user, state.settings.temperature, abortController.signal, onStream, null, briefSchema, { toolsAllowed: !!director.canResearch, tier: 'reason', purpose: 'directorBrief' });
     removeStreamingBubble();
     director.thoughts = appendMemory(director.thoughts, result.thought);
     await addMessage({
@@ -2367,7 +2367,13 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
 
     if (!Array.isArray(state.pendingPauses)) state.pendingPauses = [];
     state.pendingPauses = [...state.pendingPauses, record];
-    await addMessage({ type: "pause", actorId: actor.id, speaker: speakerName, color: actor.color, pauseRecord: record, content: record.question || record.context });
+
+    // Only write a pause card to the transcript when the request is actually honored.
+    // Suppressed pauses are recorded in pendingPauses for diagnostics but must not
+    // become transcript messages — they inflate the context window on every subsequent turn.
+    if (allowed) {
+      await addMessage({ type: "pause", actorId: actor.id, speaker: speakerName, color: actor.color, pauseRecord: record, content: record.question || record.context });
+    }
 
     // Fire conflict trigger so orchestrators can react (awaited — no concurrent pipeline calls)
     if (record.reason === 'conflict') {

@@ -10,23 +10,17 @@ against. Add a date when status changes.
 
 ## Thinking & models
 
-- [~] **Three-mode thinking system (fast / think / reason).** (2026-06) Engine
-  landed. Each LLM call site declares a tier: `fast` (no thought field — roleplay
-  actors, tinyRouter, fact distill), `think` (JSON thought, default for
-  participants), `reason` (director, intent pass, goal judge, memory summary,
-  document writer). The `reason` tier routes to `settings.reasoningModel` when
-  set, else the main model. Native `<think>…</think>` (and `reasoning_content`)
-  blocks are always stripped from completions — fixes a latent JSON-parse break on
-  reasoning models — and routed into the thought slot so real reasoning surfaces
-  in the same UI as fake thinking. Per-actor `actor.thinkingTier` override with
-  role-based defaults (`resolveActorThinkingTier`). API: `resolveModelTier`,
-  `extractNativeThinking`, `model` threaded through every chat fn. Tested
-  (api.test.js + turns.test.js, 223 total). **Remaining (Sonnet/UI):** (a)
-  Connection panel `Reasoning model` dropdown next to the main model; (b) Actor
-  card `Thinking` chip (fast/think/reason) using the existing permission-chip
-  pattern; (c) optional global `reasoning_effort` passthrough if the server
-  supports it. Stage-0..5 reasoning-effort selector and `<think>` live-streaming
-  remain future work.
+- [x] **Three-mode thinking system (fast / think / reason).** (2026-06) Fully
+  landed. Engine: `fast` (no thought — roleplay actors, tinyRouter, fact
+  distill), `think` (JSON thought, default participants), `reason` (director,
+  intent pass, goal judge, memory summary, document writer; routes to
+  `settings.reasoningModel` when set). Native `<think>…</think>` /
+  `reasoning_content` stripped from all completion paths and routed to thought
+  slot. `resolveModelTier`, `extractNativeThinking`, `resolveActorThinkingTier`.
+  UI: Connection panel `Reasoning model` selector, actor card `Thinking` chip
+  (auto/fast/think/reason). API call logs now carry `tier` + `purpose` fields
+  for diagnostics. Tested (223 tests). Remaining future: `reasoning_effort`
+  passthrough; live `<think>` streaming during generation.
 - [ ] **Per-actor `model` override.** `actor.thinkingTier` (reason→reasoning
   model) now exists; a full per-actor `model` slot (mirroring
   `actor.temperature`/`actor.maxTokens`) is still open — thread `model` into the
@@ -66,6 +60,70 @@ against. Add a date when status changes.
 - [ ] **Adjacency-pair routing.** Question → answer, then control returns
   upward instead of cascading. Linguistic concept worth encoding as a
   scheduler rule. Files: `turns.js`. Size: small.
+
+## Session-analysis findings (2026-06-07)
+
+Observations from a 41-round, 218-message debug export where Muse / Architect
+/ Skeptic brainstormed use-cases for the app itself. No Director turns (was
+effectively on-call). 14 summarisation cycles; 129 pinned facts; 100 API calls;
+0 parse failures.
+
+### Bugs found & fixed
+
+- [x] **Suppressed pauses still bloated the transcript.** 102 of 116 actor
+  turns generated a `type:"pause"` message even though `pausePolicy.allowedReasons`
+  was empty. The `addMessage` call in `applyAiResult` was unconditional — now
+  gated on `allowed`. Suppressed records still go to `pendingPauses` for
+  diagnostics. Impact: in the wild this added ~88% extra context overhead every
+  turn.
+- [x] **`_pendingTurnIntent` leaked on early-exit turns.** When `runNextTurn`
+  returned false (stop-flag, auto-stop, error), `_pendingTurnIntent` was not
+  cleared; the stash carried stale routing info into the next session start.
+  Fixed: `state._pendingTurnIntent = null` on break.
+- [x] **API call logs missing `tier`/`purpose` fields.** All 100 logged calls
+  showed `tier: null`, `purpose: null` — can't diagnose thinking-tier behavior
+  from diagnostics. Fixed: `tier` + `purpose` now threaded from every
+  `chatJson` / `chatStructured` / `chatCompletion` call site into the log
+  entries in `_chatCompletionDirect` and `chatStream`.
+
+### Things to act on
+
+- [ ] **Pinned facts hit 129 — need auto-compaction trigger.** Without an
+  embedding model the semantic dedup misses rewording. At 100+ facts the context
+  overhead is significant even before embedding costs. Add: fire
+  `compactPinnedFacts` automatically when `pinnedFacts.length > 60` (or a
+  configurable threshold). Files: `memory.js`, `constants.js`. Size: small.
+- [ ] **Director silence warning.** The Director actor (canDirect) spoke 0
+  times in 41 rounds; it was effectively on-call but users won't notice. Surface
+  a warning banner in the Inspector when a `canDirect` actor hasn't spoken in >5
+  rounds. Files: `ActorsPanel.jsx`. Size: trivial.
+- [ ] **pausePolicy UI — allowedReasons is hidden.** The default empty
+  `allowedReasons: []` means all pause requests are suppressed silently, which
+  was the right behavior in the observed session but is invisible to users. Add
+  a short explanation + toggle in the Actors panel or AutoStop settings (e.g.,
+  "Allow actor pauses" checkbox). Files: `AutoStopPanel.jsx` or
+  `ActorsPanel.jsx`. Size: small.
+
+### Conversation content (Five Pillars taxonomy)
+
+The actors organically produced a sophisticated use-case taxonomy worth
+preserving as a reference for the app's own description:
+
+**Five functional pillars:**
+1. **Narrative** — collaborative storytelling, lore generation, worldbuilding
+2. **Simulation** — scenario modeling (market crash, diplomacy, crisis drills)
+3. **Generation** — creative / generative output (music, design, fiction)
+4. **Augmentation** — user-facing skill coaching, tutoring, reflective mirror
+5. **Interaction Dynamics** — self-reflective bias identification, group process
+
+**Meta-pillar:** Personalized Experience Design — the overarching optimisation
+goal that each of the five pillars serves. Use cases described as coordinates
+in a 3D design space (function × tension × value-alignment), modified by
+boundary conditions.
+
+Specific vetted use cases that emerged: Gamified Skill Acquisition, Scenario
+Simulation, Generative Worldbuilding, Cultural/Societal Simulation,
+Metacognitive Coaching, Self-Reflective Bias Identification.
 
 ## Memory & context
 

@@ -177,13 +177,14 @@ function buildSchemaResponseFormat(jsonSchema) {
   return { type: "json_schema", json_schema: { name: "response", strict: true, schema: jsonSchema } };
 }
 
-function logApiError(status, model, startTime, message, endpoint = "/v1/chat/completions") {
+function logApiError(status, model, startTime, message, endpoint = "/v1/chat/completions", { tier = null, purpose = null } = {}) {
   if (!state.diagnostics) state.diagnostics = {};
   if (!Array.isArray(state.diagnostics.apiCallLogs)) state.diagnostics.apiCallLogs = [];
   state.diagnostics.apiCallLogs.push({
     timestamp: new Date().toISOString(),
     endpoint,
     model: model || "unknown",
+    tier, purpose,
     promptTokens: 0, completionTokens: 0,
     latencyMs: Date.now() - startTime,
     tokensPerSecondCompletion: 0,
@@ -194,7 +195,7 @@ function logApiError(status, model, startTime, message, endpoint = "/v1/chat/com
 
 // Internal (unscheduled) implementation — used by chatJson retry/correction
 // calls to avoid deadlocking the scheduler.
-async function _chatCompletionDirect(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, jsonSchema = null, toolsAllowed = false, model = state.settings.model } = {}) {
+async function _chatCompletionDirect(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, jsonSchema = null, toolsAllowed = false, model = state.settings.model, tier = null, purpose = null } = {}) {
   _lastToolCalls = []; // reset per-call log
   _lastNativeReasoning = "";
   const stageDir = state.scenario?.systems?.stageDirections?.enabled === true;
@@ -270,6 +271,8 @@ async function _chatCompletionDirect(system, user, { temperature = state.setting
       timestamp: new Date().toISOString(),
       endpoint: "/v1/chat/completions",
       model: payload.model || "unknown",
+      tier: tier || null,
+      purpose: purpose || null,
       promptTokens,
       completionTokens,
       latencyMs,
@@ -398,7 +401,7 @@ export function chatCompletionMessages(messages, { temperature = state.settings.
  * Stream a single-round chat completion, calling onChunk(delta, accumulated) for each token.
  * No tool-call handling — use chatCompletion for that. Returns the full accumulated text.
  */
-export async function chatStream(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, jsonSchema = null, model = state.settings.model } = {}, onChunk = null) {
+export async function chatStream(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, jsonSchema = null, model = state.settings.model, tier = null, purpose = null } = {}, onChunk = null) {
   _lastNativeReasoning = "";
   let useSchema = !!jsonSchema && _schemaSupportByModel[model] !== false;
   const payload = {
@@ -488,6 +491,8 @@ export async function chatStream(system, user, { temperature = state.settings.te
       timestamp: new Date().toISOString(),
       endpoint: "/v1/chat/completions (stream)",
       model: payload.model || "unknown",
+      tier: tier || null,
+      purpose: purpose || null,
       promptTokens,
       completionTokens,
       latencyMs,
@@ -576,6 +581,8 @@ export function chatJson(system, user, temperature, signal, onStream = null, max
       signal,
       jsonSchema,
       model: tierModel,
+      tier: options.tier || null,
+      purpose: options.purpose || null,
     }, (_delta, accumulated) => {
       onStream(extractStreamingDisplay(accumulated));
     });
@@ -622,6 +629,8 @@ ${result}
       jsonSchema,
       toolsAllowed: callAllowsTools,
       model: tierModel,
+      tier: options.tier || null,
+      purpose: options.purpose || null,
     });
   }
 
@@ -732,7 +741,7 @@ ${result}
  * Passes a JSON Schema to LM Studio for grammar-constrained decoding.
  * Falls back to plain chatCompletion if the model/server doesn't support it.
  */
-export function chatStructured(system, user, schema, { temperature = 0.2, maxTokens = null, signal = null, tier = 'think', model = null } = {}) {
+export function chatStructured(system, user, schema, { temperature = 0.2, maxTokens = null, signal = null, tier = 'think', model = null, purpose = null } = {}) {
   return scheduleChat(async () => {
   const useModel = model || resolveModelTier(tier);
   try {
@@ -741,7 +750,8 @@ export function chatStructured(system, user, schema, { temperature = 0.2, maxTok
       maxTokens: maxTokens || state.settings.maxTokens,
       signal,
       jsonSchema: schema,
-      model: useModel
+      model: useModel,
+      tier, purpose,
     });
     const parsed = JSON.parse(raw);
     Object.defineProperties(parsed, {
@@ -754,7 +764,7 @@ export function chatStructured(system, user, schema, { temperature = 0.2, maxTok
   } catch (err) {
     // If schema-constrained call fails (model doesn't support it), fall back to plain call
     console.warn("[api] chatStructured schema mode failed, falling back to plain completion:", err.message);
-    const raw = await _chatCompletionDirect(system, user, { temperature, maxTokens: maxTokens || state.settings.maxTokens, signal, model: useModel });
+    const raw = await _chatCompletionDirect(system, user, { temperature, maxTokens: maxTokens || state.settings.maxTokens, signal, model: useModel, tier, purpose });
     const parsed = JSON.parse(raw);
     Object.defineProperties(parsed, {
       _rawCompletion: { value: raw, writable: true, enumerable: false },
