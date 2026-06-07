@@ -47,6 +47,16 @@ function hasTask() {
   return !!String(state.scenario?.task || '').trim();
 }
 
+// Feature F: Output quality validator — returns null if OK, else a problem string.
+function validateActorOutput(result) {
+  const msg = String(result?.message || '').trim();
+  if (result?.action === 'skip') return null; // skip is a valid action
+  if (!msg) return 'empty';
+  if (msg.length < 2) return 'too_short';
+  if (/^(certainly|sure|okay|as an ai)\b/i.test(msg) && msg.length < 25) return 'filler_only';
+  return null;
+}
+
 // Resolve an actor's thinking tier: explicit override, else a sensible default by
 // role. Directors and document writers reason; ordinary characters in a roleplay
 // scene don't need to (their "thought" is just latency); everyone else fakes it
@@ -861,7 +871,24 @@ async function _runTurn(options = {}) {
       showStreamingBubble(participant.data.name, streamingColor, "actor");
       const onStream = (data) => updateStreamingBubble(data);
 
-      const result = await askActor(participant.data, abortController.signal, onStream, twoPhase, { forceSpeak: !!options.forceSpeak });
+      let result = await askActor(participant.data, abortController.signal, onStream, twoPhase, { forceSpeak: !!options.forceSpeak });
+
+      // Feature F: Output guardrails — validate and optionally retry once
+      const guardrailProblem = validateActorOutput(result);
+      if (guardrailProblem) {
+        console.warn(`[guardrail] ${participant.data.name} output failed: ${guardrailProblem} — retrying once`);
+        const corrections = {
+          empty: 'Your last reply was empty. Say something substantive now.',
+          too_short: 'Your last reply was too short to be useful. Expand it.',
+          filler_only: 'Your last reply was filler with no content. Make a concrete point.',
+        };
+        removeStreamingBubble();
+        showStreamingBubble(participant.data.name, streamingColor, "actor");
+        result = await askActor(participant.data, abortController.signal, onStream, twoPhase, {
+          forceSpeak: true,
+          correction: corrections[guardrailProblem],
+        });
+      }
 
 
       const latencyMs = Date.now() - startTime;
@@ -1753,7 +1780,8 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     persona: `Name: ${actor.name}\nRole: ${actor.role || ""}\nPersona: ${actor.persona || ""}\nVoice: ${actor.voice || ""}`
   };
 
-  const actorUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
+  let actorUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
+  if (options.correction) actorUser += `\n\n[CORRECTION: ${options.correction}]`;
   const actorSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak, validSpeakerNames });
   const result = await chatJson(actorSystem, actorUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || null, actorSchema, { toolsAllowed: !!actor.canResearch, tier: thinkingTier, purpose: actor.name });
   result._promptParts = promptParts;
