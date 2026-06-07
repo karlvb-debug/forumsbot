@@ -14,7 +14,7 @@ export function DocEditorStage({ transcript, composer }) {
   const documents = useForumState(s => s.documents || []);
   const actors = useForumState(s => s.actors || []);
   const designatedWriterId = useForumState(s => s.documentWriting?.designatedWriterId || '');
-  const scribeMode = useForumState(s => s.documentWriting?.scribeMode || 'auto_apply');
+  const scribeMode = useForumState(s => s.documentWriting?.scribeMode || 'manual');
   const pendingDocumentEdits = useForumState(s => s.pendingDocumentEdits || []);
   const pendingScribeSuggestions = useForumState(s => s.pendingScribeSuggestions || []);
   const doc = documents.find(d => d.id === focusedDocId);

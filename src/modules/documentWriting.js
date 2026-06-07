@@ -332,7 +332,7 @@ async function postTranscriptNote(payload) {
 }
 
 export async function runScribePass(signal = null, { instruction = null } = {}) {
-  const mode = state.documentWriting?.scribeMode || "auto_apply";
+  const mode = state.documentWriting?.scribeMode || "manual";
   if (mode === "manual" && !instruction) return null;
 
   const writer = resolveDesignatedWriter();

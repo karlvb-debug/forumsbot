@@ -351,7 +351,7 @@ export function DocumentsPanel() {
   const documents = useForumState(s => s.documents || []);
   const actors = useForumState(s => s.actors || []);
   const designatedWriterId = useForumState(s => s.documentWriting?.designatedWriterId || '');
-  const scribeMode = useForumState(s => s.documentWriting?.scribeMode || 'auto_apply');
+  const scribeMode = useForumState(s => s.documentWriting?.scribeMode || 'manual');
   const pendingDocumentEdits = useForumState(s => s.pendingDocumentEdits || []);
   const writerActors = actors.filter(a => a.enabled && a.canWriteDocuments);
 

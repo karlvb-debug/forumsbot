@@ -164,7 +164,7 @@ export const defaultState = {
   },
   documentWriting: {
     designatedWriterId: "",
-    scribeMode: "auto_apply"
+    scribeMode: "manual"
   },
   documents: [],
   documentTasks: [],

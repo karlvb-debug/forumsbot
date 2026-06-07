@@ -336,7 +336,7 @@ function normalizeState(value = {}) {
   }
   const validScribeModes = ["manual", "ask", "auto_review", "auto_apply"];
   if (!validScribeModes.includes(merged.documentWriting.scribeMode)) {
-    merged.documentWriting.scribeMode = "auto_apply";
+    merged.documentWriting.scribeMode = "manual";
   }
   return merged;
 }

@@ -293,9 +293,9 @@ describe('normalizeState — document writer migration', () => {
     expect(result.documentWriting.designatedWriterId).toBe('w1');
   });
 
-  it('defaults scribeMode to auto_apply when missing', () => {
+  it('defaults scribeMode to manual when missing', () => {
     const result = normalizeState({ documentWriting: { designatedWriterId: '' } });
-    expect(result.documentWriting.scribeMode).toBe('auto_apply');
+    expect(result.documentWriting.scribeMode).toBe('manual');
   });
 
   it('preserves a valid scribeMode', () => {
@@ -303,9 +303,9 @@ describe('normalizeState — document writer migration', () => {
     expect(result.documentWriting.scribeMode).toBe('ask');
   });
 
-  it('coerces an unknown scribeMode back to auto_apply', () => {
+  it('coerces an unknown scribeMode back to manual', () => {
     const result = normalizeState({ documentWriting: { scribeMode: 'nonsense' } });
-    expect(result.documentWriting.scribeMode).toBe('auto_apply');
+    expect(result.documentWriting.scribeMode).toBe('manual');
   });
 });
 
