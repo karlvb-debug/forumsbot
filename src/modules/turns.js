@@ -188,6 +188,7 @@ function _maybeResumeAfterPause() {
   }, 50);
 }
 let _lastPromptParts = null;
+let _lastInjectionMaxTokens = null; // Feature H: dynamic maxTokens from injections
 export function getLastPromptParts() { return _lastPromptParts; }
 
 
@@ -1783,7 +1784,10 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
   let actorUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
   if (options.correction) actorUser += `\n\n[CORRECTION: ${options.correction}]`;
   const actorSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak, validSpeakerNames });
-  const result = await chatJson(actorSystem, actorUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || null, actorSchema, { toolsAllowed: !!actor.canResearch, tier: thinkingTier, purpose: actor.name });
+  // Feature H: dynamic maxTokens — injection override > options override > actor default
+  const dynamicMaxTokens = _lastInjectionMaxTokens || options.maxTokensOverride || actor.maxTokens || null;
+  _lastInjectionMaxTokens = null; // consume
+  const result = await chatJson(actorSystem, actorUser, actor.temperature ?? state.settings.temperature, signal, onStream, dynamicMaxTokens, actorSchema, { toolsAllowed: !!actor.canResearch, tier: thinkingTier, purpose: actor.name });
   result._promptParts = promptParts;
   return result;
 }
@@ -2141,10 +2145,19 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   console.debug(`[budget] tokens=${finalTokens} budget=${PROMPT_TOKEN_BUDGET} model_ctx=${state.contextInfo?.maxContextLength || 'unknown'} working_n=${workingMemoryN}`);
 
   // CAP-1: Consume pending director injections (appended after budget stages so they are never trimmed)
+  let injectionMaxTokens = null;
   if (kind === "actor" && Array.isArray(state.pendingInjections) && state.pendingInjections.length) {
     const activeInj = state.pendingInjections.filter(i => i.targetId === actor.id);
     if (activeInj.length) {
-      assembled += `\n\n[DIRECTOR'S NOTE — private guidance for this turn]\n${activeInj.map(i => i.content).join("\n")}`;
+      const parts = activeInj.map(i => {
+        let block = i.content;
+        // Feature H: per-turn expectedOutput directive
+        if (i.expectedOutput) block += `\nTHIS TURN, produce: ${i.expectedOutput}`;
+        // Feature H: per-turn maxTokens override from injection
+        if (typeof i.maxTokens === 'number' && i.maxTokens > 0) injectionMaxTokens = i.maxTokens;
+        return block;
+      });
+      assembled += `\n\n[DIRECTOR'S NOTE — private guidance for this turn]\n${parts.join("\n")}`;
       state.pendingInjections = state.pendingInjections.filter(
         i => !(i.targetId === actor.id && i.scope === "next_turn_only"));
     }
@@ -2185,6 +2198,9 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
     workMemory: participantMemory,
     recentMessages: formatTranscript(recentMessages, WORD_LIMITS.recentTranscript, state.actors)
   };
+
+  // Feature H: expose injection maxTokens override to askActor
+  _lastInjectionMaxTokens = injectionMaxTokens;
 
   return assembled;
 }
