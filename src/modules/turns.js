@@ -351,8 +351,9 @@ const INTENT_SCHEMA = {
   additionalProperties: false
 };
 
-// Intent system prompt — now read from the prompt registry so users can edit it.
-function getIntentSystem() { return frag('intent_system'); }
+// Intent system prompt — editable prose from registry + code-owned JSON shape.
+const INTENT_SHAPE = 'Return JSON only: {"read":"<one sentence on the current state>","need":"<one need>","speaker":"<participant name or NONE>","rationale":"<one clause: why them>","confidence":<0..1>}';
+function getIntentSystem() { return frag('intent_system') + '\n' + INTENT_SHAPE; }
 
 async function resolveIntent(eligible, alreadySpokeThisRound, signal) {
   const available = eligible.filter(a => !alreadySpokeThisRound.has(a.id));
@@ -1232,7 +1233,8 @@ export async function judgeGoal(roundMessages = [], options = {}) {
     required: ['status', 'reason'],
     additionalProperties: false
   };
-  const system = frag('goal_judge');
+  const JUDGE_SHAPE = 'Return only JSON: {"status":"continue|complete|blocked","reason":"short explanation"}';
+  const system = frag('goal_judge') + '\n' + JUDGE_SHAPE;
   const user = [
     task ? `Task:\n${task}` : '',
     `Done When:\n${doneWhen}`,
@@ -1469,7 +1471,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
         ? frag('thoughts_disabled')
         : frag('thoughts_enabled'),
       buildSchemaPromptLine(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, schemaActive: isJsonSchemaSupported(tierModel), forceSpeak }),
-      frag('json_transport'),
+      'The JSON is transport only. Put natural public dialogue only inside message; do not make message itself JSON.',
       "",
       (!sysCfg.stageDirectionsEnabled && state.settings.toolsEnabled && actor.canResearch)
         ? frag('director_web_tools', {
@@ -1530,7 +1532,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
       frag('manager_public_msg'),
       frag('manager_user_msg'),
       buildSchemaPromptLine(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, schemaActive: isJsonSchemaSupported(tierModel), forceSpeak }),
-      frag('manager_schema_note'),
+      'All manageActors sub-arrays are optional — omit any you don\'t need. The JSON is transport only; put natural dialogue only inside message.',
       (!showThoughts) ? frag('thoughts_disabled') : "",
       frag('security_transcript')
     ].filter(Boolean).join("\n");
@@ -1598,7 +1600,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
         ? frag('thoughts_disabled_researcher')
         : frag('thoughts_enabled_participant'),
       buildSchemaPromptLine(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, schemaActive: isJsonSchemaSupported(tierModel), forceSpeak }),
-      frag('researcher_json_note'),
+      'The JSON is transport only. Put natural public dialogue/briefs only inside message; do not make message itself JSON.',
       frag('researcher_user_msg'),
       frag('security_directive')
     ].filter(Boolean).join("\n");
@@ -1668,10 +1670,10 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
       : "",
     buildSchemaPromptLine(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, schemaActive: isJsonSchemaSupported(tierModel), forceSpeak }),
     sysCfg.stageDirectionsEnabled
-      ? frag('participant_markdown_stageDirections')
-      : frag('participant_markdown_analytical'),
+      ? 'The JSON is transport only. ' + frag('participant_markdown_stageDirections')
+      : 'The JSON is transport only. ' + frag('participant_markdown_analytical'),
     (state.userContext?.interactionMode !== "observer")
-      ? frag('participant_handoff')
+      ? 'All of the above fields are part of a single JSON object. You may also add optional fields like "pauseRequest", "pinFact", "anchor", etc. alongside the required fields in that same object. ' + frag('participant_handoff')
       : "",
     frag('security_directive'),
     "",

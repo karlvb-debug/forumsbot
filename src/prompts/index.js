@@ -124,7 +124,7 @@ export const PROMPT_GROUPS = [
     label: 'System',
     keys: ['goal_judge', 'thought_distiller', 'thoughts_disabled', 'thoughts_enabled',
            'thoughts_enabled_participant', 'thoughts_disabled_researcher',
-           'json_transport', 'security_directive', 'security_transcript', 'background_mode'],
+           'security_directive', 'security_transcript', 'background_mode'],
   },
   {
     id: 'setup',

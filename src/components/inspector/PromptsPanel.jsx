@@ -207,6 +207,56 @@ export function PromptsPanel() {
     mutateState(() => {});
   }, [overrideCount]);
 
+  const handleExport = useCallback(() => {
+    const overrides = {};
+    for (const key of getAllKeys()) {
+      if (hasOverride(key)) overrides[key] = getOverride(key);
+    }
+    const blob = new Blob(
+      [JSON.stringify({ version: 1, overrides }, null, 2)],
+      { type: 'application/json' }
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'forum-prompts.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const handleImport = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (!data?.overrides || typeof data.overrides !== 'object') {
+          alert('Invalid prompt overrides file.');
+          return;
+        }
+        const allKeys = new Set(getAllKeys());
+        let applied = 0, skipped = 0;
+        for (const [key, value] of Object.entries(data.overrides)) {
+          if (allKeys.has(key) && typeof value === 'string') {
+            setOverride(key, value);
+            applied++;
+          } else {
+            skipped++;
+          }
+        }
+        mutateState(() => {});
+        alert(`Imported ${applied} override(s).${skipped ? ` Skipped ${skipped} unknown key(s).` : ''}`);
+      } catch (err) {
+        alert('Failed to parse file: ' + err.message);
+      }
+    };
+    input.click();
+  }, []);
+
   if (showViewer) {
     return (
       <div style={styles.container}>
@@ -240,6 +290,14 @@ export function PromptsPanel() {
             ↺ Reset all ({overrideCount})
           </button>
         )}
+        <button className="btn sm" onClick={handleExport}
+          title="Export prompt overrides as JSON" style={{ fontSize: 11 }}>
+          ↓ Export
+        </button>
+        <button className="btn sm" onClick={handleImport}
+          title="Import prompt overrides from JSON" style={{ fontSize: 11 }}>
+          ↑ Import
+        </button>
         <button
           className="chip-btn"
           onClick={() => setShowViewer(true)}
@@ -265,3 +323,4 @@ export function PromptsPanel() {
     </div>
   );
 }
+
