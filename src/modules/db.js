@@ -253,3 +253,17 @@ export async function deleteSession(id) {
     console.warn('[sessions] deleteSession failed:', err.message);
   }
 }
+
+export async function clearKbEntries() {
+  if (!storageAvailable || !db) return;
+  const transaction = db.transaction(KB_STORE, "readwrite");
+  transaction.objectStore(KB_STORE).clear();
+  await idbDone(transaction);
+}
+
+export async function clearActorMemories() {
+  if (!storageAvailable || !db) return;
+  const transaction = db.transaction(ACTOR_MEMORY_STORE, "readwrite");
+  transaction.objectStore(ACTOR_MEMORY_STORE).clear();
+  await idbDone(transaction);
+}

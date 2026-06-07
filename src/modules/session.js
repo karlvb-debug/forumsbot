@@ -2,7 +2,7 @@ import { PRESET_VERSION, RECENT_MESSAGE_LIMIT, defaultState } from './constants.
 import { state, setState, normalizeState, saveState } from './state.js';
 import { saveState as _saveState, mutateState } from '../hooks/useForumState.js';
 import { setStatus } from './api.js';
-import { clearMessages, clearChunks, putMessages, putChunk, countChunks, getRecentMessages, getAllMessages, getAllChunks, putSession, getAllSessions, deleteSession } from './db.js';
+import { clearMessages, clearChunks, putMessages, putChunk, countChunks, getRecentMessages, getAllMessages, getAllChunks, putSession, getAllSessions, deleteSession, clearKbEntries, clearActorMemories } from './db.js';
 import { chatCompletion, chatCompletionMessages } from './api.js';
 import { colors } from './constants.js';
 import {
@@ -221,6 +221,8 @@ export async function resetSession(fullReset = false) {
   try { await clearChunks(); } catch (err) { console.warn("clearChunks failed:", err); }
 
   if (fullReset) {
+    try { await clearKbEntries(); } catch (err) { console.warn("clearKbEntries failed:", err); }
+    try { await clearActorMemories(); } catch (err) { console.warn("clearActorMemories failed:", err); }
     setState(structuredClone(defaultState));
   } else {
     const keepConfig = {
