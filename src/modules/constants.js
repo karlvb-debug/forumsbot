@@ -98,8 +98,6 @@ export const defaultState = {
     distillingActor: ""
   },
   telemetry: {
-    embeddedObjectiveText: "",
-    alignmentMode: "none",      // "embedding" | "keyword" | "none" — shown in UI
     nudgeTriggered: false
   },
   diagnostics: {

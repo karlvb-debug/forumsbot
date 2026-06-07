@@ -1,13 +1,13 @@
-import { RECENT_MESSAGE_LIMIT, PROMPT_MESSAGE_LIMIT, WORD_LIMITS, ANCHOR_WORD_CAP, colors } from './constants.js';
+import { RECENT_MESSAGE_LIMIT, WORD_LIMITS, ANCHOR_WORD_CAP, colors } from './constants.js';
 import { buildActorSchema, buildSchemaPromptLine } from './schemas.js';
-import { state, saveState, logTransition, logWarning } from './state.js';
+import { state, saveState, logTransition } from './state.js';
 import { chatCompletion, chatJson, chatStructured, setStatus, setCurrentSpeaker, getLastToolCalls, isJsonSchemaSupported, resolveModelTier } from './api.js';
-import { saveState as _hookSaveState, mutateState } from '../hooks/useForumState.js';
+import { mutateState } from '../hooks/useForumState.js';
 import { setBusy, getBusy as getIsGenerating, showToast } from '../hooks/useActions.js';
 import { showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble, showBackgroundActivity, updateBackgroundActivity, hideBackgroundActivity, clearBackgroundActivities } from '../hooks/useStreaming.js';
-import { putMessage, getAllChunks, getActorMemory, putActorMemory } from './db.js';
+import { putMessage, getActorMemory, putActorMemory } from './db.js';
 import { summarizeMemory, recallRelevantChunks, formatCurrentOutcomes, parseOutcomeJson } from './memory.js';
-import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, checkDrift, normalizeCadence, isQueueActor, shouldFireCadence, appendMemory, normalizeSpeakingOrderStrategy, formatTranscript } from './utils.js';
+import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, normalizeCadence, isQueueActor, shouldFireCadence, appendMemory, normalizeSpeakingOrderStrategy, formatTranscript } from './utils.js';
 export { formatTranscript }; // re-export so existing imports from turns.js keep working
 // preflight.js deleted — resolver handles speaker selection upstream
 import { getKbEntriesForDirector, splitDocuments, buildDocumentManifestSection, buildReferenceSection, buildKbSection } from './knowledge.js';

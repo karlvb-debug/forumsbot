@@ -83,9 +83,6 @@ export interface Settings {
   globalStylePrompt: string;
   theme: 'dark' | 'light';
   includeTraces: boolean;
-
-  enablePreflightRouter: boolean;
-  preflightThreshold: number;
   enableCrossSessionMemory: boolean;
   streamingEnabled: boolean;
   turboMode: boolean;
@@ -150,8 +147,6 @@ export interface Anchor {
 }
 
 export interface Telemetry {
-  embeddedObjectiveText: string;
-  alignmentMode: 'embedding' | 'keyword' | 'none';
   nudgeTriggered: boolean;
 }
 

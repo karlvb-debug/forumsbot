@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react';
-import * as Ic from '../Icons';
 import { Field, Toggle } from '../shared/FormControls';
 import { useForumState, mutateState } from '../../hooks/useForumState';
 import { navigateToPanel } from '../../hooks/navigation.js';

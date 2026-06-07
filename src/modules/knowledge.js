@@ -206,11 +206,9 @@ export async function fetchUrlContent(url) {
   return data.text || "";
 }
 
+
 // ── Entry factory ────────────────────────────────────────────────────────────
 
-export function newKbEntry(overrides = {}) {
-  return newDocument({ aiEditable: false, ...overrides });
-}
 
 export function newDocument(overrides = {}) {
   const now = new Date().toISOString();
