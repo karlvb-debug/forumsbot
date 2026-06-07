@@ -19,7 +19,7 @@ vi.mock('./state.js', () => ({ state: mockState, saveState: vi.fn() }));
 vi.mock('../hooks/useActions.js', () => ({ setConnectionStatus: vi.fn() }));
 vi.mock('../hooks/useForumState.js', () => ({ notifyStateChange: vi.fn(), mutateState: vi.fn() }));
 
-import { chatJson, executeToolCall, isJsonSchemaSupported } from './api.js';
+import { chatJson, executeToolCall, isJsonSchemaSupported, extractNativeThinking, resolveModelTier } from './api.js';
 
 function chatResponse(content) {
   return {
@@ -36,6 +36,7 @@ beforeEach(() => {
   mockState.diagnostics = {};
   mockState.contextInfo = {};
   mockState.settings.model = 'test-model';
+  mockState.settings.reasoningModel = '';
   mockState.settings.toolsEnabled = false;
   mockState.settings.streamingEnabled = false;
 });
@@ -133,6 +134,92 @@ describe('chatJson — text tool gating', () => {
 
     expect(parsed.message).toContain('No tool call should run');
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('extractNativeThinking', () => {
+  it('returns content unchanged when there is no think block', () => {
+    const { reasoning, content } = extractNativeThinking('{"action":"speak","message":"hi"}');
+    expect(reasoning).toBe('');
+    expect(content).toBe('{"action":"speak","message":"hi"}');
+  });
+
+  it('strips a leading think block and captures the reasoning', () => {
+    const raw = '<think>Let me weigh the options.</think>{"action":"speak","message":"go"}';
+    const { reasoning, content } = extractNativeThinking(raw);
+    expect(reasoning).toBe('Let me weigh the options.');
+    expect(content).toBe('{"action":"speak","message":"go"}');
+    expect(() => JSON.parse(content)).not.toThrow(); // the parse-bug fix
+  });
+
+  it('handles the <thinking> tag variant and multiple blocks', () => {
+    expect(extractNativeThinking('<thinking>hmm</thinking>answer').reasoning).toBe('hmm');
+    const multi = extractNativeThinking('<think>one</think>mid<think>two</think>end');
+    expect(multi.reasoning).toContain('one');
+    expect(multi.reasoning).toContain('two');
+    expect(multi.content).toBe('midend');
+  });
+
+  it('treats an unclosed think block as reasoning that never terminated', () => {
+    const { reasoning, content } = extractNativeThinking('<think>still reasoning when cut off');
+    expect(reasoning).toBe('still reasoning when cut off');
+    expect(content).toBe('');
+  });
+
+  it('is a no-op on empty / non-string input', () => {
+    expect(extractNativeThinking('').content).toBe('');
+    expect(extractNativeThinking(null).content).toBe('');
+  });
+});
+
+describe('resolveModelTier', () => {
+  beforeEach(() => { mockState.settings.model = 'main-model'; mockState.settings.reasoningModel = ''; });
+
+  it('uses the main model for fast/think/unknown tiers', () => {
+    expect(resolveModelTier('fast')).toBe('main-model');
+    expect(resolveModelTier('think')).toBe('main-model');
+    expect(resolveModelTier(undefined)).toBe('main-model');
+  });
+
+  it('uses the reasoning model for the reason tier when configured', () => {
+    mockState.settings.reasoningModel = 'thinking-model';
+    expect(resolveModelTier('reason')).toBe('thinking-model');
+  });
+
+  it('falls back to the main model for reason when no reasoning model is set (incl. whitespace)', () => {
+    expect(resolveModelTier('reason')).toBe('main-model');
+    mockState.settings.reasoningModel = '   ';
+    expect(resolveModelTier('reason')).toBe('main-model');
+  });
+});
+
+describe('chatJson — native reasoning routing', () => {
+  it('strips a native <think> block and routes it into the thought field', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue(
+      chatResponse('<think>I should greet them.</think>{"thought":"","action":"speak","message":"hello"}')
+    );
+    const parsed = await chatJson('sys', 'usr', 0.2, null);
+    expect(parsed.message).toBe('hello');           // <think> prefix did not break JSON parsing
+    expect(parsed.thought).toBe('I should greet them.'); // reasoning surfaced in the thought slot
+    expect(parsed._parseFailure).toBe(false);
+  });
+
+  it('routes reason-tier calls to the configured reasoning model', async () => {
+    mockState.settings.reasoningModel = 'thinker';
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(
+      chatResponse('{"thought":"","action":"speak","message":"ok"}')
+    );
+    await chatJson('sys', 'usr', 0.2, null, null, null, null, { tier: 'reason' });
+    expect(JSON.parse(fetchSpy.mock.calls[0][1].body).request.model).toBe('thinker');
+  });
+
+  it('keeps think-tier calls on the main model even when a reasoning model exists', async () => {
+    mockState.settings.reasoningModel = 'thinker';
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(
+      chatResponse('{"thought":"","action":"speak","message":"ok"}')
+    );
+    await chatJson('sys', 'usr', 0.2, null, null, null, null, { tier: 'think' });
+    expect(JSON.parse(fetchSpy.mock.calls[0][1].body).request.model).toBe('test-model');
   });
 });
 

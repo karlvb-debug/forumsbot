@@ -61,6 +61,56 @@ function extractStreamingDisplay(accumulated) {
   return { thought, message };
 }
 
+// ── Native reasoning (<think> blocks) ────────────────────────────────────────
+// Reasoning models (DeepSeek-R1, Qwen3-thinking, etc.) emit their chain-of-thought
+// inside <think>…</think> (or a separate message.reasoning_content field) BEFORE the
+// actual answer. Left in place, a leading think block breaks JSON.parse on the actor
+// envelope, so we always strip it — there is no case where raw think tags should
+// render. The extracted reasoning is captured so callers can route it into the
+// thought field (real thinking surfaced in the same UI slot as our fake thinking).
+
+const THINK_BLOCK_RE = /<(think|thinking|reason|reasoning)>([\s\S]*?)<\/\1>/gi;
+
+// Returns { reasoning, content } with all think blocks removed from content.
+// Handles an unclosed trailing <think> (truncation mid-reasoning) as reasoning.
+export function extractNativeThinking(raw) {
+  if (!raw || typeof raw !== 'string') return { reasoning: '', content: raw || '' };
+  if (raw.indexOf('<think') === -1 && raw.indexOf('<reason') === -1) {
+    return { reasoning: '', content: raw }; // fast path — no native thinking
+  }
+  let reasoning = '';
+  let content = raw.replace(THINK_BLOCK_RE, (_m, _tag, inner) => {
+    reasoning += inner + '\n';
+    return '';
+  });
+  // Unclosed opener: everything after it is reasoning that never terminated.
+  const openMatch = content.match(/<(think|thinking|reason|reasoning)>/i);
+  if (openMatch) {
+    const idx = content.indexOf(openMatch[0]);
+    reasoning += content.slice(idx + openMatch[0].length);
+    content = content.slice(0, idx);
+  }
+  return { reasoning: reasoning.trim(), content: content.trim() };
+}
+
+// Set by every completion path (_chatCompletionDirect / chatStream / messages) to
+// the captured native reasoning of the LAST response. Calls are serialized through
+// scheduleChat, so last-wins is safe. Capped to keep the thought slot bounded.
+const NATIVE_REASONING_CAP = 4000;
+let _lastNativeReasoning = "";
+export function getLastNativeReasoning() { return _lastNativeReasoning; }
+
+// Resolve a thinking tier to the model that should serve it. The `reason` tier
+// prefers a dedicated reasoning model when one is configured, so a director or
+// writer can run a thinking model while ordinary actors stay on the fast model.
+export function resolveModelTier(tier) {
+  const s = state.settings;
+  if (tier === 'reason' && s.reasoningModel && s.reasoningModel.trim()) {
+    return s.reasoningModel.trim();
+  }
+  return s.model;
+}
+
 // ── Request scheduler ────────────────────────────────────────────────────────
 // Prevents concurrent LLM generation calls from racing (e.g. a memory
 // summarization firing while an actor turn is in-flight). Each queue is a
@@ -144,12 +194,12 @@ function logApiError(status, model, startTime, message, endpoint = "/v1/chat/com
 
 // Internal (unscheduled) implementation — used by chatJson retry/correction
 // calls to avoid deadlocking the scheduler.
-async function _chatCompletionDirect(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, jsonSchema = null, toolsAllowed = false } = {}) {
+async function _chatCompletionDirect(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, jsonSchema = null, toolsAllowed = false, model = state.settings.model } = {}) {
   _lastToolCalls = []; // reset per-call log
+  _lastNativeReasoning = "";
   const stageDir = state.scenario?.systems?.stageDirections?.enabled === true;
   // Tools are text-tags only ([SEARCH:]/[READ:]), which are grammar-compatible.
   const allowTextTools = !!toolsAllowed && state.settings.toolsEnabled && !stageDir;
-  const model = state.settings.model;
   let useSchema = !!jsonSchema && _schemaSupportByModel[model] !== false;
   const messages = [
     { role: "system", content: system },
@@ -158,7 +208,7 @@ async function _chatCompletionDirect(system, user, { temperature = state.setting
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
     const payload = {
-      model: state.settings.model,
+      model,
       messages,
       temperature,
       max_tokens: maxTokens
@@ -234,7 +284,14 @@ async function _chatCompletionDirect(system, user, { temperature = state.setting
 
     const choice = data?.choices?.[0];
     const msg = choice?.message;
-    const content = msg?.content || "";
+    const rawContent = msg?.content || "";
+    // Strip native reasoning so a leading <think> block can't break envelope JSON
+    // parsing, and capture it for routing into the thought field.
+    const { reasoning: inlineReasoning, content } = extractNativeThinking(rawContent);
+    const fieldReasoning = msg?.reasoning_content || msg?.reasoning || "";
+    if (fieldReasoning || inlineReasoning) {
+      _lastNativeReasoning = String(fieldReasoning || inlineReasoning).slice(0, NATIVE_REASONING_CAP);
+    }
 
     // Capture real token usage from LM Studio response
     if (data.usage) {
@@ -280,18 +337,20 @@ async function _chatCompletionDirect(system, user, { temperature = state.setting
  * chat chain so no two generation requests run simultaneously.
  */
 export function chatCompletion(system, user, options = {}) {
-  return scheduleChat(() => _chatCompletionDirect(system, user, options), options.signal);
+  const model = options.model || resolveModelTier(options.tier);
+  return scheduleChat(() => _chatCompletionDirect(system, user, { ...options, model }), options.signal);
 }
 
 /**
  * Like chatCompletion but accepts a pre-built messages array (system + history + user).
  * Used by the conversational Quick Setup to pass full conversation history.
  */
-export function chatCompletionMessages(messages, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal } = {}) {
+export function chatCompletionMessages(messages, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, model = state.settings.model } = {}) {
   return scheduleChat(async () => {
   _lastToolCalls = [];
+  _lastNativeReasoning = "";
   const payload = {
-    model: state.settings.model,
+    model,
     messages,
     temperature,
     max_tokens: maxTokens
@@ -326,7 +385,11 @@ export function chatCompletionMessages(messages, { temperature = state.settings.
     state.contextInfo.lastCompletionTokens = completionTokens;
     notifyStateChange();
   }
-  return data?.choices?.[0]?.message?.content || "";
+  const rawMsg = data?.choices?.[0]?.message;
+  const { reasoning, content } = extractNativeThinking(rawMsg?.content || "");
+  const fieldReasoning = rawMsg?.reasoning_content || rawMsg?.reasoning || "";
+  if (fieldReasoning || reasoning) _lastNativeReasoning = String(fieldReasoning || reasoning).slice(0, NATIVE_REASONING_CAP);
+  return content;
   }, signal);
 }
 
@@ -335,11 +398,11 @@ export function chatCompletionMessages(messages, { temperature = state.settings.
  * Stream a single-round chat completion, calling onChunk(delta, accumulated) for each token.
  * No tool-call handling — use chatCompletion for that. Returns the full accumulated text.
  */
-export async function chatStream(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, jsonSchema = null } = {}, onChunk = null) {
-  const model = state.settings.model;
+export async function chatStream(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, jsonSchema = null, model = state.settings.model } = {}, onChunk = null) {
+  _lastNativeReasoning = "";
   let useSchema = !!jsonSchema && _schemaSupportByModel[model] !== false;
   const payload = {
-    model: state.settings.model,
+    model,
     messages: [
       { role: "system", content: system },
       { role: "user", content: user }
@@ -441,7 +504,10 @@ export async function chatStream(system, user, { temperature = state.settings.te
       state.contextInfo.lastCompletionTokens = completionTokens;
       notifyStateChange();
     }
-    return accumulated;
+    // Strip any native <think> reasoning from the final text and capture it.
+    const { reasoning, content: streamContent } = extractNativeThinking(accumulated);
+    if (reasoning) _lastNativeReasoning = reasoning.slice(0, NATIVE_REASONING_CAP);
+    return streamContent;
   } catch (err) {
     const apiLog = {
       timestamp: new Date().toISOString(),
@@ -498,6 +564,8 @@ export function chatJson(system, user, temperature, signal, onStream = null, max
   const toolsAllowed = callAllowsTools && state.settings.toolsEnabled && !stageDir2;
   const canStream = onStream && state.settings.streamingEnabled !== false;
   const resolvedMaxTokens = maxTokens || state.settings.maxTokens;
+  // Thinking tier → model. `reason` may route to a dedicated reasoning model.
+  const tierModel = options.model || resolveModelTier(options.tier);
 
   let content;
   if (canStream) {
@@ -507,6 +575,7 @@ export function chatJson(system, user, temperature, signal, onStream = null, max
       maxTokens: resolvedMaxTokens,
       signal,
       jsonSchema,
+      model: tierModel,
     }, (_delta, accumulated) => {
       onStream(extractStreamingDisplay(accumulated));
     });
@@ -540,6 +609,7 @@ ${result}
           signal,
           jsonSchema,
           toolsAllowed: callAllowsTools,
+          model: tierModel,
         });
         _lastToolCalls = toolCallsSnapshot; // restore: follow-up is synthesis, not a new search
       }
@@ -551,8 +621,12 @@ ${result}
       signal,
       jsonSchema,
       toolsAllowed: callAllowsTools,
+      model: tierModel,
     });
   }
+
+  // Capture native reasoning from the main response before any retry overwrites it.
+  let capturedReasoning = getLastNativeReasoning();
 
   // Detect truncation: JSON that ends mid-string, mid-key, or with an unclosed brace
   // is almost always a token-budget hit rather than a model error.
@@ -595,6 +669,7 @@ ${result}
           maxTokens: Math.min(resolvedMaxTokens * 2, 4000),
           signal,
           toolsAllowed: false,
+          model: tierModel,
         });
         // Merge: try the retry content alone first, then as a suffix to the original
         const candidates = [retryContent, content + retryContent];
@@ -605,6 +680,7 @@ ${result}
             isStrictJson = true;
             retrySucceeded = true;
             parseError = null;
+            capturedReasoning = getLastNativeReasoning() || capturedReasoning;
             break;
           } catch { /* try next */ }
         }
@@ -619,6 +695,11 @@ ${result}
   // separate "missing required field" correction pass — truncation recovery
   // above plus the regex fallback in parseAiJson cover the remaining cases.
   const parsed = parseAiJson(finalContent);
+
+  // Real thinking → thought slot. When a reasoning model emitted a <think> block,
+  // surface it in the same field as our fake thinking. Native reasoning is the
+  // authoritative chain-of-thought, so it takes precedence over any JSON thought.
+  if (capturedReasoning) parsed.thought = capturedReasoning;
 
   if (!isStrictJson) {
     if (!state.diagnostics) state.diagnostics = {};
@@ -651,14 +732,16 @@ ${result}
  * Passes a JSON Schema to LM Studio for grammar-constrained decoding.
  * Falls back to plain chatCompletion if the model/server doesn't support it.
  */
-export function chatStructured(system, user, schema, { temperature = 0.2, maxTokens = null, signal = null } = {}) {
+export function chatStructured(system, user, schema, { temperature = 0.2, maxTokens = null, signal = null, tier = 'think', model = null } = {}) {
   return scheduleChat(async () => {
+  const useModel = model || resolveModelTier(tier);
   try {
     const raw = await _chatCompletionDirect(system, user, {
       temperature,
       maxTokens: maxTokens || state.settings.maxTokens,
       signal,
-      jsonSchema: schema
+      jsonSchema: schema,
+      model: useModel
     });
     const parsed = JSON.parse(raw);
     Object.defineProperties(parsed, {
@@ -671,7 +754,7 @@ export function chatStructured(system, user, schema, { temperature = 0.2, maxTok
   } catch (err) {
     // If schema-constrained call fails (model doesn't support it), fall back to plain call
     console.warn("[api] chatStructured schema mode failed, falling back to plain completion:", err.message);
-    const raw = await _chatCompletionDirect(system, user, { temperature, maxTokens: maxTokens || state.settings.maxTokens, signal });
+    const raw = await _chatCompletionDirect(system, user, { temperature, maxTokens: maxTokens || state.settings.maxTokens, signal, model: useModel });
     const parsed = JSON.parse(raw);
     Object.defineProperties(parsed, {
       _rawCompletion: { value: raw, writable: true, enumerable: false },

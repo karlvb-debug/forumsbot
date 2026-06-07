@@ -169,7 +169,8 @@ export async function runDocumentTask(taskId, signal = null) {
     const result = await chatStructured(system, user, buildDocumentWriterSchema(), {
       temperature: writer.temperature ?? state.settings.temperature,
       maxTokens: writer.maxTokens || state.settings.maxTokens,
-      signal
+      signal,
+      tier: 'reason'
     });
     const edits = sanitizeDocumentEdits(result.documentEdits, doc.id);
     if (!edits.length) throw new Error("Writer returned no applicable document edits.");
@@ -312,7 +313,8 @@ async function judgeAndDraft(writer, doc, signal, { instruction = null } = {}) {
   const result = await chatStructured(system, user, buildDocumentWriterSchema(), {
     temperature: writer.temperature ?? state.settings.temperature,
     maxTokens: writer.maxTokens || state.settings.maxTokens,
-    signal
+    signal,
+    tier: 'reason'
   });
   const edits = sanitizeDocumentEdits(result.documentEdits, doc.id);
   return {

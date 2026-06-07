@@ -14,6 +14,10 @@ export interface Actor {
   expanded: boolean;
   temperature: number;
   color: string;
+  // Thinking tier: 'fast' (no thought), 'think' (JSON thought field), 'reason'
+  // (may use a dedicated reasoning model + native <think> capture). Unset = a
+  // role-based default (directors/writers reason, roleplay characters are fast).
+  thinkingTier?: 'fast' | 'think' | 'reason';
   // Permission flags (replaces legacy isDirector / isResearcher / isManager)
   canDirect: boolean;
   canManageCast: boolean;
@@ -66,6 +70,7 @@ export interface Settings {
   apiKey: string;
   model: string;
   embeddingModel: string;
+  reasoningModel: string;
   temperature: number;
   maxTokens: number;
   topP: number;

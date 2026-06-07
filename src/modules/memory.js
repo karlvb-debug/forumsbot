@@ -224,7 +224,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
       `Source turns:\n${formatTranscript(usableMessages, 1600)}`
     ].filter(Boolean).join("\n\n");
 
-    const content = await chatCompletion(system, user, { temperature: 0.2, maxTokens: 1600, signal });
+    const content = await chatCompletion(system, user, { temperature: 0.2, maxTokens: 1600, signal, tier: 'reason' });
     const parsed = parseMemoryJson(content);
     if (!parsed) {
       console.warn('[memory] Summary parse failed — preserving existing memory');
@@ -554,7 +554,7 @@ export async function compactPinnedFacts() {
       "Return ONLY the bullet list — no JSON, no preamble."
     ].join("\n");
     const user = `Current pinned facts:\n${state.memory.pinnedFacts.join("\n")}`;
-    const result = await chatCompletion(system, user, { temperature: 0.1, maxTokens: 600 });
+    const result = await chatCompletion(system, user, { temperature: 0.1, maxTokens: 600, tier: 'fast' });
     const compacted = result.trim();
     if (compacted) {
       state.memory.pinnedFacts = normalizeStringArray(trimWords(compacted, PINNED_FACTS_WORD_CAP));
@@ -696,7 +696,7 @@ export async function extractOutcomes() {
     for (let i = 0; i < attempts.length; i++) {
       const { temperature, maxTokens, prompt } = attempts[i];
       try {
-        const content = await chatCompletion(system, prompt, { temperature, maxTokens });
+        const content = await chatCompletion(system, prompt, { temperature, maxTokens, tier: 'reason' });
         const parsed = normalizeOutcomeUpdate(parseOutcomeJson(content));
         // Success if we got at least a finalRecommendation
         if (parsed.finalRecommendation) {

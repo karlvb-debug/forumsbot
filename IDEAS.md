@@ -10,19 +10,28 @@ against. Add a date when status changes.
 
 ## Thinking & models
 
-- [ ] **Three-mode thinking system (Real / Simulated / None).** Per-task mode
-  registry + `judgmentModel` and `fastModel` slots so reasoning models drive
-  judgment tasks while instruct models drive conversation. Strip `<think>`
-  blocks, surface native reasoning into the thought slot, add a global
-  `reasoning_effort` selector. Full design exists — Stages 0-5 with
-  Sonnet/Opus split (see chat history). Files: `api.js`, `turns.js`,
-  `memory.js`, `documentWriting.js`, `session.js`, `preflight.js`,
-  `ConnectionPanel.jsx`, `constants.js`, `state.js`. Size: large (5 stages).
-- [ ] **Per-actor `model` / `thinking` override.** Mirror the existing
-  `actor.temperature` / `actor.maxTokens` pattern so one actor can use a
-  thinking model while others don't. Small add once the three-mode system
-  exists. Files: `state.js`, `constants.js`, `ActorsPanel.jsx`, `turns.js`.
-  Size: small.
+- [~] **Three-mode thinking system (fast / think / reason).** (2026-06) Engine
+  landed. Each LLM call site declares a tier: `fast` (no thought field — roleplay
+  actors, tinyRouter, fact distill), `think` (JSON thought, default for
+  participants), `reason` (director, intent pass, goal judge, memory summary,
+  document writer). The `reason` tier routes to `settings.reasoningModel` when
+  set, else the main model. Native `<think>…</think>` (and `reasoning_content`)
+  blocks are always stripped from completions — fixes a latent JSON-parse break on
+  reasoning models — and routed into the thought slot so real reasoning surfaces
+  in the same UI as fake thinking. Per-actor `actor.thinkingTier` override with
+  role-based defaults (`resolveActorThinkingTier`). API: `resolveModelTier`,
+  `extractNativeThinking`, `model` threaded through every chat fn. Tested
+  (api.test.js + turns.test.js, 223 total). **Remaining (Sonnet/UI):** (a)
+  Connection panel `Reasoning model` dropdown next to the main model; (b) Actor
+  card `Thinking` chip (fast/think/reason) using the existing permission-chip
+  pattern; (c) optional global `reasoning_effort` passthrough if the server
+  supports it. Stage-0..5 reasoning-effort selector and `<think>` live-streaming
+  remain future work.
+- [ ] **Per-actor `model` override.** `actor.thinkingTier` (reason→reasoning
+  model) now exists; a full per-actor `model` slot (mirroring
+  `actor.temperature`/`actor.maxTokens`) is still open — thread `model` into the
+  `chatJson` options at the askActor call sites (the API already accepts it).
+  Files: `state.js`, `constants.js`, `ActorsPanel.jsx`, `turns.js`. Size: small.
 - [ ] **Try Qwen3-Embedding-0.6B as drop-in vs Nomic v1.5.** Empirical A/B on
   real session archives for fact dedup + chunk recall. No code change yet —
   just a measurement. Size: small.

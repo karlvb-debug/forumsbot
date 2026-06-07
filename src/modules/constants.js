@@ -65,6 +65,9 @@ export const defaultState = {
     apiKey: "lm-studio",
     model: "",
     embeddingModel: "",
+    // Optional dedicated model for `reason`-tier calls (director, writer, memory,
+    // goal judge, intent pass). Empty = use the main model for everything.
+    reasoningModel: "",
     temperature: 0.8,
     maxTokens: 2000,
     topP: 1.0,

@@ -61,6 +61,7 @@ vi.mock('./api.js', () => ({
   setCurrentSpeaker: vi.fn(),
   getLastToolCalls: vi.fn(() => []),
   isJsonSchemaSupported: vi.fn(() => false),
+  resolveModelTier: vi.fn(() => 'test-model'),
 }));
 
 vi.mock('../hooks/useForumState.js', () => ({
@@ -774,6 +775,42 @@ describe('resolveNextSpeaker — director intent pass', () => {
     const result = await resolveNextSpeaker([alice, bob], { alreadySpokeThisRound: new Set() });
     expect(result?.reason).toBe('intent');
     expect(result?.actor?.id).toBe('a1');
+  });
+});
+
+// ── Thinking tier resolution ──────────────────────────────────────────────────
+import { resolveActorThinkingTier } from './turns.js';
+
+describe('resolveActorThinkingTier', () => {
+  beforeEach(() => {
+    mockState.scenario = { systems: {} };
+  });
+
+  it('honors an explicit valid tier override', () => {
+    expect(resolveActorThinkingTier({ thinkingTier: 'fast', canDirect: true })).toBe('fast');
+    expect(resolveActorThinkingTier({ thinkingTier: 'reason' })).toBe('reason');
+    expect(resolveActorThinkingTier({ thinkingTier: 'think', canWriteDocuments: true })).toBe('think');
+  });
+
+  it('defaults directors and writers to reason', () => {
+    expect(resolveActorThinkingTier({ canDirect: true })).toBe('reason');
+    expect(resolveActorThinkingTier({ canWriteDocuments: true })).toBe('reason');
+  });
+
+  it('defaults ordinary actors to think', () => {
+    expect(resolveActorThinkingTier({ name: 'Bob' })).toBe('think');
+  });
+
+  it('defaults ordinary characters to fast in a stage-directions (roleplay) scene', () => {
+    mockState.scenario = { systems: { stageDirections: { enabled: true } } };
+    expect(resolveActorThinkingTier({ name: 'Hero' })).toBe('fast');
+    // but a director still reasons even in roleplay
+    expect(resolveActorThinkingTier({ canDirect: true })).toBe('reason');
+  });
+
+  it('falls back to role default when the override is invalid', () => {
+    expect(resolveActorThinkingTier({ thinkingTier: 'garbage', canDirect: true })).toBe('reason');
+    expect(resolveActorThinkingTier({ thinkingTier: 'garbage' })).toBe('think');
   });
 });
 
