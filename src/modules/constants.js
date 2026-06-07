@@ -165,7 +165,9 @@ export const defaultState = {
         narrates: false,
         canIntroduceElements: false
       }
-    }
+    },
+    // Feature E: Planning pre-pass spine — generated at session start when task is defined
+    plan: null,          // { steps: string[], currentStep: number } | null
   },
   actors: [
     {

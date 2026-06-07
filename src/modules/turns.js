@@ -191,6 +191,48 @@ let _lastPromptParts = null;
 let _lastInjectionMaxTokens = null; // Feature H: dynamic maxTokens from injections
 export function getLastPromptParts() { return _lastPromptParts; }
 
+// Feature E: Planning pre-pass — generates a 3-5 step discussion spine from the task.
+const PLAN_SCHEMA = {
+  type: 'object',
+  properties: {
+    steps: { type: 'array', items: { type: 'string' } }
+  },
+  required: ['steps'],
+  additionalProperties: false
+};
+
+export async function generateDiscussionPlan(signal) {
+  const task = String(state.scenario?.task || '').trim();
+  if (!task) return null;
+  const actors = state.actors.filter(a => a.enabled).map(a => `${a.name} (${a.role})`).join(', ');
+  const system = 'You are a discussion planner. Given a task and cast, produce a short ordered plan of 3-5 discussion steps that would efficiently lead to a conclusion. Each step is one sentence describing what should happen in that phase. Return JSON only.';
+  const user = `Task: ${task}\nParticipants: ${actors}\n\nProduce 3-5 discussion steps.`;
+  try {
+    const data = await chatStructured(system, user, PLAN_SCHEMA, {
+      temperature: 0.3, maxTokens: 300, signal, tier: 'reason', purpose: 'planningPrePass'
+    });
+    const steps = Array.isArray(data?.steps) ? data.steps.slice(0, 5).map(s => String(s).trim()).filter(Boolean) : [];
+    if (!steps.length) return null;
+    state.scenario.plan = { steps, currentStep: 0 };
+    saveState();
+    console.debug(`[plan] Generated ${steps.length}-step discussion plan`);
+    return state.scenario.plan;
+  } catch (err) {
+    console.warn('[plan] Planning pre-pass failed:', err.message);
+    return null;
+  }
+}
+
+export function advancePlanStep() {
+  const plan = state.scenario?.plan;
+  if (!plan?.steps?.length) return;
+  if (plan.currentStep < plan.steps.length - 1) {
+    plan.currentStep += 1;
+    saveState();
+    console.debug(`[plan] Advanced to step ${plan.currentStep + 1}: ${plan.steps[plan.currentStep]}`);
+  }
+}
+
 
 // Rolling window of recent tok/s samples for the speed display.
 const _tokSpeedWindow = [];
@@ -1078,6 +1120,12 @@ async function _runRound(options = {}) {
   const startIndex = state.messages.length;
   let completedTurns = 0;
   state.currentRound = (state.currentRound || 0) + 1;
+  // Feature E: advance the plan step at each round boundary
+  if (state.currentRound > 1) advancePlanStep();
+  // Feature E: auto-generate plan at session start if task exists and no plan yet
+  if (state.currentRound === 1 && hasTask() && !state.scenario.plan) {
+    try { await generateDiscussionPlan(abortController?.signal); } catch (e) { /* silent */ }
+  }
 
   // Fire round-start triggers (background orchestrators can set up injections/routing),
   // then any round-cadence background actors that are due this round.
@@ -2555,10 +2603,16 @@ export function scenarioBlock() {
   const taskLine = state.scenario.task?.trim()
     ? `Task: ${state.scenario.task}`
     : "Task: None set — follow the user's lead, stay in character, and contribute when you have something useful to add.";
+  // Feature E: discussion plan spine
+  const plan = state.scenario.plan;
+  const planBlock = plan?.steps?.length
+    ? `Discussion plan:\n${plan.steps.map((s, i) => `${i === plan.currentStep ? '►' : ' '} ${i + 1}. ${s}`).join('\n')}`
+    : '';
   return [
     `Title: ${state.scenario.title || "Untitled forum"}`,
     state.scenario.premise ? `Context: ${state.scenario.premise}` : "",
     taskLine,
+    planBlock,
     userLabel ? `The human participant in this session is: ${userLabel}. Messages labelled [USER] in the transcript are from them.` : ""
   ].filter(Boolean).join("\n");
 }
