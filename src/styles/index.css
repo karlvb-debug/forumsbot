@@ -538,6 +538,7 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
   color: var(--fg-mute);
 }
 .thought-label { font-style: normal; color: var(--violet); font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 6px; }
+.route-chip { font-size: 10px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.04em; color: oklch(from var(--accent) l c h / 0.7); background: oklch(from var(--accent) l c h / 0.08); border: 1px solid oklch(from var(--accent) l c h / 0.2); border-radius: 3px; padding: 1px 5px; cursor: default; }
 
 .tool-call {
   margin-top: 8px;

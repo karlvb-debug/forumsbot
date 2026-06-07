@@ -8,8 +8,11 @@ export default function AutoStopPanel() {
   const model = useForumState(s => s.settings?.model || '');
   const task = useForumState(s => s.scenario?.task || '');
   const doneWhen = useForumState(s => s.scenario?.doneWhen || '');
+  const intentPass = useForumState(s => s.settings?.intentPass || 'auto');
+  const turnDelay = useForumState(s => s.settings?.turnDelay ?? 0);
 
   const update = (key, val) => mutateState(s => { s.autoStop[key] = val; });
+  const updateSetting = (key, val) => mutateState(s => { s.settings[key] = val; });
 
   const checkGoalNow = async () => {
     const turns = await import('../../modules/turns.js');
@@ -58,6 +61,30 @@ export default function AutoStopPanel() {
             <input type="number" value={autoStop.maxRounds ?? 5} min={1} max={50}
               onChange={(e) => update('maxRounds', parseInt(e.target.value) || 5)}
               disabled={!autoStop.maxRoundsEnabled} />
+          </Field>
+        </div>
+      </details>
+
+      <details className="card card-disclosure">
+        <summary className="card-title">
+          <h3>Auto-run & Routing</h3>
+          <span className="disclosure-sub">speed · speaker selection</span>
+        </summary>
+        <div className="disclosure-body">
+          <Field label="Turn delay (s)" hint="Pause between actor turns when auto-running (0 = instant).">
+            <input
+              type="number"
+              value={turnDelay}
+              min={0} max={30} step={0.5}
+              onChange={(e) => updateSetting('turnDelay', parseFloat(e.target.value) || 0)}
+            />
+          </Field>
+          <Field label="Speaker selection" hint="How the engine decides who speaks next when multiple candidates are equally scored.">
+            <select value={intentPass} onChange={(e) => updateSetting('intentPass', e.target.value)}>
+              <option value="auto">Smart — grounded intent (ambiguous turns only)</option>
+              <option value="always">Always — reason before every turn</option>
+              <option value="off">Off — heuristic name-picker only</option>
+            </select>
           </Field>
         </div>
       </details>

@@ -106,6 +106,14 @@ const MessageCard = React.memo(function MessageCard({ msg, actor, showThoughts, 
               <Ic.Anchor width={12} height={12} />
             </span>
           )}
+          {msg.routeInfo?.reason === 'intent' && msg.routeInfo.need && (
+            <span
+              className="route-chip"
+              title={[msg.routeInfo.read, msg.routeInfo.rationale].filter(Boolean).join(' · ')}
+            >
+              {msg.routeInfo.need}
+            </span>
+          )}
         </div>
 
         {toolCalls.length > 0 && toolCalls.map((tc, i) => (

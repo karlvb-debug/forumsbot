@@ -1000,6 +1000,9 @@ async function _runRound(options = {}) {
     });
     if (!resolved) break; // NONE — natural conclusion
 
+    // Stash the routing reason so applyAiResult can attach it to the message.
+    state._pendingTurnIntent = { reason: resolved.reason, ...(resolved.intent || {}) };
+
     // Place resolved actor at front for _runTurn's nextParticipant()
     state.turnQueue = [resolved.actor.id, ...state.turnQueue.filter(id => id !== resolved.actor.id)];
     const ok = await runNextTurn({ summarizeCycle: false, isRoundContinuation: true, forceSpeak: false });
@@ -1595,6 +1598,16 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     ? buildRoleplayContextLine(showThoughts, state.actors.some(a => a.canDirect && a.enabled))
     : "You are one participant in a local AI forum. You can read the public transcript, but not other actors' private thoughts.";
 
+  // If the intent pass selected this actor, inject the need so it shapes the response.
+  const intentHint = (() => {
+    const li = state.lastIntent;
+    if (!li?.need || !li?.speaker) return '';
+    if (li.speaker.toLowerCase() !== actor.name.toLowerCase()) return '';
+    if (Date.now() - new Date(li.at).getTime() > 10000) return '';
+    const suffix = li.rationale ? ` (${li.rationale})` : '';
+    return `DISCUSSION FOCUS: The forum currently needs to ${li.need}${suffix}. Let that shape your contribution.`;
+  })();
+
   const relationships = relationshipBlock(actor);
   const system = [
     `You are ${actor.name}.`,
@@ -1605,6 +1618,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     actor.voice ? "" : globalStyleInstruction(),
     relationships,
     contextLine,
+    intentHint,
     sysCfg.stageDirectionsEnabled
       ? "Messages labelled [USER] in the transcript are instructions or questions from the human facilitator. You MUST incorporate their notes, instructions, or scenario changes into your character's actions and speech naturally on this turn. Do not ignore them."
       : "Messages labelled [USER] in the transcript are from the human facilitator. You MUST acknowledge, address, and respond to their messages, questions, or instructions directly in your public message. Do not ignore them or treat them as out-of-character meta-disruptions; respond to them directly.",
@@ -2265,12 +2279,17 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
   const msgType = actor.canDirect ? "dm" : "actor";
   const isBackground = (actor.actorMode || 'participant') === 'background';
 
+  // Consume the pending route context and attach it to the message so the
+  // transcript can show why this actor was selected.
+  const routeInfo = state._pendingTurnIntent || null;
+  state._pendingTurnIntent = null;
+
   if (result.action === "skip") {
     logTransition("skip_decision", { speaker: speakerName, reason: result.thought });
     actor.skipCount = (actor.skipCount || 0) + 1;
     saveState();
     if (isBackground) return; // silent skip — no transcript entry for background actors
-    return addMessage({ type: "skip", actorId: actor.id, speaker: actor.name, content: "Skipped.", thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, nextSpeaker: result.nextSpeaker || "" });
+    return addMessage({ type: "skip", actorId: actor.id, speaker: actor.name, content: "Skipped.", thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, nextSpeaker: result.nextSpeaker || "", routeInfo });
   }
 
   // Track cumulative words for speaking-time balance
@@ -2285,7 +2304,7 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
   // Add the actor's message to the transcript BEFORE handling pause requests.
   // This ensures the natural order: actor message → pause card → user response.
   if (!isBackground) {
-    await addMessage({ type: msgType, actorId: actor.id, speaker: actor.name, content: result.message, thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, nextSpeaker: result.nextSpeaker || "" });
+    await addMessage({ type: msgType, actorId: actor.id, speaker: actor.name, content: result.message, thought: result.thought, color: actor.color, toolCalls: result.toolCalls || [], docEdited, trace: result.trace, nextSpeaker: result.nextSpeaker || "", routeInfo });
   }
 
   // Pause infrastructure — actor requests user input
