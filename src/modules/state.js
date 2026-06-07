@@ -293,6 +293,7 @@ function normalizeState(value = {}) {
     persona: actor.persona || "",
     goal: actor.goal || "",
     voice: actor.voice || "",
+    exampleDialogue: actor.exampleDialogue || "",
     thoughts: (actor.thoughts && typeof actor.thoughts === "object") ? JSON.stringify(actor.thoughts) : String(actor.thoughts || ""),
     relationships: (actor.relationships && typeof actor.relationships === "object") ? actor.relationships : {},
     enabled: actor.enabled !== false,

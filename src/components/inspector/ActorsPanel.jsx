@@ -309,6 +309,7 @@ export function ActorsPanel() {
                   <Field label="Persona"><textarea rows={3} value={a.persona} onChange={(e) => updateActor(a.id, 'persona', e.target.value)} /></Field>
                   <Field label="Responsibility" info="This actor's personal focus — not the session completion criteria."><textarea rows={2} value={a.goal} onChange={(e) => updateActor(a.id, 'goal', e.target.value)} /></Field>
                   <Field label="Voice"><input value={a.voice || ''} onChange={(e) => updateActor(a.id, 'voice', e.target.value)} /></Field>
+                  <Field label="Example dialogue" info="A few lines showing how this character talks. The model imitates the style."><textarea rows={2} value={a.exampleDialogue || ''} onChange={(e) => updateActor(a.id, 'exampleDialogue', e.target.value)} /></Field>
                 </div>
 
                 {/* ── Behavior (always visible) ── */}
