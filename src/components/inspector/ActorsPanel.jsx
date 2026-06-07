@@ -330,6 +330,33 @@ export function ActorsPanel() {
                     </button>
                   </div>
                   <div>
+                    <div className="actor-section-label" style={{ marginBottom: 6 }}>Thinking Tier</div>
+                    <div className="perm-chips">
+                      {[
+                        { value: undefined, label: 'auto', title: 'Role-based default: directors and writers use reason, roleplay uses fast, others use think' },
+                        { value: 'fast',   label: '⚡ fast',   title: 'No thinking — respond directly without a thought field' },
+                        { value: 'think',  label: '💭 think',  title: 'JSON thought field — lightweight in-prompt reasoning' },
+                        { value: 'reason', label: '🧠 reason', title: 'Deep reasoning — uses native <think> capture and routes to the reasoning model if configured' },
+                      ].map(opt => {
+                        const active = a.thinkingTier === opt.value;
+                        return (
+                          <button
+                            key={String(opt.value)}
+                            className={"perm-chip" + (active ? " active" : "")}
+                            style={active ? { '--perm-color': 'var(--accent)' } : {}}
+                            onClick={() => updateActor(a.id, 'thinkingTier', opt.value)}
+                            title={opt.title}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="field-hint" style={{ marginTop: 4 }}>
+                      auto = role default &nbsp;·&nbsp; fast = no thought &nbsp;·&nbsp; think = JSON thought &nbsp;·&nbsp; reason = deep / reasoning model
+                    </div>
+                  </div>
+                  <div>
                     <div className="actor-section-label" style={{ marginBottom: 6 }}>Abilities & Permissions</div>
                     <div className="permissions-grid">
                       {PERM_DEFS.map(p => (

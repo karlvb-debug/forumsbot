@@ -97,6 +97,7 @@ export function ConnectionPanel() {
   const apiKey = useForumState(s => s.settings?.apiKey || '');
   const model = useForumState(s => s.settings?.model || '');
   const embModel = useForumState(s => s.settings?.embeddingModel || '');
+  const reasoningModel = useForumState(s => s.settings?.reasoningModel || '');
   const temperature = useForumState(s => s.settings?.temperature ?? 0.8);
   const maxTokens = useForumState(s => s.settings?.maxTokens ?? 2000);
   const topP = useForumState(s => s.settings?.topP ?? 0.95);
@@ -284,6 +285,35 @@ export function ConnectionPanel() {
         {embeddingProbe && cfg.supportsEmbeddings && (
           <div className={`field-hint${embeddingProbe.ok ? '' : ' hint-warn'}`}>
             {embeddingProbe.ok ? '✓ Embedding model OK' : `⚠ ${embeddingProbe.reason}`}
+          </div>
+        )}
+
+        <Field label="Reasoning model" info="Optional — routes reason-tier calls (directors, writers) to this model. Leave blank to use the chat model.">
+          {isLocal ? (
+            <select value={reasoningModel} onChange={(e) => updateSetting('reasoningModel', e.target.value)}>
+              <option value="">— use chat model —</option>
+              {(chatModels.length ? chatModels : availableModels).map((id) => <option key={id} value={id}>{id}</option>)}
+            </select>
+          ) : hasSuggestions ? (
+            <>
+              <select value={cfg.suggestedModels.includes(reasoningModel) ? reasoningModel : ''} onChange={(e) => e.target.value && updateSetting('reasoningModel', e.target.value)}>
+                <option value="">— use chat model —</option>
+                {cfg.suggestedModels.map((id) => <option key={id} value={id}>{id}</option>)}
+              </select>
+              <input
+                value={reasoningModel}
+                onChange={(e) => updateSetting('reasoningModel', e.target.value)}
+                placeholder="or type a model name…"
+                style={{ marginTop: 4 }}
+              />
+            </>
+          ) : (
+            <input value={reasoningModel} onChange={(e) => updateSetting('reasoningModel', e.target.value)} placeholder="reasoning model name (optional)…" />
+          )}
+        </Field>
+        {reasoningModel && (
+          <div className="field-hint">
+            Reason-tier calls (directors, writers) will use <strong>{reasoningModel}</strong>.
           </div>
         )}
       </div>
