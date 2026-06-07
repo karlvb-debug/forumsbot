@@ -2227,9 +2227,9 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
     const duped = (state.memory.pinnedFacts || []).some(f =>
       f.toLowerCase() === fact.toLowerCase());
     if (!duped && fact) {
-      if (!Array.isArray(state.memory.pendingPinnedFacts)) state.memory.pendingPinnedFacts = [];
-      state.memory.pendingPinnedFacts.push(fact);
-      logTransition("fact_proposed", { actor: speakerName, fact });
+      if (!Array.isArray(state.memory.pinnedFacts)) state.memory.pinnedFacts = [];
+      state.memory.pinnedFacts.push(fact);
+      logTransition("fact_pinned", { actor: speakerName, fact });
     }
   }
 

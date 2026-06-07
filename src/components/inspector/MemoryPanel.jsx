@@ -93,16 +93,6 @@ export function MemoryPanel() {
               ))}
               {!pinnedFacts.length && <div className="empty">No pinned facts yet. Run memory to generate.</div>}
             </div>
-            {pendingFacts.length > 0 && (
-              <div className="btn-row" style={{ marginTop: 10 }}>
-                <button className="btn sm" onClick={() => {
-                  mutateState(s => {
-                    s.memory.pinnedFacts = [...s.memory.pinnedFacts, ...s.memory.pendingPinnedFacts];
-                    s.memory.pendingPinnedFacts = [];
-                  });
-                }}>Save pending ({pendingFacts.length})</button>
-              </div>
-            )}
           </div>
 
           <div className="card">

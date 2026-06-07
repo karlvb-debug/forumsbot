@@ -372,7 +372,7 @@ async function applyPinnedFactSuggestions(suggestions) {
   const newFacts = (suggestions || []).filter(Boolean);
   if (!newFacts.length) return;
 
-  const allExisting = [...state.memory.pinnedFacts, ...state.memory.pendingPinnedFacts];
+  const allExisting = [...(state.memory.pinnedFacts || [])];
 
   // Pre-embed all new facts + all existing facts in two batched calls to minimize round trips.
   let newVecs = null;
@@ -420,7 +420,8 @@ async function applyPinnedFactSuggestions(suggestions) {
       }
     }
 
-    state.memory.pendingPinnedFacts.push(trimWords(fact, 40));
+    if (!Array.isArray(state.memory.pinnedFacts)) state.memory.pinnedFacts = [];
+    state.memory.pinnedFacts.push(trimWords(fact, 40));
   }
 }
 
