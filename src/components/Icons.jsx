@@ -283,3 +283,10 @@ export const GripVertical = (props) => (
     <circle cx="5.5" cy="12" r="1.1"/>
   </svg>
 );
+
+export const Terminal = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <polyline points="4 6 8 10 4 14" />
+    <line x1="10" y1="14" x2="16" y2="14" />
+  </svg>
+);

@@ -90,6 +90,7 @@ function normalizeState(value = {}) {
     outcomes: { ...defaultState.outcomes, ...value.outcomes },
     autoStop: { ...defaultState.autoStop, ...value.autoStop },
     documentWriting: { ...defaultState.documentWriting, ...(value.documentWriting || {}) },
+    promptOverrides: { ...defaultState.promptOverrides, ...(value.promptOverrides || {}) },
     scenario: {
       ...defaultState.scenario,
       ...scenarioFields,

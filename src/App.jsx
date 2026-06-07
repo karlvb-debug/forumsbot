@@ -53,6 +53,7 @@ const NAV = [
   { id: 'documents',     label: 'Documents',    icon: 'Doc',           tier: 'advanced' },
   { id: 'library',       label: 'Library',      icon: 'Stage',         tier: 'advanced' },
   { id: 'sessions',      label: 'Sessions',     icon: 'Sessions',      tier: 'advanced' },
+  { id: 'prompts',       label: 'Prompts',      icon: 'Terminal',      tier: 'advanced' },
   { id: 'help',          label: 'Help',         icon: 'Info',          tier: 'bottom'   },
 ];
 
@@ -67,6 +68,7 @@ const NAV_TITLES = {
   library:       { title: 'Library',       sub: 'blueprints · saved setups' },
   sessions:      { title: 'Sessions',      sub: 'save · load · export' },
   connection:    { title: 'Connection',    sub: 'LM Studio · model · generation' },
+  prompts:       { title: 'Prompts',       sub: 'system prompt editor' },
   help:          { title: 'Help',          sub: 'documentation · reference' },
 };
 

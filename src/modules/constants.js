@@ -140,6 +140,7 @@ export const defaultState = {
   pendingInjections: [],     // CAP-1: director prompt injection queue
   pendingPrivateMessages: [], // CAP-2: actor-to-actor private message queue
   pendingStyleUpdate: null,  // Phase 3: pending global style proposal awaiting user approval
+  promptOverrides: {},       // User overrides for system prompt fragments (keyed by registry key)
   lastIntent: null,          // last director intent pass: { read, need, speaker, rationale, confidence, at }
   scenario: {
     title: "Untitled forum",

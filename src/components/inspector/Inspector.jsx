@@ -12,6 +12,7 @@ import { DocumentsPanel } from './DocumentsPanel';
 import { PromptViewerPanel } from './PromptViewerPanel';
 import { HelpPanel } from './HelpPanel';
 import { ParticipationPanel } from './ParticipationPanel';
+import { PromptsPanel } from './PromptsPanel';
 
 const PANELS = {
   connection: ConnectionPanel,
@@ -24,6 +25,7 @@ const PANELS = {
   library: LibraryPanel,
   sessions: SessionsPanel,
   documents: DocumentsPanel,
+  prompts: PromptsPanel,
   help: HelpPanel,
 };
 
