@@ -2186,11 +2186,36 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   }
 
   const finalTokens = estimateTokens(assembled);
-  if (finalTokens > PROMPT_TOKEN_BUDGET) {
-    console.warn(`[budget] Prompt still over budget (${finalTokens} tokens, budget ${PROMPT_TOKEN_BUDGET}) after all degradation steps.`);
+  // Feature G: Emergency mid-round context summarization
+  // If we're still way over budget (150%+), summarize older transcript into a compact prefix
+  if (finalTokens > PROMPT_TOKEN_BUDGET * 1.5 && recentMessages.length > 4) {
+    const splitPoint = Math.floor(recentMessages.length * 0.6);
+    const olderMsgs = recentMessages.slice(0, splitPoint);
+    const newerMsgs = recentMessages.slice(splitPoint);
+    const olderText = olderMsgs.map(m => `${m.speaker}: ${trimWords(String(m.content || ''), 30)}`).join('\n');
+    try {
+      const summary = await chatCompletion(
+        'Summarize this conversation snippet in 2-3 sentences. Preserve key decisions, disagreements, and open questions. Be concise.',
+        olderText,
+        { temperature: 0.2, maxTokens: 150 }
+      );
+      if (summary && String(summary).trim().length > 10) {
+        // Replace older messages with a synthetic summary message
+        const summaryMsg = { speaker: '[Summary]', content: String(summary).trim(), type: 'system' };
+        recentMessages = [summaryMsg, ...newerMsgs];
+        assembled = buildSections(recallChunks, recentMessages);
+        console.debug(`[budget] Emergency summarization: compressed ${olderMsgs.length} messages → summary`);
+      }
+    } catch (e) {
+      console.warn('[budget] Emergency summarization failed:', e.message);
+    }
+  }
+
+  if (estimateTokens(assembled) > PROMPT_TOKEN_BUDGET) {
+    console.warn(`[budget] Prompt still over budget (${estimateTokens(assembled)} tokens, budget ${PROMPT_TOKEN_BUDGET}) after all degradation steps.`);
   }
   // Log utilization for empirical tuning
-  console.debug(`[budget] tokens=${finalTokens} budget=${PROMPT_TOKEN_BUDGET} model_ctx=${state.contextInfo?.maxContextLength || 'unknown'} working_n=${workingMemoryN}`);
+  console.debug(`[budget] tokens=${estimateTokens(assembled)} budget=${PROMPT_TOKEN_BUDGET} model_ctx=${state.contextInfo?.maxContextLength || 'unknown'} working_n=${workingMemoryN}`);
 
   // CAP-1: Consume pending director injections (appended after budget stages so they are never trimmed)
   let injectionMaxTokens = null;
