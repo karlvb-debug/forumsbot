@@ -8,6 +8,7 @@ export interface Actor {
   persona: string;
   goal: string;
   voice: string;
+  exampleDialogue?: string;
   thoughts: string;
   relationships: Record<string, string>;
   enabled: boolean;
@@ -202,6 +203,7 @@ export interface Scenario {
   premise: string;
   task: string;
   doneWhen: string;
+  plan?: { steps: string[]; currentStep: number } | null;
   systems?: {
     stageDirections?: { enabled?: boolean; intensity?: string; maxTokenShare?: number };
     alignment?: { strictness?: string };
@@ -271,6 +273,7 @@ export interface ForumState {
   actors: Actor[];
   anchors: Anchor[];
   messages: Message[];
+  promptOverrides: Record<string, string>;
   turnQueue: string[];
   contextInfo: ContextInfo;
   autoRunning: boolean;
