@@ -61,9 +61,9 @@ function globalStyleInstruction() {
 // interrupt the user, and how many pauses per round. (The old honoredWindow
 // field was never read by any logic and has been removed.)
 const PAUSE_POLICY_DEFAULTS = {
-  sponsor:      { allowedReasons: ["decision", "conflict"], maxPausesPerRound: 1 },
-  collaborator: { allowedReasons: ["decision", "conflict", "question", "clarification", "information"], maxPausesPerRound: 2 },
-  observer:     { allowedReasons: [], maxPausesPerRound: 0 },
+  sponsor:      { allowedReasons: ["decision", "conflict"], maxPausesPerRound: 1, deferMode: true },
+  collaborator: { allowedReasons: ["decision", "conflict", "question", "clarification", "information"], maxPausesPerRound: 2, deferMode: true },
+  observer:     { allowedReasons: [], maxPausesPerRound: 0, deferMode: true },
 };
 
 export function resolvePolicy(userContext) {
@@ -95,6 +95,17 @@ export function reopenPause() {
       s.ui.awaitingUserInput = true;
     });
   }
+}
+
+// Called from PauseCard when user optionally answers a deferred question before round end.
+export function resolveDeferredQuestion(id, response) {
+  const resp = String(response || "").trim();
+  mutateState(s => {
+    const pause = (s.pendingPauses || []).find(p => p.id === id);
+    if (pause && pause.outcome === "deferred") pause.userResponse = resp;
+    const msg = s.messages.find(m => m.pauseRecord?.id === id);
+    if (msg) msg.pauseRecord = { ...msg.pauseRecord, userResponse: resp };
+  });
 }
 
 async function promptPause(pauseRecord) {
@@ -983,6 +994,43 @@ export async function runRound(options = {}) {
   }
 }
 
+// At round end, finalize all deferred questions from this round.
+// Uses any inline user response the watcher typed; falls back to defaultIfNoResponse.
+// Injects the assumed answer as a private note for the requester's next turn.
+async function finalizeDeferredQuestions(round) {
+  const deferred = (state.pendingPauses || []).filter(p => p.outcome === "deferred" && p.deferredRound === round);
+  if (!deferred.length) return;
+
+  const resolvedAt = new Date().toISOString();
+  for (const pause of deferred) {
+    const userResponse = (pause.userResponse && pause.userResponse.trim())
+      ? pause.userResponse.trim()
+      : (pause.defaultIfNoResponse || "");
+
+    mutateState(s => {
+      const p = (s.pendingPauses || []).find(q => q.id === pause.id);
+      if (p) { p.outcome = "assumed"; p.userResponse = userResponse; p.resolvedAt = resolvedAt; }
+      const msg = s.messages.find(m => m.pauseRecord?.id === pause.id);
+      if (msg) msg.pauseRecord = { ...msg.pauseRecord, outcome: "assumed", userResponse, resolvedAt };
+    });
+
+    // Inject assumed answer so the requester knows on their next turn
+    if (userResponse) {
+      if (!Array.isArray(state.pendingInjections)) state.pendingInjections = [];
+      state.pendingInjections.push({
+        id: crypto.randomUUID(),
+        injectorId: "user",
+        targetId: pause.requesterId,
+        content: `[Your question "${pause.question}" wasn't answered in time. Assumed: "${userResponse}". Proceed on that basis.]`,
+        scope: "next_turn_only",
+        insertedAt: new Date().toISOString()
+      });
+    }
+
+    logTransition("pause_assumed", { pauseId: pause.id, reason: pause.reason, round });
+  }
+}
+
 async function _runRound(options = {}) {
   abortController = null;
   _sessionController = null; // Reset abort state for the new round
@@ -1029,6 +1077,10 @@ async function _runRound(options = {}) {
       if (delayMs > 0) await wait(delayMs);
     }
   }
+
+  // Finalize deferred questions before round-end triggers so assumed answers
+  // are in state when trigger actors run and the next round starts.
+  await finalizeDeferredQuestions(state.currentRound);
 
   const roundMessages = state.messages.slice(startIndex);
 
@@ -1965,6 +2017,12 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
 
     let docActionNudge = "";
 
+    // Brief note about open deferred questions so actors can optionally address them.
+    const openDeferred = (state.pendingPauses || []).filter(p => p.outcome === "deferred" && p.deferredRound === state.currentRound);
+    const deferredNote = openDeferred.length > 0
+      ? `[Open questions pending user review: ${openDeferred.map(p => `${p.requesterName}: "${p.question || p.context}"`).join("; ")}. Address them in-conversation if you can; the user will see them at round end.]`
+      : "";
+
     return [
       scenarioBlock(),
       state.memory.enabled ? memoryBlock(chunks) : "",
@@ -1987,6 +2045,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
             ? "You are the Researcher. Analyze the open questions, run a web search using `[SEARCH: query]` in your thought field if facts are needed, cite your sources, and skip your turn if no further research is required right now."
             : "Take your next turn now. Write as you would speak aloud in a real conversation — plain English, direct, natural rhythm. One to three sentences is usually enough. Do NOT use filler openers (e.g. 'Certainly', 'Absolutely', 'Great point', 'It's worth noting', 'In conclusion', 'I would argue that', 'Building on that'). Do NOT use hedging academic constructions. Say the thing directly.")
         : "Take the director turn now. Be brief and direct. Keep summaries and guidance to plain conversational English — no formal preamble.",
+      deferredNote,
       facilitatorDirective
     ].filter(Boolean).join("\n\n");
   };
@@ -2349,6 +2408,8 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
     const policy = resolvePolicy(state.userContext);
     const roundPauses = (state.pendingPauses || []).filter(p => p.outcome === "pending" || p.outcome === "honored").length;
     const allowed = policy.allowedReasons.includes(pr.reason) && roundPauses < policy.maxPausesPerRound;
+    const deferMode = policy.deferMode ?? true;
+    const outcome = allowed ? "honored" : (deferMode ? "deferred" : "suppressed");
 
     const record = {
       id: crypto.randomUUID(),
@@ -2360,18 +2421,18 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
       options: Array.isArray(pr.options) ? pr.options.filter(o => o && String(o).trim() && !REPAIR_ARTIFACTS.test(String(o))).slice(0, 5).map(o => String(o).slice(0, 100)) : [],
       defaultIfNoResponse: String(pr.defaultIfNoResponse || "").slice(0, 200),
       requestedAt: new Date().toISOString(),
-      outcome: allowed ? "honored" : "suppressed",
-      userResponse: allowed ? "" : (pr.defaultIfNoResponse || ""),
-      resolvedAt: allowed ? "" : new Date().toISOString(),
+      deferredRound: outcome === "deferred" ? state.currentRound : null,
+      outcome,
+      userResponse: outcome === "suppressed" ? (pr.defaultIfNoResponse || "") : "",
+      resolvedAt: outcome === "suppressed" ? new Date().toISOString() : "",
     };
 
     if (!Array.isArray(state.pendingPauses)) state.pendingPauses = [];
     state.pendingPauses = [...state.pendingPauses, record];
 
-    // Only write a pause card to the transcript when the request is actually honored.
-    // Suppressed pauses are recorded in pendingPauses for diagnostics but must not
-    // become transcript messages — they inflate the context window on every subsequent turn.
-    if (allowed) {
+    // Write a pause card for honored (blocking) and deferred (non-blocking) outcomes.
+    // Suppressed pauses are silent — no transcript card.
+    if (outcome === "honored" || outcome === "deferred") {
       await addMessage({ type: "pause", actorId: actor.id, speaker: speakerName, color: actor.color, pauseRecord: record, content: record.question || record.context });
     }
 
@@ -2380,7 +2441,7 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
       await fireTriggerActors('on_conflict', { actorId: actor.id, actorName: speakerName, context: record.context }, null, actor.id);
     }
 
-    if (allowed) {
+    if (outcome === "honored") {
       const wasAutoRunning = state.autoRunning;
       state.autoRunning = false;
       saveState();
@@ -2419,6 +2480,8 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
         // turn after releasing its lock, so actors react to the user's answer.
         _resumeAfterPause = true;
       }
+    } else if (outcome === "deferred") {
+      logTransition("pause_deferred", { actorId: actor.id, reason: record.reason, round: state.currentRound });
     }
     } // end else (non-garbage pause)
   }

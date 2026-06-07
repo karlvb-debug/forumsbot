@@ -2409,11 +2409,26 @@ button:focus-visible { border-radius: 8px; }
   border-left-color: oklch(0.78 0.13 65);  /* amber */
   background: oklch(0.78 0.13 65 / 0.06);
 }
-.pause-card.resolved {
+.pause-card.deferred {
+  border-left-color: oklch(0.72 0.14 220);  /* blue */
+  background: oklch(0.72 0.14 220 / 0.05);
+}
+.pause-card.resolved,
+.pause-card.assumed {
   border-left-color: var(--ok);
   flex-direction: row;
   align-items: flex-start;
   gap: 8px;
+}
+.pause-deferred-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: oklch(0.72 0.14 220 / 0.15);
+  color: oklch(0.45 0.14 220);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
 }
 .pause-icon {
   font-size: 14px;

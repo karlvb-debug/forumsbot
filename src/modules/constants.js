@@ -335,6 +335,7 @@ export const defaultState = {
     pausePolicy: {
       allowedReasons: ["decision", "conflict", "question", "clarification", "information"],
       maxPausesPerRound: 2,
+      deferMode: true,
     }
   },
   pendingPauses: [],  // PauseRecord[]

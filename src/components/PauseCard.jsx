@@ -30,6 +30,28 @@ export function PauseCard({ msg, interactive = false }) {
     );
   }
 
+  if (record.outcome === 'assumed') {
+    const wasUserResponse = record.userResponse && record.userResponse !== record.defaultIfNoResponse;
+    return (
+      <div className="pause-card assumed">
+        <span className="pause-icon">✓</span>
+        <div className="pause-body">
+          <div><strong>{record.requesterName}</strong> asked: <em>{record.question || record.context}</em></div>
+          <div className="pause-response">
+            {wasUserResponse
+              ? <>Your answer was used: {record.userResponse}</>
+              : <>Agents assumed: {record.userResponse || record.defaultIfNoResponse || '(proceeding without answer)'}</>
+            }
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (record.outcome === 'deferred') {
+    return <DeferredCard record={record} />;
+  }
+
   // honored — transcript shows static indicator; modal shows interactive form
   if (!interactive) {
     return (
@@ -45,6 +67,54 @@ export function PauseCard({ msg, interactive = false }) {
   }
 
   return <PauseForm record={record} />;
+}
+
+function DeferredCard({ record }) {
+  const [answer, setAnswer] = useState(record.userResponse || '');
+  const [sent, setSent] = useState(!!record.userResponse);
+
+  const send = (value) => {
+    const v = String(value || '').trim();
+    if (!v) return;
+    setSent(true);
+    setAnswer(v);
+    import('../modules/turns.js').then(m => m.resolveDeferredQuestion(record.id, v));
+  };
+
+  return (
+    <div className="pause-card deferred">
+      <div className="pause-header">
+        <span className="pause-icon">💬</span>
+        <strong>{record.requesterName}</strong> has a question
+        <span className="pause-reason-badge">{record.reason}</span>
+        <span className="pause-deferred-badge">non-blocking</span>
+      </div>
+      {record.context && <div className="pause-context">{record.context}</div>}
+      <div className="pause-question">{record.question}</div>
+      {sent ? (
+        <div className="pause-response">Your answer queued: {answer}</div>
+      ) : (
+        <div className="pause-free-text">
+          <input
+            className="pause-input"
+            type="text"
+            value={answer}
+            onChange={e => setAnswer(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && answer.trim() && send(answer)}
+            placeholder={record.defaultIfNoResponse ? `Leave blank — agents will assume: ${record.defaultIfNoResponse}` : 'Answer (optional)…'}
+          />
+          <button className="btn sm primary" disabled={!answer.trim()} onClick={() => send(answer)}>
+            Send
+          </button>
+        </div>
+      )}
+      {!sent && record.defaultIfNoResponse && (
+        <div className="pause-note" style={{ marginTop: 2 }}>
+          Agents will assume "{record.defaultIfNoResponse}" if you don't respond before round end.
+        </div>
+      )}
+    </div>
+  );
 }
 
 function PauseForm({ record }) {
