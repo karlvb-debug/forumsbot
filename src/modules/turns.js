@@ -2039,7 +2039,15 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
             : "Push the discussion toward a decision.")
         : "",
       deferredNote,
-      facilitatorDirective
+      facilitatorDirective,
+      // Post-history persona reminder — absolute last so tail-weighted models stay in character
+      kind === "actor" ? (() => {
+        const bits = [actor.role && `${actor.name}, ${actor.role}`].filter(Boolean);
+        const id = bits.length ? bits.join(' — ') : actor.name;
+        return isRoleplayMode()
+          ? `Stay in character as ${id}. Respond as them now — not about them.`
+          : `You are ${id}. Answer in your own voice now.`;
+      })() : ""
     ].filter(Boolean).join("\n\n");
   };
 
