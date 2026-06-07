@@ -408,14 +408,15 @@ const INTENT_SCHEMA = {
     speaker: { type: 'string' },
     rationale: { type: 'string' },
     confidence: { type: 'number' },
-    stuck: { type: 'boolean' }
+    stuck: { type: 'boolean' },
+    expectedOutput: { type: 'string' }
   },
   required: ['need', 'speaker'],
   additionalProperties: false
 };
 
 // Intent system prompt — editable prose from registry + code-owned JSON shape.
-const INTENT_SHAPE = 'Return JSON only: {"read":"<one sentence on the current state>","need":"<one need>","speaker":"<participant name or NONE>","rationale":"<one clause: why them>","confidence":<0..1>}';
+const INTENT_SHAPE = 'Return JSON only: {"read":"<one sentence on the current state>","need":"<one need>","speaker":"<participant name or NONE>","rationale":"<one clause: why them>","confidence":<0..1>,"expectedOutput":"<optional turn directive>"}';
 function getIntentSystem() { return frag('intent_system') + '\n' + INTENT_SHAPE; }
 
 async function resolveIntent(eligible, alreadySpokeThisRound, signal) {
@@ -495,6 +496,7 @@ async function resolveIntent(eligible, alreadySpokeThisRound, signal) {
       rationale: String(data?.rationale || '').trim(),
       confidence: typeof data?.confidence === 'number' ? data.confidence : null,
       stuck: !!data?.stuck,
+      expectedOutput: data?.expectedOutput ? String(data.expectedOutput).trim() : null,
       at: new Date().toISOString(),
     };
 
@@ -1737,7 +1739,11 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     if (li.speaker.toLowerCase() !== actor.name.toLowerCase()) return '';
     if (Date.now() - new Date(li.at).getTime() > 10000) return '';
     const suffix = li.rationale ? ` (${li.rationale})` : '';
-    return frag('participant_intent_hint', { need: li.need, rationale: suffix });
+    let hint = frag('participant_intent_hint', { need: li.need, rationale: suffix });
+    if (li.expectedOutput) {
+      hint += `\nTHIS TURN, produce: ${li.expectedOutput}`;
+    }
+    return hint;
   })();
 
   const relationships = relationshipBlock(actor);
