@@ -29,11 +29,17 @@ against. Add a date when status changes.
 
 ## Orchestration & scheduling
 
-- [ ] **Two-step intent pass + speaker scoring.** Each enabled actor emits a
-  tiny `{desire_to_speak, target, intent, reason}` blob; orchestrator picks
-  one based on score. Highest-ceiling architectural change — most other
-  scheduling improvements fall out for free. Files: `turns.js` (round loop),
-  new scheduler module. Size: large.
+- [~] **Two-step intent pass + speaker scoring.** (2026-06) Director-side
+  variant landed: `resolveIntent` in `turns.js` is a grounded reasoning pass
+  (reads the room against task / doneWhen / open questions / shared summary →
+  `{read, need, speaker, rationale, confidence}`) that replaces the bare
+  `tinyRouter` on the ambiguous path. `settings.intentPass` = `off` / `auto`
+  (ambiguous-only, default) / `always` (every turn). Result recorded on
+  `state.lastIntent` and surfaced live via background activity. Remaining
+  (Sonnet-friendly): (a) UI control for `intentPass` — Telemetry or Goal panel;
+  (b) prime the chosen actor's prompt with the resolved `need` in `askActor`;
+  (c) per-actor desire blobs as an alternative scoring input; (d) fold the
+  dominance/participation penalty (next item) into the intent prompt.
 - [ ] **Addressee-driven next-speaker routing.** Regex/parse `@Name` or "Bob,
   what do you think?" in the latest message; bump that actor's priority.
   Cheap, big naturalness win even without the two-step pass. Files:
@@ -106,8 +112,10 @@ against. Add a date when status changes.
   medium.
 - [ ] **"Why did this actor speak?" chip.** The director already emits a
   routing reason; surface it as a tiny ℹ chip on each message. Mostly
-  plumbing existing data through to the UI. Files: `turns.js` (persist
-  reason), `Transcript.jsx`. Size: small.
+  plumbing existing data through to the UI. For intent-routed turns this is
+  now backed by `state.lastIntent` (read / need / rationale / confidence) —
+  richer than a bare reason string. Files: `turns.js` (persist reason +
+  lastIntent onto the message), `Transcript.jsx`. Size: small.
 - [ ] **Force-ask UI ("Ask this actor").** Right-click an actor in the
   inspector → "Ask next." Or `@Alice` chip in the composer. Pairs with
   addressee-driven routing. Files: `ActorsPanel.jsx`, `Composer.jsx`,

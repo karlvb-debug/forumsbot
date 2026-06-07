@@ -88,7 +88,12 @@ export const defaultState = {
     // KV cache: freeze transcript at round start so all actors share a byte-identical prefix
     roundSnapshotEnabled: true,
     // Pause between turns when auto-running (seconds, 0 = instant)
-    turnDelay: 0
+    turnDelay: 0,
+    // Director intent pass: how the resolver reasons about who speaks next.
+    //   "off"    — bare name-picker fallback only (cheapest)
+    //   "auto"   — grounded intent pass only when selection is ambiguous (default)
+    //   "always" — reason about the room before every turn (most coherent, most tokens)
+    intentPass: "auto"
   },
   ui: {
     activeTab: "",
@@ -172,6 +177,7 @@ export const defaultState = {
   pendingInjections: [],     // CAP-1: director prompt injection queue
   pendingPrivateMessages: [], // CAP-2: actor-to-actor private message queue
   pendingStyleUpdate: null,  // Phase 3: pending global style proposal awaiting user approval
+  lastIntent: null,          // last director intent pass: { read, need, speaker, rationale, confidence, at }
   scenario: {
     title: "Untitled forum",
     premise: "",

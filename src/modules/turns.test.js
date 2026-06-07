@@ -710,3 +710,70 @@ describe('askActor schema generation based on abilities', () => {
   });
 });
 
+// ── Director Intent Pass (speaker resolution) ─────────────────────────────────
+import { resolveNextSpeaker } from './turns.js';
+import { chatStructured } from './api.js';
+
+describe('resolveNextSpeaker — director intent pass', () => {
+  const alice = { id: 'a1', name: 'Alice', role: 'Analyst', goal: 'Analyze rigorously', enabled: true, color: '#18726d' };
+  const bob = { id: 'a2', name: 'Bob', role: 'Builder', goal: 'Propose concrete plans', enabled: true, color: '#b84738' };
+
+  beforeEach(() => {
+    chatStructured.mockReset();
+    mockState.actors = [alice, bob];
+    // Neutral last message: names no actor → deterministic scoring ties → ambiguous.
+    mockState.messages = [{ type: 'user', speaker: 'You', content: 'Let us begin.' }];
+    mockState.turnQueue = [];
+    mockState.ui = { mentionTarget: null };
+    mockState.scenario = { title: 'T', task: 'Decide a plan', doneWhen: 'A plan is chosen', systems: {} };
+    mockState.memory = { pinnedFacts: [], sharedSummary: '', openQuestions: [], dmState: '' };
+    mockState.lastIntent = null;
+    delete mockState.settings.intentPass; // → defaults to 'auto'
+  });
+
+  it('uses the grounded intent pass to pick a speaker when ambiguous', async () => {
+    chatStructured.mockResolvedValue({ read: 'Fresh start.', need: 'deepen', speaker: 'Bob', rationale: 'Best builder', confidence: 0.8 });
+    const result = await resolveNextSpeaker([alice, bob], { alreadySpokeThisRound: new Set() });
+
+    expect(result?.reason).toBe('intent');
+    expect(result?.actor?.id).toBe('a2');
+    // Confirms it ran the intent prompt, not the bare tiny router.
+    expect(chatStructured.mock.calls[0][0]).toContain('synthesize');
+    expect(mockState.lastIntent?.need).toBe('deepen');
+    expect(mockState.lastIntent?.speaker).toBe('Bob');
+  });
+
+  it('concludes the round when the intent pass returns NONE', async () => {
+    chatStructured.mockResolvedValue({ read: 'Done.', need: 'conclude', speaker: 'NONE', confidence: 0.9 });
+    const result = await resolveNextSpeaker([alice, bob], { alreadySpokeThisRound: new Set() });
+    expect(result).toBeNull();
+  });
+
+  it('falls back to recency when the intent pass names an actor not in the roster', async () => {
+    chatStructured.mockResolvedValue({ need: 'deepen', speaker: 'Nobody', confidence: 0.5 });
+    const result = await resolveNextSpeaker([alice, bob], { alreadySpokeThisRound: new Set() });
+    expect(result?.reason).toBe('recency');
+    expect(result?.actor).toBeTruthy();
+  });
+
+  it('uses the bare tiny router (not the intent pass) when intentPass is off', async () => {
+    mockState.settings.intentPass = 'off';
+    chatStructured.mockResolvedValue({ speaker: 'Alice' });
+    const result = await resolveNextSpeaker([alice, bob], { alreadySpokeThisRound: new Set() });
+    expect(result?.reason).toBe('router');
+    expect(result?.actor?.id).toBe('a1');
+    // The tiny-router system prompt, not the intent taxonomy.
+    expect(chatStructured.mock.calls[0][0]).toContain('Pick exactly one speaker');
+  });
+
+  it('reasons about the room before every turn in always mode', async () => {
+    mockState.settings.intentPass = 'always';
+    // Make scoring decisive for Alice so we can prove intent overrode it.
+    mockState.messages = [{ type: 'actor', speaker: 'Bob', content: 'I just spoke.' }];
+    chatStructured.mockResolvedValue({ read: 'Bob led.', need: 'challenge', speaker: 'Alice', rationale: 'Counter Bob', confidence: 0.7 });
+    const result = await resolveNextSpeaker([alice, bob], { alreadySpokeThisRound: new Set() });
+    expect(result?.reason).toBe('intent');
+    expect(result?.actor?.id).toBe('a1');
+  });
+});
+

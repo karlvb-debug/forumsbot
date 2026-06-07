@@ -188,6 +188,9 @@ function normalizeState(value = {}) {
   if (typeof merged.settings.globalStylePrompt !== "string" || !merged.settings.globalStylePrompt.trim()) {
     merged.settings.globalStylePrompt = defaultState.settings.globalStylePrompt;
   }
+  if (!["off", "auto", "always"].includes(merged.settings.intentPass)) {
+    merged.settings.intentPass = "auto";
+  }
   delete merged.settings.plainLanguageDefault;
   if (!VALID_TABS.includes(merged.ui.activeTab)) {
     merged.ui.activeTab = "";

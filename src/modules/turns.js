@@ -309,7 +309,132 @@ async function tinyRouter(candidates, alreadySpokeThisRound, signal) {
   }
 }
 
-async function resolveNextSpeaker(candidates, { signal, alreadySpokeThisRound = new Set() } = {}) {
+// ── Director Intent Pass ────────────────────────────────────────────────────
+// The grounded successor to the bare tinyRouter. Instead of blindly picking a
+// name, it reads the room against the scenario goal, open questions, and shared
+// summary, decides what the discussion NEEDS next, then chooses the participant
+// best suited to provide it — or NONE when the goal is met or the thread is
+// spent. The read/need/rationale are surfaced live (background activity) and
+// recorded on state.lastIntent so the UI can show why the next speaker was
+// chosen. Gated to the same ambiguity trigger as tinyRouter in "auto" mode, so
+// most turns still cost 0 tokens; "always" mode runs it before every turn.
+
+const INTENT_NEEDS = ['deepen', 'challenge', 'synthesize', 'broaden', 'redirect', 'decide', 'conclude'];
+
+const INTENT_SCHEMA = {
+  type: 'object',
+  properties: {
+    read: { type: 'string' },
+    need: { type: 'string', enum: INTENT_NEEDS },
+    speaker: { type: 'string' },
+    rationale: { type: 'string' },
+    confidence: { type: 'number' }
+  },
+  required: ['need', 'speaker'],
+  additionalProperties: false
+};
+
+const INTENT_SYSTEM = [
+  'You are the discussion director. Read the conversation, decide what it NEEDS next, then choose the one participant best suited to provide it — or NONE if the goal is met or the thread is exhausted.',
+  'Needs:',
+  '- deepen: push the current thread further (its strongest contributor continues)',
+  '- challenge: surface a counterpoint, risk, or missing objection',
+  '- synthesize: pull the open threads together into a clearer picture',
+  '- broaden: bring in a perspective that has not been heard yet',
+  '- redirect: the talk has drifted from the task; steer it back',
+  '- decide: a choice is ripe; push the group to commit',
+  '- conclude: the goal is met or the discussion is spent → speaker "NONE"',
+  'Choose the speaker by fit to the need, not by rotation. Prefer voices that have not just spoken.',
+  'Return JSON only: {"read":"<one sentence on the current state>","need":"<one need>","speaker":"<participant name or NONE>","rationale":"<one clause: why them>","confidence":<0..1>}'
+].join('\n');
+
+async function resolveIntent(eligible, alreadySpokeThisRound, signal) {
+  const available = eligible.filter(a => !alreadySpokeThisRound.has(a.id));
+  if (!available.length) return null;
+
+  const activityId = showBackgroundActivity(
+    'Director is reading the room',
+    'Deciding what the discussion needs next…',
+    'var(--accent)'
+  );
+  try {
+    const sc = state.scenario || {};
+    const mem = state.memory || {};
+
+    const roster = available.map(a => {
+      const aim = trimWords(String(a.goal || a.role || 'participant'), 14);
+      return `- ${a.name} (${a.role || 'participant'}) — ${aim}`;
+    }).join('\n');
+
+    const recent = state.messages
+      .filter(m => m.type !== 'skip' && m.type !== 'management')
+      .slice(-4)
+      .map(m => `${m.speaker}: ${trimWords(String(m.content || ''), 40)}`)
+      .join('\n');
+
+    const openQ = (Array.isArray(mem.openQuestions) ? mem.openQuestions : [])
+      .slice(0, 3)
+      .map(q => (typeof q === 'string' ? q : q?.text || q?.question || ''))
+      .filter(Boolean);
+
+    const goalBlock = [
+      sc.task ? `Task: ${sc.task}` : '',
+      sc.doneWhen ? `Done when: ${sc.doneWhen}` : '',
+      mem.sharedSummary ? `Where things stand: ${trimWords(String(mem.sharedSummary), 60)}` : '',
+      openQ.length ? `Open questions: ${openQ.join('; ')}` : ''
+    ].filter(Boolean).join('\n');
+
+    const user = [
+      goalBlock,
+      goalBlock ? '' : null,
+      `Participants:\n${roster}`,
+      '',
+      `Recent discussion:\n${recent || '(nothing said yet)'}`,
+      '',
+      'What does the discussion need next, and who is best placed to provide it?'
+    ].filter(v => v !== null).join('\n');
+
+    let data;
+    try {
+      data = await chatStructured(INTENT_SYSTEM, user, INTENT_SCHEMA, {
+        temperature: 0.2, maxTokens: 160, signal
+      });
+    } catch (err) {
+      console.warn('[resolver] intent pass failed, using fallback:', err.message);
+      return null;
+    }
+
+    const need = String(data?.need || '').trim();
+    const speakerName = String(data?.speaker || '').trim();
+    state.lastIntent = {
+      read: String(data?.read || '').trim(),
+      need,
+      speaker: speakerName,
+      rationale: String(data?.rationale || '').trim(),
+      confidence: typeof data?.confidence === 'number' ? data.confidence : null,
+      at: new Date().toISOString(),
+    };
+
+    if (!speakerName || speakerName.toUpperCase() === 'NONE') {
+      updateBackgroundActivity(activityId, {
+        detail: need === 'conclude' ? 'Goal looks met — wrapping up.' : 'Natural pause — no one needs to speak.'
+      });
+      return { actor: null, conclude: true, data: state.lastIntent };
+    }
+
+    const matched = available.find(a => a.name.toLowerCase() === speakerName.toLowerCase());
+    updateBackgroundActivity(activityId, {
+      detail: matched
+        ? `Needs to ${need || 'continue'} → ${matched.name}`
+        : `Suggested ${speakerName} (not in roster).`
+    });
+    return { actor: matched || null, conclude: false, data: state.lastIntent };
+  } finally {
+    hideBackgroundActivity(activityId);
+  }
+}
+
+export async function resolveNextSpeaker(candidates, { signal, alreadySpokeThisRound = new Set() } = {}) {
   if (!candidates.length) return null;
   // Filter out actors who already spoke this round
   const eligible = candidates.filter(a => !alreadySpokeThisRound.has(a.id));
@@ -343,6 +468,18 @@ async function resolveNextSpeaker(candidates, { signal, alreadySpokeThisRound = 
     }
   }
 
+  const intentMode = state.settings?.intentPass || 'auto';
+
+  // 3b. Intent pass (always) — reason about the room before falling back to
+  // heuristics. A hallucinated/unmatched name falls through to scoring below.
+  if (intentMode === 'always') {
+    const intent = await resolveIntent(eligible, alreadySpokeThisRound, signal);
+    if (intent) {
+      if (intent.actor) return { actor: intent.actor, reason: 'intent', intent: intent.data };
+      if (intent.conclude) return null; // NONE — natural conclusion
+    }
+  }
+
   // 4. Deterministic scoring
   const scored = scoreCandidates(eligible, alreadySpokeThisRound);
   const top = scored[0];
@@ -351,11 +488,20 @@ async function resolveNextSpeaker(candidates, { signal, alreadySpokeThisRound = 
     return { actor: top.actor, reason: 'score' };
   }
 
-  // 5. Tiny LLM router — only when ambiguous
+  // 5. Ambiguous — grounded intent pass (default), or the bare router when
+  // intent reasoning is disabled. "always" already ran above, so skip here.
   if (eligible.length > 1 && top) {
-    const routed = await tinyRouter(eligible, alreadySpokeThisRound, signal);
-    if (routed === null) return null; // NONE — natural conclusion
-    if (routed) return { actor: routed, reason: 'router' };
+    if (intentMode === 'off') {
+      const routed = await tinyRouter(eligible, alreadySpokeThisRound, signal);
+      if (routed === null) return null; // NONE — natural conclusion
+      if (routed) return { actor: routed, reason: 'router' };
+    } else if (intentMode === 'auto') {
+      const intent = await resolveIntent(eligible, alreadySpokeThisRound, signal);
+      if (intent) {
+        if (intent.actor) return { actor: intent.actor, reason: 'intent', intent: intent.data };
+        if (intent.conclude) return null; // NONE — natural conclusion
+      }
+    }
   }
 
   // 6. Least-recently-spoke fallback
