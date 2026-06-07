@@ -1413,6 +1413,10 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
   const skipAllowed = !forceSpeak && (!twoPhase || !!actor.canResearch || !!actor.canManageCast);
   const docsContext = { hasEditable: false };
   const sysCfg = resolveSystemSettings();
+  // Feature B: valid speaker names for nextSpeaker enum constraint
+  const validSpeakerNames = state.actors
+    .filter(a => a.enabled && a.id !== actor.id && isQueueActor(a))
+    .map(a => a.name);
 
   // Build event context block when this call was fired by a trigger event
   const triggerBlock = options.triggerEvent
@@ -1517,7 +1521,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     }
 
     const directorUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
-    const schema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak });
+    const schema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak, validSpeakerNames });
     const result = await chatJson(directorSystem, directorUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || 600, schema, { toolsAllowed: !!actor.canResearch, tier: thinkingTier, purpose: actor.name });
     result._promptParts = promptParts;
     return result;
@@ -1562,7 +1566,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
       managerSystem = `BACKGROUND MODE: Your response will NOT appear in the transcript. Only your promptInjections, manageActors, nextSpeaker, and privateMessages fields take effect. Omit or leave "message" blank.\n${nextLabel}\n\n` + system;
     }
     const managerUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
-    const managerSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak });
+    const managerSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak, validSpeakerNames });
     return chatJson(managerSystem, managerUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || 600, managerSchema, { toolsAllowed: false, tier: thinkingTier, purpose: actor.name });
   }
 
@@ -1630,7 +1634,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
       researchSystem = `BACKGROUND MODE: Your response will NOT appear in the transcript. Only your promptInjections, manageActors, nextSpeaker, and privateMessages fields take effect. Omit or leave "message" blank.\n${nextLabel}\n\n` + system;
     }
     const researchUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
-    const researchSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak });
+    const researchSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak, validSpeakerNames });
     return chatJson(researchSystem, researchUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || null, researchSchema, { toolsAllowed: researcherToolsEnabled, tier: thinkingTier, purpose: actor.name });
   }
 
@@ -1738,7 +1742,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
   };
 
   const actorUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
-  const actorSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak });
+  const actorSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak, validSpeakerNames });
   const result = await chatJson(actorSystem, actorUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || null, actorSchema, { toolsAllowed: !!actor.canResearch, tier: thinkingTier, purpose: actor.name });
   result._promptParts = promptParts;
   return result;
@@ -2280,6 +2284,8 @@ export async function applyAiResult(participant, result, { justSpokeId = null } 
       }
     } else if (targetActor && targetActor.id === actor.id) {
       console.debug(`[turns] ${actor.name} tried to route to itself — ignored`);
+    } else if (!targetActor) {
+      console.warn(`[handoff] ${actor.name} named unknown nextSpeaker "${result.nextSpeaker}"`);
     }
   }
 

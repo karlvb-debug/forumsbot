@@ -228,7 +228,12 @@ export function buildActorSchema(actor, options = {}) {
 
   const properties = {};
   for (const name of allFields) {
-    properties[name] = FIELDS[name].json;
+    if (name === 'nextSpeaker' && options.validSpeakerNames?.length) {
+      // Constrain to an enum of valid participant names + '' (empty = no suggestion)
+      properties[name] = { type: 'string', enum: [...options.validSpeakerNames, ''] };
+    } else {
+      properties[name] = FIELDS[name].json;
+    }
   }
 
   return {
