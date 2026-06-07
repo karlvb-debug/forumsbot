@@ -38,6 +38,15 @@ export function resolveSystemSettings() {
   };
 }
 
+// Mode-gating helpers used by multiple features.
+// Roleplay = story session with stage directions; work = analytical session.
+function isRoleplayMode() {
+  return !!state.scenario?.systems?.stageDirections?.enabled;
+}
+function hasTask() {
+  return !!String(state.scenario?.task || '').trim();
+}
+
 // Resolve an actor's thinking tier: explicit override, else a sensible default by
 // role. Directors and document writers reason; ordinary characters in a roleplay
 // scene don't need to (their "thought" is just latency); everyone else fakes it
@@ -345,7 +354,8 @@ const INTENT_SCHEMA = {
     need: { type: 'string', enum: INTENT_NEEDS },
     speaker: { type: 'string' },
     rationale: { type: 'string' },
-    confidence: { type: 'number' }
+    confidence: { type: 'number' },
+    stuck: { type: 'boolean' }
   },
   required: ['need', 'speaker'],
   additionalProperties: false
@@ -419,6 +429,7 @@ async function resolveIntent(eligible, alreadySpokeThisRound, signal) {
       speaker: speakerName,
       rationale: String(data?.rationale || '').trim(),
       confidence: typeof data?.confidence === 'number' ? data.confidence : null,
+      stuck: !!data?.stuck,
       at: new Date().toISOString(),
     };
 
@@ -1860,7 +1871,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   // Small models pay most attention to start and end of prompt.
   const roleReminder = kind === "actor" && (participant.role || participant.goal || participant.voice)
     ? [
-        `Reminder — you are ${participant.name}${participant.role ? `, ${participant.role}` : ""}.`,
+        `You are ${participant.name}${participant.role ? `, ${participant.role}` : ""}.`,
         participant.goal ? `Your responsibility: ${participant.goal}` : "",
         participant.voice ? `Your voice: ${participant.voice}` : ""
       ].filter(Boolean).join(" ")
@@ -2011,6 +2022,20 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
             ? "You are the Researcher. Analyze the open questions, run a web search using `[SEARCH: query]` in your thought field if facts are needed, cite your sources, and skip your turn if no further research is required right now."
             : "Take your next turn now. Write as you would speak aloud in a real conversation — plain English, direct, natural rhythm. One to three sentences is usually enough. Do NOT use filler openers (e.g. 'Certainly', 'Absolutely', 'Great point', 'It's worth noting', 'In conclusion', 'I would argue that', 'Building on that'). Do NOT use hedging academic constructions. Say the thing directly.")
         : "Take the director turn now. Be brief and direct. Keep summaries and guidance to plain conversational English — no formal preamble.",
+      // Anti-meta-commentary: prevent actors from narrating their role instead of performing it
+      kind === "actor" ? "Do not narrate your role (\"As a {role}, I would…\") — just speak/act." : "",
+      // Anti-repetition: push new content
+      kind === "actor"
+        ? (isRoleplayMode()
+            ? "Don't repeat the previous beat verbatim; move it forward."
+            : "Don't restate what was just said; add something new.")
+        : "",
+      // Proactivity: push toward resolution
+      kind === "actor"
+        ? (isRoleplayMode()
+            ? "Move the scene forward."
+            : "Push the discussion toward a decision.")
+        : "",
       deferredNote,
       facilitatorDirective
     ].filter(Boolean).join("\n\n");
@@ -2124,6 +2149,7 @@ export function memoryBlock(recallChunks) {
 
   return [
     "### Long-term memory",
+    "(This memory is a partial digest — if something needed isn't here, ask or proceed with a stated assumption.)",
     pinnedStr ? `**Pinned facts:**\n${trimWords(pinnedStr, WORD_LIMITS.sharedSummary)}` : "Pinned facts: none.",
     anchorLines ? `**Anchored agreements (settled — do not re-argue these):**\n${trimWords(anchorLines, ANCHOR_WORD_CAP)}` : "",
     state.memory.sharedSummary ? `**Shared summary:**\n${trimWords(state.memory.sharedSummary, WORD_LIMITS.sharedSummary)}` : "Shared summary: none yet.",
