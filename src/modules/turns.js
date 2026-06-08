@@ -400,6 +400,18 @@ async function tinyRouter(candidates, alreadySpokeThisRound, signal) {
 
 const INTENT_NEEDS = ['deepen', 'challenge', 'synthesize', 'broaden', 'redirect', 'decide', 'conclude'];
 
+// Per-need token budgets for actor turns. Keeps simple reactions short without
+// truncating complex proposals. Applied only when the intent pass ran for this actor.
+const NEED_TOKEN_BUDGET = {
+  redirect:   200,
+  conclude:   250,
+  challenge:  450,
+  decide:     450,
+  deepen:     500,
+  broaden:    500,
+  synthesize: 900,
+};
+
 const INTENT_SCHEMA = {
   type: 'object',
   properties: {
@@ -1612,7 +1624,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
 
     const directorUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
     const schema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak, validSpeakerNames });
-    const result = await chatJson(directorSystem, directorUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || 600, schema, { toolsAllowed: !!actor.canResearch, tier: thinkingTier, purpose: actor.name });
+    const result = await chatJson(directorSystem, directorUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || 1200, schema, { toolsAllowed: !!actor.canResearch, tier: thinkingTier, purpose: actor.name });
     result._promptParts = promptParts;
     return result;
   }
@@ -1657,7 +1669,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     }
     const managerUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
     const managerSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak, validSpeakerNames });
-    return chatJson(managerSystem, managerUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || 600, managerSchema, { toolsAllowed: false, tier: thinkingTier, purpose: actor.name });
+    return chatJson(managerSystem, managerUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || 1200, managerSchema, { toolsAllowed: false, tier: thinkingTier, purpose: actor.name });
   }
 
   if (actor.canResearch) {
@@ -1737,13 +1749,22 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     const li = state.lastIntent;
     if (!li?.need || !li?.speaker) return '';
     if (li.speaker.toLowerCase() !== actor.name.toLowerCase()) return '';
-    if (Date.now() - new Date(li.at).getTime() > 10000) return '';
+    if (Date.now() - new Date(li.at).getTime() > 60_000) return '';
     const suffix = li.rationale ? ` (${li.rationale})` : '';
     let hint = frag('participant_intent_hint', { need: li.need, rationale: suffix });
     if (li.expectedOutput) {
       hint += `\nTHIS TURN, produce: ${li.expectedOutput}`;
     }
     return hint;
+  })();
+
+  // Derive a per-turn token budget from the intent need. Same freshness window.
+  const intentBudget = (() => {
+    const li = state.lastIntent;
+    if (!li?.need || !li?.speaker) return null;
+    if (li.speaker.toLowerCase() !== actor.name.toLowerCase()) return null;
+    if (Date.now() - new Date(li.at).getTime() > 60_000) return null;
+    return NEED_TOKEN_BUDGET[li.need] || null;
   })();
 
   const relationships = relationshipBlock(actor);
@@ -1755,6 +1776,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     actor.voice ? `Voice: ${actor.voice}` : "",
     actor.voice ? "" : globalStyleInstruction(),
     actor.exampleDialogue ? `How ${actor.name} speaks:\n${actor.exampleDialogue}` : "",
+    "LENGTH: Match response length to the turn. Reactions, questions, and redirects: 2–3 sentences. Proposals, analysis, and synthesis: as long as needed, no padding.",
     relationships,
     contextLine,
     intentHint,
@@ -1838,8 +1860,8 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
   let actorUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
   if (options.correction) actorUser += `\n\n[CORRECTION: ${options.correction}]`;
   const actorSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak, validSpeakerNames });
-  // Feature H: dynamic maxTokens — injection override > options override > actor default
-  const dynamicMaxTokens = _lastInjectionMaxTokens || options.maxTokensOverride || actor.maxTokens || null;
+  // Feature H: dynamic maxTokens — injection override > intent budget > options override > actor default
+  const dynamicMaxTokens = _lastInjectionMaxTokens || intentBudget || options.maxTokensOverride || actor.maxTokens || null;
   _lastInjectionMaxTokens = null; // consume
   const result = await chatJson(actorSystem, actorUser, actor.temperature ?? state.settings.temperature, signal, onStream, dynamicMaxTokens, actorSchema, { toolsAllowed: !!actor.canResearch, tier: thinkingTier, purpose: actor.name });
   result._promptParts = promptParts;

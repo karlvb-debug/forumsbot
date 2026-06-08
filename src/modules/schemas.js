@@ -231,6 +231,10 @@ export function buildActorSchema(actor, options = {}) {
     if (name === 'nextSpeaker' && options.validSpeakerNames?.length) {
       // Constrain to an enum of valid participant names + '' (empty = no suggestion)
       properties[name] = { type: 'string', enum: [...options.validSpeakerNames, ''] };
+    } else if (name === 'thought' && !options.showThoughts) {
+      // Cap the thought field when thoughts are hidden so grammar-constrained models
+      // can't exhaust the token budget on scratch notes before reaching `message`.
+      properties[name] = { type: 'string', maxLength: 80 };
     } else {
       properties[name] = FIELDS[name].json;
     }

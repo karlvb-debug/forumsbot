@@ -224,7 +224,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
       `Source turns:\n${formatTranscript(usableMessages, 1600)}`
     ].filter(Boolean).join("\n\n");
 
-    const content = await chatCompletion(system, user, { temperature: 0.2, maxTokens: 1600, signal, tier: 'reason' });
+    const content = await chatCompletion(system, user, { temperature: 0.2, maxTokens: 2800, signal, tier: 'reason' });
     const parsed = parseMemoryJson(content);
     if (!parsed) {
       console.warn('[memory] Summary parse failed — preserving existing memory');
