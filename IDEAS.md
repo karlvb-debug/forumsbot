@@ -41,6 +41,17 @@ against. Add a date when status changes.
   `state.lastIntent` and surfaced live via background activity. Remaining
   (Sonnet-friendly): (a) UI control for `intentPass` — Telemetry or Goal panel;
   (b) prime the chosen actor's prompt with the resolved `need` in `askActor`;
+- [ ] **Persist intent pass results to the message log.** `state.lastIntent`
+  is currently ephemeral — it shapes the next turn but isn't recorded anywhere
+  durable. Appending each intent result as a `type: "intent"` message (hidden
+  from the transcript UI but present in the log and debug exports) would give
+  a complete audit trail: why each actor was chosen, what the discussion was
+  judged to need, confidence over time. Inspired by Temporal's event-sourcing
+  model — the execution history becomes the source of truth, not just derived
+  state. Enables: replay analysis, "why did this actor speak?" chip (already
+  in the UX backlog), and future session-diff tooling.
+  Files: `turns.js` (`resolveIntent`), `state.js`, `Transcript.jsx` (filter
+  intent messages from display). Size: small.
   (c) per-actor desire blobs as an alternative scoring input; (d) fold the
   dominance/participation penalty (next item) into the intent prompt.
 - [x] **Addressee-driven next-speaker routing.** (2026-06) `detectAddressedActor`
