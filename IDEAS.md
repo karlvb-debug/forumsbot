@@ -43,10 +43,21 @@ against. Add a date when status changes.
   (b) prime the chosen actor's prompt with the resolved `need` in `askActor`;
   (c) per-actor desire blobs as an alternative scoring input; (d) fold the
   dominance/participation penalty (next item) into the intent prompt.
-- [ ] **Addressee-driven next-speaker routing.** Regex/parse `@Name` or "Bob,
-  what do you think?" in the latest message; bump that actor's priority.
-  Cheap, big naturalness win even without the two-step pass. Files:
-  `turns.js`. Size: small.
+- [x] **Addressee-driven next-speaker routing.** (2026-06) `detectAddressedActor`
+  in `turns.js` parses `@Name` and `"Name,"` / `"Name?"` patterns in the latest
+  message; `state.ui.mentionTarget` handles explicit @-mention routing from the
+  composer. Both are checked as priority steps 1–2 in `resolveNextSpeaker`.
+- [ ] **Devil's Advocate actor preset.** Built-in actor template pre-configured
+  to adversarially challenge whatever the group is converging on. Key addition:
+  wire the intent pass so the Director routes to it specifically when
+  `need === 'challenge'` or when consecutive turns show high cosine similarity
+  (sycophancy signal). Files: actor preset list / `blueprints.js`, `turns.js`
+  (intent routing hint in `askActor`). Size: small.
+- [ ] **External shock injection.** Director action (or user button) that fires a
+  crisis scenario mid-session via `pendingInjections` — "the market just
+  collapsed, does your plan survive?" Fits the existing injection system; needs a
+  UI affordance (button in Scenario panel or Composer). Files: `turns.js`,
+  `ScenarioPanel.jsx` or `Composer.jsx`. Size: small.
 - [ ] **Backchannels.** `actor.backchannel: true` schema flag — when enabled
   the actor can emit a short acknowledgment ("Agreed.", "Hold on —")
   instead of a full paragraph. Drops max_tokens, skips full prompt context.
@@ -124,6 +135,47 @@ boundary conditions.
 Specific vetted use cases that emerged: Gamified Skill Acquisition, Scenario
 Simulation, Generative Worldbuilding, Cultural/Societal Simulation,
 Metacognitive Coaching, Self-Reflective Bias Identification.
+
+## Session-analysis findings (2026-06-08)
+
+6-actor brainstorming session, 69 messages, model `gemma-4-e4b-uncensored`
+(4096-token context), LM Studio. 15 t/s average. 0 parse failures on the
+actors that completed; 2 parse-fail skips.
+
+### Bugs / action items
+
+- [ ] **Thought field bleeds into message on non-compliant models.** ~10 messages
+  start mid-word (`n to feed`, `gh—how about`). Raw completions confirm the model
+  splits a word across the `thought`/`message` JSON field boundary. No extraction
+  bug — the model generates it wrong. Mitigation: when `showThoughts: false`,
+  remove `thought` from the actor schema entirely (or cap it to ~40 chars) so
+  the model can't burn the field budget before `message`. Files: `schemas.js`,
+  `turns.js` (`buildActorSchema`). Size: small.
+- [ ] **Pause storm despite `allowedReasons: []`.** Session had 29 pause messages
+  with `pausePolicy.allowedReasons: []` set — all reasons should be suppressed.
+  The June-07 fix gated `addMessage` on `allowed`, but this session suggests a
+  remaining path. Investigate whether empty `allowedReasons` is treated as
+  "allow none" or "allow all defaults" at the enforcement site.
+  Files: `turns.js` (`applyAiResult` pause path). Size: small.
+- [ ] **Persona breaks not caught by output guardrail.** Several turns produced
+  meta-commentary instead of in-character speech: `"Anya will speak next."`,
+  `"Here is the completed JSON object."`, `"My mandate is to…"`, `"the directive
+  implies I should assume…"`. These pass the `validateActorOutput` length/filler
+  check. Add a fast regex gate for common meta-commentary signals before the
+  retry. Files: `turns.js` (`validateActorOutput`). Size: trivial.
+
+### Observations (no action needed)
+
+- Intent pass quality: last intent had `confidence: 0.9`, correctly routing to
+  IdeaSparker to challenge the CoE/Velocity binary with a third path.
+  `expectedOutput` was specific and useful — the feature is working.
+- Plan stepped correctly through all 4 stages over the session.
+- Memory healthy: 30 pinned facts, coherent shared summary, open questions
+  correctly tracked.
+- Model note: `gemma-4-e4b-uncensored` doesn't support `response_format:
+  json_schema` (grammar-constrained JSON); falls back to code-fence output.
+  Schema enforcement is nil on this model — persona collapses and field-boundary
+  errors are expected. Recommend `google/gemma-4-12b-qat` for better compliance.
 
 ## Memory & context
 
@@ -245,54 +297,19 @@ reading papers.
 Running notes from auditing the Inspector panels for (a) controls bound to
 dead/removed systems, and (b) live systems with no UI control.
 
-### Documents panel — wiring is fine, layout is cramped, three orphans
+### Documents panel — layout density, two open items
 
-Every control fires a live consumer. No dead UI. The problems are
-layout density, missing controls for important state, and a couple of
-orphans.
+Phase 1 + 2 + 3 shipped (2026-06): scribeMode selector in header, pending
+badge, Writer Queue, unified list + filter chips, content preview, search,
+drag-reorder, bulk select/delete, file/folder/clipboard import.
 
-Missing UI for live state:
-- [ ] `scribeMode` lives only in DocEditorStage. It's a session-level
-  setting (`state.documentWriting.scribeMode`) that affects every
-  writable document. Belongs in the panel header next to the writer
-  dropdown.
-- [ ] Pending review counts: `pendingDocumentEdits` and
-  `pendingScribeSuggestions` are shown per-doc in the editor but the
-  panel list has no badge. Add header count + per-row indicator.
-- [ ] `state.documentTasks` orphan. Created by
-  `createDocumentTask` (`documentWriting.js:56`), no UI anywhere.
-  Either build queue UI under the Writer header or remove the field.
-
-Layout / UX:
-- [ ] Working vs Reference split is artificial — just `aiEditable`
-  filter rendered as two cards with duplicate add-buttons. Merge
-  into one list with filter chips (All / Writable / Reference /
-  Pending) + one Add button group.
-- [ ] DocRow main row crams 7 elements in a flex (chevron, type
-  badge, title input, Nw, vN, Writable, Expand, Toggle). Title
-  input gets squeezed. Switch to fixed-grid columns with clear
-  regions for title / meta / actions.
-- [ ] Expanded settings mix inline (toggles, dropdown) and vertical
-  (textareas) layouts inconsistently. Pick one rhythm.
-- [ ] Open Editor button is duplicated (icon in collapsed row, label
-  in expanded). Drop the expanded one.
-- [ ] No content preview in collapsed row — add ~50 chars under
-  title.
-- [ ] No search / filter input.
-- [ ] No drag-and-drop reorder. Doc order matters for
-  `buildKbSection` packing.
-- [ ] No bulk operations (enable / disable / delete multiple).
-- [ ] No file or clipboard import for doc content. Today you have to
-  open the editor and paste.
-
-Phased build mirrors Library/Sessions pattern:
-- Phase 1 (biggest win): single list + filter chips + scribeMode in
-  header + pending badge + row layout fix + drop duplicate Open
-  button.
-- Phase 2: search, bulk select, content preview, drag reorder,
-  import from file/clipboard.
-- Phase 3: decide on `documentTasks` — surface as a queue or
-  remove.
+Remaining:
+- [ ] DocRow main row is still dense (chevron, type badge, title input, word
+  count, version, AI badge, preview btn, expand btn, toggle). Switch to
+  fixed-grid columns with clear regions for title / meta / actions when
+  revisiting the panel.
+- [ ] Expanded settings mix inline (toggles, dropdown) and vertical (textareas)
+  layouts inconsistently. Pick one rhythm.
 
 ### Sessions panel — same UX problems as Library, plus hidden behavior
 
@@ -645,3 +662,9 @@ remove. Adds/relocations:
   Commit `c123c7b`.
 - [x] **Show thoughts on skipped turns** (2026-06) — skip render path now
   includes the thought block. Commit `5655ab1`.
+- [x] **Addressee-driven next-speaker routing** (2026-06) — `detectAddressedActor`
+  parses `@Name` and `"Name,"` / `"Name?"` patterns; `state.ui.mentionTarget`
+  handles @-mention routing from the composer. Steps 1–2 in `resolveNextSpeaker`.
+- [x] **Documents panel Phase 1 + 2 + 3** (2026-06) — scribeMode selector,
+  pending badge, Writer Queue UI, unified list + filter chips, content preview,
+  search, drag-reorder, bulk select/delete, file/folder/clipboard import.
