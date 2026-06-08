@@ -67,6 +67,18 @@ against. Add a date when status changes.
   monopolize. Trivial once intent-pass exists. Files: `turns.js`. Size: small.
 - [ ] **Conversational repair.** When `openQuestions` has an entry that's
   stayed unanswered for N turns, nudge the next speaker to address it.
+- [ ] **Pending-reply queue (soft addressee routing).** When an actor
+  addresses another by name in their message, record it in
+  `state.pendingAddressees` (populated in `applyAiResult`, drained when
+  the addressed actor speaks). Pass the queue as context to the intent
+  pass so the addressed actor gets a scheduling boost without a hard
+  override — other actors can still interject. After N turns with no
+  response, escalate to a forced route. Note: self-nomination (`wantsToReply`
+  flag) was considered and rejected — non-speaking actors don't execute,
+  so there is nowhere to write the flag. Passive inference from the
+  speaking actor's output is the only viable signal.
+  Files: `turns.js` (`applyAiResult`, `resolveIntent` context block),
+  `state.js`, `constants.js`. Size: small.
   Files: `turns.js`, `memory.js`. Size: small.
 - [ ] **Adjacency-pair routing.** Question → answer, then control returns
   upward instead of cascading. Linguistic concept worth encoding as a
