@@ -136,7 +136,7 @@ Specific vetted use cases that emerged: Gamified Skill Acquisition, Scenario
 Simulation, Generative Worldbuilding, Cultural/Societal Simulation,
 Metacognitive Coaching, Self-Reflective Bias Identification.
 
-## Session-analysis findings (2026-06-08)
+## Session-analysis findings (2026-06-08, run 2)
 
 6-actor brainstorming session, 69 messages, model `gemma-4-e4b-uncensored`
 (4096-token context), LM Studio. 15 t/s average. 0 parse failures on the
@@ -176,6 +176,70 @@ actors that completed; 2 parse-fail skips.
   json_schema` (grammar-constrained JSON); falls back to code-fence output.
   Schema enforcement is nil on this model — persona collapses and field-boundary
   errors are expected. Recommend `google/gemma-4-12b-qat` for better compliance.
+
+## Session-analysis findings (2026-06-08, run 3)
+
+6-actor brainstorm, **model: `google/gemma-4-12b-qat`**, 18 messages, 3 rounds,
+8 t/s average. Same cast as run 2. Major quality jump over the 4B.
+
+### Comparison vs 4B (run 2)
+
+| Metric | 4B (run 2) | 12B (run 3) |
+|---|---|---|
+| Parse failures | 2 (hard skips) | 1 (regex fallback recovered) |
+| Pause storm | 29 messages | 0 |
+| Mid-word truncation | ~10 messages | 0 |
+| Persona breaks | Several | 0 |
+| Content quality | Fragmented | Coherent, on-topic |
+
+### Remaining issues
+
+- [ ] **Thought field overflow still happens at 12B.** One parse failure: Business
+  Innovator wrote a 2367-char `thought` and hit `max_tokens` before reaching the
+  `message` field — identical failure mode to run 2, just rarer. Priority fix:
+  when `showThoughts: false`, remove the `thought` field from the schema entirely
+  (or cap at ~40 chars). Files: `schemas.js`, `turns.js` (`buildActorSchema`).
+  **Size: small. Should land before MCP work.**
+- [ ] **Intent pass firing too often.** 7 intent-pass calls for 17 actor turns
+  (~41% of turns). Each adds ~9s latency. The `auto` threshold may be too
+  broad — check the ambiguity signal in `resolveIntent`. Files: `turns.js`. Size:
+  small.
+- [ ] **Summarizer hits token cap on 3 of 4 calls.** 1600-token ceiling reached
+  each time (one at 2918 — the planner). Summarizer is being cut off. Consider
+  raising `maxTokens` for `reason`-tier summarizer calls, or chunking the output.
+  Files: `turns.js`, `memory.js`. Size: small.
+- [ ] **One summarizer call still shows `tier: null`.** The June-07 tier-logging
+  fix didn't cover this call site. Files: `turns.js`. Size: trivial.
+
+### Observations (no action needed)
+
+- Intent pass: `need: "challenge"`, confidence 0.85, correctly routing to Muse
+  for creative pushback. Feature is working well.
+- Context pressure: 85% (3498/4096) by round 3. Expected for a 4096-context
+  model; not a bug.
+- Token speed down to 8 t/s from 15 t/s (4B) — expected for a 3× larger model.
+
+### Brainstormed ideas from this session
+
+The actors were brainstorming features for the app itself. Ideas worth keeping:
+
+- [ ] **Dynamic Narrative Branching.** In story sessions, actors vote on which
+  story path to take based on their persona and goals — majority or
+  confidence-weighted vote decides the next narrative beat. Variant: a "Live
+  Prompt Engineering" panel where the user adjusts actor voting weights in
+  real-time as the story unfolds. Files: `turns.js` (new vote-collection pass),
+  new UI chip. Size: medium.
+- [ ] **Lore Synthesizer / Living Mythos.** For world-building sessions: ingest
+  disconnected user notes, synthesize them into a consistent timeline/encyclopedia,
+  then identify "narrative voids" (gaps in user detail) and fill them with
+  generated legends, rumors, or lost records that feel organic rather than
+  placeholder. Distinct from the existing document system — it's generative
+  gap-filling, not just storage. Files: new `lore.js` module, `DocumentsPanel.jsx`
+  (new tab or scribe mode). Size: large.
+- (Note: **Adversarial Perspective Injection** and the three-tier
+  Proposal→Challenge→Arbitration hierarchy are covered by the Devil's Advocate
+  preset + existing Director arbitration. The "Logic Stress Test" variant is
+  just a blueprint with opposing-goal actors — doable today with no code change.)
 
 ## Memory & context
 
