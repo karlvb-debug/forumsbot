@@ -668,3 +668,9 @@ remove. Adds/relocations:
 - [x] **Documents panel Phase 1 + 2 + 3** (2026-06) — scribeMode selector,
   pending badge, Writer Queue UI, unified list + filter chips, content preview,
   search, drag-reorder, bulk select/delete, file/folder/clipboard import.
+- [x] **Routing, Prompt, Validation & Context plan** (2026-06) — all 9 features
+  shipped: intent-pass retry (A), nextSpeaker enum (B), post-history persona
+  reminder (C), per-actor exampleDialogue (D), planning pre-pass (E), output
+  guardrails + retry (F), emergency mid-round summarization (G), expected-output
+  + dynamic maxTokens (H), prose prompt-gaps / stuck flag (I).
+  `FEATURE_IMPLEMENTATION_PLAN.md` deleted.
