@@ -1860,8 +1860,9 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
   let actorUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
   if (options.correction) actorUser += `\n\n[CORRECTION: ${options.correction}]`;
   const actorSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak, validSpeakerNames });
-  // Feature H: dynamic maxTokens — injection override > intent budget > options override > actor default
-  const dynamicMaxTokens = _lastInjectionMaxTokens || intentBudget || options.maxTokensOverride || actor.maxTokens || null;
+  // Feature H: dynamic maxTokens — injection override > per-actor setting > intent budget > options override > null (→ settings.maxTokens)
+  // actor.maxTokens sits above intentBudget so explicit user settings always win over automatic budgeting.
+  const dynamicMaxTokens = _lastInjectionMaxTokens || options.maxTokensOverride || actor.maxTokens || intentBudget || null;
   _lastInjectionMaxTokens = null; // consume
   const result = await chatJson(actorSystem, actorUser, actor.temperature ?? state.settings.temperature, signal, onStream, dynamicMaxTokens, actorSchema, { toolsAllowed: !!actor.canResearch, tier: thinkingTier, purpose: actor.name });
   result._promptParts = promptParts;
