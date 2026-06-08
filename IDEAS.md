@@ -213,6 +213,51 @@ actors that completed; 2 parse-fail skips.
   style reminder more aggressively when it dips. Files: `telemetry.js`,
   `turns.js`. Size: medium.
 
+## Tools & MCP
+
+forumsbot as an **MCP client** — actors can call real tools (web search, file
+read, SQLite memory, RAG) during a turn. LM Studio stays as the inference
+backend unchanged; MCP is an execution layer underneath the existing text-tag
+system.
+
+Architecture: session config declares which MCP servers to connect to → on
+session start forumsbot opens connections and fetches tool lists → available
+tools are auto-appended to each actor's system prompt as text-tag examples
+(local models understand `[SEARCH: query]` better than raw JSON tool schemas)
+→ when an actor emits a recognized tag the turn loop intercepts it, calls the
+MCP server, injects `[Tool result: …]`, and re-runs the turn.
+
+Use cases that motivated this:
+- Large codebase: filesystem MCP + embeddings RAG server
+- Epic roleplay campaign: `@modelcontextprotocol/server-sqlite` for persistent
+  queryable world-state and character memory
+- Research session: Brave/Exa search MCP + fetch MCP for live web access
+- Any session: expose the forumsbot KB store as a custom MCP server so actors
+  can query the session's own document base
+
+Practical note: tool-use reliability scales with model capability. Gemma-4 will
+be erratic; a larger Qwen3 or Mistral with grammar-constrained output will work
+much better. The text-tag interface is intentionally low-bar to fit small
+models.
+
+- [ ] **`src/modules/mcp.js` — MCP client core.** Connect to configured MCP
+  servers (stdio or HTTP/SSE transport via `@modelcontextprotocol/sdk`), list
+  tools, execute calls, surface errors as injected context. Size: medium.
+- [ ] **Session MCP config.** Per-session array of server configs (similar to
+  actor configs). UI: "Tools" section in Scenario or Connection panel showing
+  enabled servers + their discovered tool names. Size: medium.
+- [ ] **Tool injection into system prompts.** Auto-append "Available Tools"
+  block to each actor prompt listing only the tools from connected servers,
+  formatted as text-tag examples with parameter descriptions. Files:
+  `turns.js` (`buildActorPrompt`). Size: small.
+- [ ] **Turn loop tag interception.** Generalize the existing `[SEARCH:]` /
+  `[READ:]` intercept in `applyAiResult` to route any `[TOOLNAME: args]` block
+  through the MCP call registry. Result injected before re-run. Files:
+  `turns.js`. Size: medium.
+- [ ] **Preset server bundles.** Named bundles the user can toggle per session
+  type — "Research" (search + fetch), "Roleplay" (SQLite memory), "Codebase"
+  (filesystem + RAG). Lowers config friction. Size: small.
+
 ## Documents
 
 - [ ] **Document semantic retrieval.** Replace the even-cap per-doc
