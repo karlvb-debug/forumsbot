@@ -384,7 +384,6 @@ export function TelemetryPanel() {
       <details className="card card-disclosure">
         <summary className="card-title">
           <h3>Settings</h3>
-          <span className="disclosure-sub">diagnostics · tracing</span>
         </summary>
         <div className="disclosure-body">
           <Toggle
