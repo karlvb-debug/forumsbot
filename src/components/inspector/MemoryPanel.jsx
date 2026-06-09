@@ -74,6 +74,7 @@ export function MemoryPanel() {
         <button className={section === "facts" ? "active" : ""} onClick={() => setSection("facts")}>Facts</button>
         <button className={section === "summary" ? "active" : ""} onClick={() => setSection("summary")}>Summary</button>
         <button className={section === "anchors" ? "active" : ""} onClick={() => setSection("anchors")}>Anchors</button>
+        <button className={section === "actors" ? "active" : ""} onClick={() => setSection("actors")}>Actors</button>
         <button className={section === "outcomes" ? "active" : ""} onClick={() => setSection("outcomes")}>Outcomes</button>
       </div>
 
@@ -170,6 +171,51 @@ export function MemoryPanel() {
             ))}
             {!anchors.length && <div className="empty">Click ⚓ on a message to anchor a new claim.</div>}
           </div>
+        </div>
+      )}
+
+      {section === "actors" && (
+        <div>
+          {actors.filter(a => a.enabled !== false).length === 0 && (
+            <div className="card"><div className="empty">No active actors.</div></div>
+          )}
+          {actors.filter(a => a.enabled !== false).map(actor => {
+            const rels = actor.relationships && typeof actor.relationships === 'object'
+              ? Object.entries(actor.relationships).filter(([, v]) => v)
+              : [];
+            return (
+              <div className="card" key={actor.id} style={{ marginBottom: 10 }}>
+                <div className="card-title">
+                  <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: actor.color || 'var(--fg-faint)', display: 'inline-block', flexShrink: 0 }} />
+                    {actor.name}
+                  </h3>
+                  <span className="badge">{actor.role}</span>
+                </div>
+                <div className="field-hint" style={{ marginBottom: 6 }}>Private memory — injected into this actor's prompt each turn.</div>
+                <textarea
+                  rows={4}
+                  value={actor.thoughts || ''}
+                  placeholder="No memory yet."
+                  onChange={e => mutateState(s => {
+                    const a = s.actors.find(x => x.id === actor.id);
+                    if (a) a.thoughts = e.target.value;
+                  })}
+                />
+                {rels.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <div className="field-hint" style={{ marginBottom: 4 }}>Relationships</div>
+                    {rels.map(([name, opinion]) => (
+                      <div key={name} className="card-row" style={{ alignItems: 'flex-start', gap: 6 }}>
+                        <span className="lbl" style={{ minWidth: 80, flexShrink: 0 }}>{name}</span>
+                        <span className="val" style={{ whiteSpace: 'pre-wrap', textAlign: 'left' }}>{opinion}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
