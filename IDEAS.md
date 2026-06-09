@@ -360,12 +360,13 @@ models.
 Batch #1–5 (emoji→SVG icons, stale subtitles, surfaced density/accent in the
 command palette, ReadinessStrip→CSS, topbar overflow menu) shipped. Queued:
 
-- [ ] **Run-control consolidation (#6).** Continue-mode (Next/Round/Auto) is
-  smeared across the Topbar selector, the Composer's send button label, the
-  mobile More sheet, the command palette, and Alt+N/R/A. Collapse to one
-  split-button (primary "Continue" action + caret dropdown for the mode) in a
-  single location. Biggest usability win. Files: `Topbar.jsx`, `Composer.jsx`,
-  `App.jsx`, CSS. Size: medium.
+- [x] **Run-control consolidation (#6).** (2026-06-09) Replaced the three
+  look-alike Topbar mode buttons (which only armed the mode, never ran) with a
+  single `RunControl` split-button: primary segment runs the current mode and
+  becomes Stop while auto-running; caret opens a menu to switch mode (arms
+  only — won't accidentally trigger an expensive auto-run). Composer Send/
+  Continue, Enter, and Alt+N/R/A unchanged. Files: `RunControl.jsx` (new),
+  `Topbar.jsx`, CSS.
 - [ ] **Nav IA reshuffle (#7–8).** The 12-item rail's "advanced" tier is a junk
   drawer (You/Memory/Telemetry/Auto-Stop/Documents/Library/Sessions/Prompts).
   Regroup into Build (Scenario, Actors, Connection, Library) / Inspect (Memory,

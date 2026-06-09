@@ -292,34 +292,54 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
 }
 
 
-.run-controls {
-  display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--bg-card);
-}
-.run-controls button {
-  appearance: none; background: transparent; border: 0; color: var(--fg-mute);
-  padding: 6px 11px;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: var(--fs-sm);
+/* Run control — split button (primary runs the current mode, caret picks it) */
+.run-control { position: relative; display: inline-flex; }
+.run-control-main,
+.run-control-caret {
+  appearance: none; border: 1px solid var(--border); color: var(--accent-fg);
+  background: var(--accent);
+  cursor: pointer; font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: 600;
   display: inline-flex; align-items: center; gap: 5px;
-  border-right: 1px solid var(--border-soft);
   transition: background 0.12s, color 0.12s;
   white-space: nowrap;
 }
-.run-controls button:last-child { border-right: 0; }
-.run-controls button:hover { background: var(--bg-elev); color: var(--fg); }
-.run-controls button.active {
-  background: var(--accent);
-  color: var(--accent-fg);
-  font-weight: 600;
+.run-control-main {
+  padding: 6px 12px; border-radius: 8px 0 0 8px; border-right: 0;
 }
-.run-controls button.active:hover {
+.run-control-caret {
+  padding: 6px 6px; border-radius: 0 8px 8px 0;
+}
+.run-control-main:hover,
+.run-control-caret:hover,
+.run-control-caret.active {
   background: oklch(from var(--accent) calc(l + 0.04) c h);
 }
+.run-control-caret { border-left: 1px solid oklch(from var(--accent-fg) l c h / 0.25); }
+.run-control-main.danger {
+  background: var(--danger); color: #fff; border-color: var(--danger);
+  border-radius: 8px; border-right: 1px solid var(--danger);
+}
+.run-control-main.danger:hover { background: oklch(from var(--danger) calc(l + 0.05) c h); }
+
+.run-control-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 60;
+  min-width: 240px; padding: 4px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+  display: flex; flex-direction: column; gap: 1px;
+}
+.run-control-menu button {
+  appearance: none; background: transparent; border: 0; cursor: pointer;
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 9px; border-radius: 6px;
+  color: var(--fg-dim); font-size: 13px; text-align: left; width: 100%;
+}
+.run-control-menu button:hover { background: var(--bg-elev); color: var(--fg); }
+.run-control-menu button.checked { color: var(--accent); }
+.run-mode-label { font-weight: 600; }
+.run-mode-desc { color: var(--fg-mute); font-size: 12px; }
+.run-mode-mark { margin-left: auto; color: var(--accent); }
+.run-mode-hint { margin-left: auto; color: var(--fg-faint); font-family: var(--font-mono); font-size: 10.5px; }
 
 .icon-btn {
   appearance: none; background: transparent; border: 1px solid transparent; color: var(--fg-mute);
@@ -1898,7 +1918,7 @@ button:focus-visible { border-radius: 8px; }
 
   /* Topbar: run controls + status live in bottom nav / panels on mobile */
   .topbar { gap: 8px; overflow: hidden; }
-  .topbar .run-controls { display: none; }
+  .topbar .run-control { display: none; }
   .topbar .status-cluster { display: none; }
   .topbar > .icon-btn { display: none; }
   .topbar .topbar-overflow { display: none; }
