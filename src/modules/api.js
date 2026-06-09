@@ -216,6 +216,14 @@ async function _chatCompletionDirect(system, user, { temperature = state.setting
     };
     applySamplingParams(payload);
 
+    // Native reasoning — activate the model's built-in chain-of-thought for
+    // reason-tier calls when the model advertises the capability. The thinking
+    // tokens are separate from max_tokens and come back as <think> blocks which
+    // extractNativeThinking() already strips and routes to the thought slot.
+    if (tier === 'reason' && (state.contextInfo?.modelCapabilities || []).includes('reasoning')) {
+      payload.enable_thinking = true;
+    }
+
     // JSON schema-constrained decoding (LM Studio / llama.cpp grammar support).
     // Always applied when the model supports it — dramatically improves structured
     // output reliability on small models. (No longer gated behind tool mode.)
@@ -416,6 +424,10 @@ export async function chatStream(system, user, { temperature = state.settings.te
     stream_options: { include_usage: true }
   };
   applySamplingParams(payload);
+
+  if (tier === 'reason' && (state.contextInfo?.modelCapabilities || []).includes('reasoning')) {
+    payload.enable_thinking = true;
+  }
 
   const startTime = Date.now();
   try {
@@ -923,8 +935,11 @@ export async function pingConnection(silent = false) {
         : models.find((m) => m.state === "loaded");
       if (current?.loaded_context_length || current?.max_context_length) {
         state.contextInfo.maxContextLength = current.loaded_context_length || current.max_context_length;
-        notifyStateChange();
       }
+      if (Array.isArray(current?.capabilities)) {
+        state.contextInfo.modelCapabilities = current.capabilities;
+      }
+      notifyStateChange();
     }).catch(() => {}); // non-critical
 
     // Probe the embedding endpoint so we can warn the user if it's broken.
