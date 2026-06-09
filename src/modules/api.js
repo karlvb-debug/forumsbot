@@ -1,8 +1,8 @@
 import { MAX_TOOL_ROUNDS } from './constants.js';
 import { state, saveState } from './state.js';
 import { parseAiJson, parseTextToolCalls, stripTextToolCalls, stripCodeFence, estimateTokens } from './utils.js';
-import { setConnectionStatus } from '../hooks/useActions.js';
-import { notifyStateChange, mutateState } from '../hooks/useForumState.js';
+import { setConnectionStatus } from './uiStore.js';
+import { notifyStateChange, mutateState } from './stateStore.js';
 
 /**
  * Detect if a model identifier is an embedding model (not suitable for chat).
@@ -1015,6 +1015,13 @@ export function startConnectionPing() {
   _pingInterval = setInterval(() => {
     if (!document.hidden) pingConnection(true);
   }, 30000);
+}
+
+export function stopConnectionPing() {
+  if (_pingInterval) {
+    clearInterval(_pingInterval);
+    _pingInterval = null;
+  }
 }
 
 

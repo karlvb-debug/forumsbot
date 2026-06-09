@@ -105,6 +105,7 @@ export default function App() {
   // Load modules on mount
   useEffect(() => {
     notifyStateChange(); // trigger initial React render with loaded state
+    let apiModule = null;
     // Lazy-load modules to wire action hooks
     Promise.all([
       import('./modules/turns.js'),
@@ -113,6 +114,7 @@ export default function App() {
       import('./modules/memory.js'),
       import('./modules/db.js'),
     ]).then(async ([turns, api, session, memory, db]) => {
+      apiModule = api;
       setModuleRefs({ turns, api, session, memory, db });
       await db.initializeMemoryStorage?.();
       saveState();
@@ -123,6 +125,7 @@ export default function App() {
       console.warn('[App] Module init error (non-fatal):', err);
       setReady(true);
     });
+    return () => { apiModule?.stopConnectionPing?.(); };
   }, []);
 
   // ── Keyboard shortcuts ──────────────────────────────────────

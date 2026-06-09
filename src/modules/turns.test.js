@@ -64,19 +64,19 @@ vi.mock('./api.js', () => ({
   resolveModelTier: vi.fn(() => 'test-model'),
 }));
 
-vi.mock('../hooks/useForumState.js', () => ({
+vi.mock('./stateStore.js', () => ({
   saveState: vi.fn(),
   notifyStateChange: vi.fn(),
   mutateState: vi.fn((fn) => fn(mockState)),
 }));
 
-vi.mock('../hooks/useActions.js', () => ({
+vi.mock('./uiStore.js', () => ({
   setBusy: vi.fn(),
   getBusy: vi.fn(() => false),
   showToast: vi.fn(),
 }));
 
-vi.mock('../hooks/useStreaming.js', () => ({
+vi.mock('./streamingStore.js', () => ({
   showStreamingBubble: vi.fn(),
   updateStreamingBubble: vi.fn(),
   removeStreamingBubble: vi.fn(),

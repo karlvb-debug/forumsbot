@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // useActions pulls in state + the React-notify wiring on import; stub both so the
 // toast store can be tested in isolation.
 vi.mock('../modules/state.js', () => ({ state: {} }));
-vi.mock('./useForumState.js', () => ({ saveState: vi.fn(), notifyStateChange: vi.fn() }));
+vi.mock('../modules/stateStore.js', () => ({ saveState: vi.fn(), notifyStateChange: vi.fn() }));
 
 import {
   showToast,

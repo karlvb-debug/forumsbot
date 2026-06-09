@@ -1,9 +1,9 @@
 import { WORD_LIMITS, PROMPT_MESSAGE_LIMIT, RECALLED_CHUNK_LIMIT, PINNED_FACTS_WORD_CAP } from './constants.js';
 import { state, saveState, logTransition } from './state.js';
 import { chatCompletion, getEmbedding, getEmbeddingsBatch, setStatus } from './api.js';
-import { saveState as _hookSaveState } from '../hooks/useForumState.js';
-import { setBusy, getBusy as getIsGenerating } from '../hooks/useActions.js';
-import { hideBackgroundActivity, showBackgroundActivity, updateBackgroundActivity } from '../hooks/useStreaming.js';
+import { saveState as _hookSaveState } from './stateStore.js';
+import { setBusy, getBusy as getIsGenerating } from './uiStore.js';
+import { hideBackgroundActivity, showBackgroundActivity, updateBackgroundActivity } from './streamingStore.js';
 import { getAllChunks, putChunk, clearChunks, countChunks, getAllMessages } from './db.js';
 import { trimWords, stringifyList, normalizeStringArray, extractKeywords, stringifyBullets, stripCodeFence, extractBalancedObjects, sanitizeJsonString, cosineSimilarity, appendMemory, formatTranscript } from './utils.js';
 

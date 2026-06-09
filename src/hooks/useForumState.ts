@@ -2,44 +2,16 @@
  * State bridge: connects the mutable global `state` object to React's
  * rendering cycle via useSyncExternalStore.
  *
- * Logic modules continue to mutate `state` directly.
- * After mutation, they call `notifyStateChange()` (or the patched `saveState`)
- * which bumps a version counter and notifies all React subscribers.
+ * The framework-agnostic store (subscription registry, mutateState,
+ * saveState, notifyStateChange) lives in modules/stateStore.js. This file
+ * holds only the React hook and re-exports the store actions components use.
  */
 import { useSyncExternalStore } from 'react';
-import { state, saveState as originalSaveState, registerSaveCallback } from '../modules/state.js';
+import { state } from '../modules/state.js';
+import { subscribe, getVersion } from '../modules/stateStore.js';
 import type { ForumState } from '../types.js';
 
-// ── Subscription system ──────────────────────────────────────────────
-let _version = 0;
-const _listeners = new Set<() => void>();
-
-/** Notify React that state has changed. Call after mutating `state`. */
-export function notifyStateChange(): void {
-  _version++;
-  _listeners.forEach(fn => fn());
-}
-
-// Wire: every saveState() call from ANY module now notifies React.
-registerSaveCallback(notifyStateChange);
-
-/**
- * Patched saveState: persists to localStorage AND notifies React.
- */
-export function saveState(): void {
-  originalSaveState();
-}
-
-function subscribe(callback: () => void): () => void {
-  _listeners.add(callback);
-  return () => _listeners.delete(callback);
-}
-
-function getVersion(): number {
-  return _version;
-}
-
-// ── Hooks ────────────────────────────────────────────────────────────
+export { mutateState, notifyStateChange, saveState } from '../modules/stateStore.js';
 
 /**
  * Subscribe to a slice of Forum state. Forces re-render when state version
@@ -52,25 +24,4 @@ function getVersion(): number {
 export function useForumState<T>(selector: (s: ForumState) => T): T {
   useSyncExternalStore(subscribe, getVersion);
   return selector(state as ForumState);
-}
-
-
-
-/**
- * Mutate state and notify React.
- * Usage: mutateState(s => { s.settings.theme = 'light'; });
- *
- * React is notified immediately so the UI stays responsive.
- * localStorage serialization (saveState) is debounced by 300ms
- * to avoid hammering JSON.stringify on rapid successive mutations.
- */
-let _saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-export function mutateState(fn: (s: ForumState) => void): void {
-  fn(state as ForumState);
-  notifyStateChange();
-  if (_saveDebounceTimer) clearTimeout(_saveDebounceTimer);
-  _saveDebounceTimer = setTimeout(() => {
-    _saveDebounceTimer = null;
-    originalSaveState();
-  }, 300);
 }

@@ -36,7 +36,7 @@ vi.mock('./turns.js', () => ({
   addMessage: vi.fn(async () => {}),
 }));
 
-vi.mock('../hooks/useActions.js', () => ({
+vi.mock('./uiStore.js', () => ({
   showToast: vi.fn(),
 }));
 

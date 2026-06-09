@@ -2,9 +2,9 @@ import { RECENT_MESSAGE_LIMIT, WORD_LIMITS, ANCHOR_WORD_CAP, colors } from './co
 import { buildActorSchema, buildSchemaPromptLine } from './schemas.js';
 import { state, saveState, logTransition } from './state.js';
 import { chatCompletion, chatJson, chatStructured, setStatus, setCurrentSpeaker, getLastToolCalls, isJsonSchemaSupported, resolveModelTier } from './api.js';
-import { mutateState } from '../hooks/useForumState.js';
-import { setBusy, getBusy as getIsGenerating, showToast } from '../hooks/useActions.js';
-import { showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble, showBackgroundActivity, updateBackgroundActivity, hideBackgroundActivity, clearBackgroundActivities } from '../hooks/useStreaming.js';
+import { mutateState } from './stateStore.js';
+import { setBusy, getBusy as getIsGenerating, showToast } from './uiStore.js';
+import { showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble, showBackgroundActivity, updateBackgroundActivity, hideBackgroundActivity, clearBackgroundActivities } from './streamingStore.js';
 import { putMessage, getActorMemory, putActorMemory } from './db.js';
 import { summarizeMemory, recallRelevantChunks, formatCurrentOutcomes, parseOutcomeJson } from './memory.js';
 import { cleanStoredMessage, parseAiJson, stringifyMessage, publicMessageContent, trimWords, stringifyList, estimateTokens, normalizeCadence, isQueueActor, shouldFireCadence, appendMemory, normalizeSpeakingOrderStrategy, formatTranscript } from './utils.js';

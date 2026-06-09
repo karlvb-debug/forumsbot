@@ -16,8 +16,8 @@ const { mockState } = vi.hoisted(() => ({
 }));
 
 vi.mock('./state.js', () => ({ state: mockState, saveState: vi.fn() }));
-vi.mock('../hooks/useActions.js', () => ({ setConnectionStatus: vi.fn() }));
-vi.mock('../hooks/useForumState.js', () => ({ notifyStateChange: vi.fn(), mutateState: vi.fn() }));
+vi.mock('./uiStore.js', () => ({ setConnectionStatus: vi.fn() }));
+vi.mock('./stateStore.js', () => ({ notifyStateChange: vi.fn(), mutateState: vi.fn() }));
 
 import { chatJson, executeToolCall, isJsonSchemaSupported, extractNativeThinking, resolveModelTier } from './api.js';
 

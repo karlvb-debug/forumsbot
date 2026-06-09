@@ -19,8 +19,8 @@ vi.mock('./state.js', () => ({
 }));
 vi.mock('./api.js', () => ({ setStatus: vi.fn(), chatJson: vi.fn(), chatCompletion: vi.fn(), getEmbedding: vi.fn(), getEmbeddingsBatch: vi.fn() }));
 vi.mock('./db.js', () => ({ getAllChunks: vi.fn(async () => []), putChunk: vi.fn(), clearChunks: vi.fn(), countChunks: vi.fn(async () => 0), getAllMessages: vi.fn(async () => []) }));
-vi.mock('../hooks/useForumState.js', () => ({ saveState: vi.fn(), notifyStateChange: vi.fn(), mutateState: vi.fn() }));
-vi.mock('../hooks/useActions.js', () => ({ setBusy: vi.fn(), getBusy: vi.fn(() => false) }));
+vi.mock('./stateStore.js', () => ({ saveState: vi.fn(), notifyStateChange: vi.fn(), mutateState: vi.fn() }));
+vi.mock('./uiStore.js', () => ({ setBusy: vi.fn(), getBusy: vi.fn(() => false) }));
 
 import { formatCurrentOutcomes } from './memory.js';
 import { state } from './state.js';

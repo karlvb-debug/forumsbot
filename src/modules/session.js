@@ -1,6 +1,6 @@
 import { PRESET_VERSION, RECENT_MESSAGE_LIMIT, defaultState } from './constants.js';
 import { state, setState, normalizeState, saveState } from './state.js';
-import { saveState as _saveState, mutateState } from '../hooks/useForumState.js';
+import { saveState as _saveState, mutateState } from './stateStore.js';
 import { setStatus } from './api.js';
 import { clearMessages, clearChunks, putMessages, putChunk, countChunks, getRecentMessages, getAllMessages, getAllChunks, putSession, getAllSessions, deleteSession, clearKbEntries, clearActorMemories } from './db.js';
 import { chatCompletion, chatCompletionMessages } from './api.js';
