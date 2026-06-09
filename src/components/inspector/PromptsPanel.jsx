@@ -308,14 +308,13 @@ export function PromptsPanel() {
         </button>
       </div>
 
-      <div style={{ padding: '0 4px', fontSize: 11, color: 'var(--fg-mute)', marginBottom: 8 }}>
-        Edit any system prompt fragment below. Changes take effect on the next turn and persist across sessions.
-        {overrideCount > 0 && (
-          <span style={{ ...styles.badge, marginLeft: 6 }}>
+      {overrideCount > 0 && (
+        <div style={{ padding: '0 4px', marginBottom: 8 }}>
+          <span style={styles.badge}>
             {overrideCount} override{overrideCount !== 1 ? 's' : ''}
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {PROMPT_GROUPS.map(g => (
         <PromptGroup key={g.id} group={g} searchFilter={search} />

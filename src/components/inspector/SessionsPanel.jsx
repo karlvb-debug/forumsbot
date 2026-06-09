@@ -5,7 +5,6 @@ import { Field } from '../shared/FormControls';
 export function SessionsPanel() {
   const [sessions, setSessions] = useState([]);
   const [exportMode, setExportMode] = useState('debug');
-  const [pendingReset, setPendingReset] = useState(false);
   const presetInputRef = useRef(null);
 
   const refreshSessions = async () => {
@@ -117,20 +116,16 @@ export function SessionsPanel() {
           }}>
             <Ic.Trash width={13} height={13} /> Clear conversation
           </button>
-          {pendingReset ? (
-            <span className="confirm-inline">
-              Reset app state to defaults?
-              <button className="btn danger sm" onClick={resetAllAppState}>Yes, reset</button>
-              <button className="btn sm" onClick={() => setPendingReset(false)}>Cancel</button>
-            </span>
-          ) : (
-            <button className="btn danger" onClick={() => setPendingReset(true)}>
-              <Ic.Trash width={13} height={13} /> Reset all
-            </button>
-          )}
-        </div>
-        <div className="field-hint" style={{ marginTop: 8 }}>
-          Reset all restores Forum defaults only — it does not affect other browser storage on this origin.
+          <button className="btn danger" onClick={async () => {
+            const session = await import('../../modules/session.js');
+            const confirmed = await session.requestConfirmPublic(
+              'Reset everything to factory defaults? This permanently deletes your actors, scenario, settings, documents, saved setups, and the current transcript. Saved sessions and other browser data on this origin are not affected. This cannot be undone.',
+              'Reset all'
+            );
+            if (confirmed) await resetAllAppState();
+          }}>
+            <Ic.Trash width={13} height={13} /> Reset all
+          </button>
         </div>
       </div>
     </div>

@@ -45,23 +45,20 @@ export function MemoryPanel() {
         })}>Extract Outcomes</button>
       </div>
 
-      <details className="card-disclosure" style={{ marginBottom: 12 }}>
-        <summary><span className="disclosure-sub">Rebuild · Compact · Clear archive</span></summary>
-        <div className="btn-row" style={{ marginTop: 8 }}>
-          <button className="btn sm" disabled={!!actionBusy} onClick={() => runMemoryAction('rebuild', async () => {
-            const m = await import('../../modules/memory.js');
-            await m.summarizeMemory('rebuild', null, { reset: true });
-          })}>Rebuild Summary</button>
-          <button className="btn sm" disabled={!!actionBusy} onClick={() => runMemoryAction('compact', async () => {
-            const m = await import('../../modules/memory.js');
-            await m.compactPinnedFacts();
-          })}>Compact Facts</button>
-          <button className="btn sm ghost" disabled={!!actionBusy} onClick={() => runMemoryAction('clear', async () => {
-            const m = await import('../../modules/memory.js');
-            await m.clearArchivedMemory();
-          })}>Clear Archive</button>
-        </div>
-      </details>
+      <div className="btn-row" style={{ marginBottom: 12 }}>
+        <button className="btn sm" disabled={!!actionBusy} title="Discard the current summary and rebuild it from the full transcript" onClick={() => runMemoryAction('rebuild', async () => {
+          const m = await import('../../modules/memory.js');
+          await m.summarizeMemory('rebuild', null, { reset: true });
+        })}>Rebuild Summary</button>
+        <button className="btn sm" disabled={!!actionBusy} title="Merge and deduplicate pinned facts to save context space" onClick={() => runMemoryAction('compact', async () => {
+          const m = await import('../../modules/memory.js');
+          await m.compactPinnedFacts();
+        })}>Compact Facts</button>
+        <button className="btn sm ghost" disabled={!!actionBusy} title="Permanently delete archived (summarized-away) memory chunks" onClick={() => runMemoryAction('clear', async () => {
+          const m = await import('../../modules/memory.js');
+          await m.clearArchivedMemory();
+        })}>Clear Archive</button>
+      </div>
 
       {(memoryStatus || outcomeStatus || actionBusy) && (
         <div className="field-hint" style={{ marginBottom: 10 }}>

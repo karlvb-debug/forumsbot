@@ -29,7 +29,6 @@ export function Sheet({ open, title, sub, onClose, children }) {
           <div className="sheet-grip" aria-hidden="true" />
           <div className="sheet-titles">
             <h2>{title}</h2>
-            {sub && <small>{sub}</small>}
           </div>
           <button type="button" className="sheet-close" onClick={onClose} aria-label="Close">✕</button>
         </header>

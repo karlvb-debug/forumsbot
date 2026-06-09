@@ -81,7 +81,6 @@ export function Inspector({ active, meta, nav, embedded = false, collapsible = f
         <h2>
           {Icon && <span className="h-icon"><Icon width={16} height={16} /></span>}
           {showPrompt ? 'Prompt Viewer' : meta.title}
-          <small>· {showPrompt ? 'last assembled prompt' : meta.sub}</small>
         </h2>
         {promptToggle}
         {collapsible && (

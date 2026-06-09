@@ -28,6 +28,14 @@ export const Stage = (props) => (
   </svg>
 );
 
+export const Book = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H16v12.5H5.5A1.5 1.5 0 0 0 4 17z" />
+    <path d="M4 4.5V17" />
+    <path d="M7 6.5h6M7 9h6" />
+  </svg>
+);
+
 export const Actors = (props) => (
   <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
     <circle cx="7" cy="7" r="2.5" />

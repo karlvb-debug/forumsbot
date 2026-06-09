@@ -580,9 +580,6 @@ export function DocumentsPanel() {
             <option value="manual">Manual only</option>
           </select>
         </div>
-        <div className="field-hint">
-          Only the designated writer receives document-writing tasks.
-        </div>
       </div>
 
       {/* Writer task queue */}

@@ -49,7 +49,7 @@ export function ScenarioPanel() {
   return (
     <div>
       <div className="card">
-        <div className="card-title"><h3>Core Context</h3><span className="badge">non-compressible</span></div>
+        <div className="card-title"><h3>Core Context</h3></div>
         <Field label="Title">
           <input value={title} onChange={e => updateScenario('title', e.target.value)} />
         </Field>

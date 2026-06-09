@@ -49,7 +49,7 @@ const NAV = [
   { id: 'scenario',      label: 'Scenario',     icon: 'Target',        tier: 'build'   },
   { id: 'actors',        label: 'Actors',       icon: 'Actors',        tier: 'build'   },
   { id: 'connection',    label: 'Connection',   icon: 'Plug',          tier: 'build'   },
-  { id: 'library',       label: 'Library',      icon: 'Stage',         tier: 'build'   },
+  { id: 'library',       label: 'Library',      icon: 'Book',          tier: 'build'   },
   // Inspect
   { id: 'memory',        label: 'Memory',       icon: 'Brain',         tier: 'inspect' },
   { id: 'telemetry',     label: 'Telemetry',    icon: 'Gauge',         tier: 'inspect' },
@@ -64,18 +64,18 @@ const NAV = [
 ];
 
 const NAV_TITLES = {
-  scenario:      { title: 'Scenario',      sub: 'premise · task · systems' },
-  actors:        { title: 'Actors',        sub: 'panel composition' },
-  connection:    { title: 'Connection',    sub: 'LM Studio · model · generation' },
-  library:       { title: 'Library',       sub: 'blueprints · saved setups' },
-  memory:        { title: 'Memory',        sub: 'facts · summary · anchors · actors · outcomes' },
-  telemetry:     { title: 'Telemetry',     sub: 'context · speed · health · budget' },
-  documents:     { title: 'Documents',     sub: 'working docs · references · links' },
-  autostop:      { title: 'Auto Stop',     sub: 'completion criteria · judges' },
-  participation: { title: 'Participation', sub: 'your role · pause policy' },
-  sessions:      { title: 'Sessions',      sub: 'save · load · export' },
-  prompts:       { title: 'Prompts',       sub: 'system prompt editor' },
-  help:          { title: 'Help',          sub: 'documentation · reference' },
+  scenario:      { title: 'Scenario' },
+  actors:        { title: 'Actors' },
+  connection:    { title: 'Connection' },
+  library:       { title: 'Library' },
+  memory:        { title: 'Memory' },
+  telemetry:     { title: 'Telemetry' },
+  documents:     { title: 'Documents' },
+  autostop:      { title: 'Auto Stop' },
+  participation: { title: 'Participation' },
+  sessions:      { title: 'Sessions' },
+  prompts:       { title: 'Prompts' },
+  help:          { title: 'Help' },
 };
 
 export default function App() {
@@ -285,7 +285,7 @@ export default function App() {
 
   const inspectorOnLeft = inspectorPos === 'left';
   const showInspector = !isMobile && !inspectorCollapsed;
-  const meta = NAV_TITLES[activePanel] || { title: '', sub: '' };
+  const meta = NAV_TITLES[activePanel] || { title: '' };
 
   // Mobile bottom-nav highlight + the "More" panel list
   const navMode = sheet === null
@@ -354,7 +354,7 @@ export default function App() {
 
       {isMobile && (
         <>
-          <Sheet open={sheet === 'panel'} title={meta.title} sub={meta.sub} onClose={() => setSheet(null)}>
+          <Sheet open={sheet === 'panel'} title={meta.title} onClose={() => setSheet(null)}>
             <Inspector active={activePanel} meta={meta} nav={NAV} embedded />
           </Sheet>
           <Sheet open={sheet === 'more'} title="More" sub="all panels & settings" onClose={() => setSheet(null)}>

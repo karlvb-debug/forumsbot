@@ -4,12 +4,6 @@ import { useForumState, mutateState } from '../../hooks/useForumState';
 
 const USER_CONTEXT_KEY = 'forum_user_context';
 
-const MODE_DESCRIPTIONS = {
-  sponsor:      'Actors pause only for major decisions or conflicts. The discussion runs independently otherwise.',
-  collaborator: 'Actors pause freely to ask your opinion, request decisions, or check their understanding.',
-  observer:     'Actors never pause. The discussion runs to completion without interruption.',
-};
-
 const PAUSE_REASON_LABELS = {
   decision:      'Decisions',
   conflict:      'Conflicts',
@@ -79,9 +73,6 @@ export function ParticipationPanel() {
             <option value="observer">Observer — never pause, let discussion run</option>
           </select>
         </Field>
-        <div className="field-hint" style={{ marginTop: -4, marginBottom: 8 }}>
-          {MODE_DESCRIPTIONS[mode]}
-        </div>
 
         {mode !== 'observer' && (
           <Field label="Max pauses per round" info="Caps how many times actors can interrupt the auto-run per round to ask for your input. Prevents being pestered on every turn.">
@@ -103,9 +94,6 @@ export function ParticipationPanel() {
             placeholder="e.g. The client, The mayor, Yourself"
           />
         </Field>
-        <div className="field-hint" style={{ marginTop: -4 }}>
-          In story sessions, actors can address you by this role name.
-        </div>
       </div>
 
       {mode !== 'observer' && (

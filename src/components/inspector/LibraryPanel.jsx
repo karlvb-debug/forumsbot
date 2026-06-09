@@ -63,9 +63,6 @@ export function LibraryPanel() {
       {/* ── Blueprints ─────────────────────────────────────────── */}
       <div className="card">
         <div className="card-title"><h3>Blueprints</h3></div>
-        <div className="field-hint" style={{ marginBottom: 10 }}>
-          A turnkey setup — scenario, systems, and a recommended cast (some also seed working documents). Everything stays editable after you apply it.
-        </div>
         <div className="btn-row" style={{ marginBottom: selectedBp ? 8 : 0 }}>
           <select
             style={{ flex: 1, fontSize: 12 }}
@@ -91,9 +88,6 @@ export function LibraryPanel() {
       {/* ── Saved setups (user blueprints) ─────────────────────── */}
       <div className="card">
         <div className="card-title"><h3>Your saved setups</h3></div>
-        <div className="field-hint" style={{ marginBottom: 8 }}>
-          Save the current scenario, cast, and generation settings as a reusable setup — no transcript.
-        </div>
         <div className="btn-row" style={{ marginBottom: 10 }}>
           <input
             style={{ flex: 1, fontSize: 12 }}

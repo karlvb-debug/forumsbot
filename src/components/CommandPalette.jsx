@@ -6,7 +6,7 @@ const COMMANDS = [
   { id: 'scenario',   label: 'Open Scenario',       hint: '',      kind: 'nav', icon: Ic.Target },
   { id: 'actors',     label: 'Open Actors',         hint: '',      kind: 'nav', icon: Ic.Actors },
   { id: 'connection', label: 'Open Connection',     hint: '',      kind: 'nav', icon: Ic.Plug },
-  { id: 'library',    label: 'Open Library',        hint: '',      kind: 'nav', icon: Ic.Stage },
+  { id: 'library',    label: 'Open Library',        hint: '',      kind: 'nav', icon: Ic.Book },
   // Inspect
   { id: 'memory',     label: 'Open Memory',         hint: '',      kind: 'nav', icon: Ic.Brain },
   { id: 'telemetry',  label: 'Open Telemetry',      hint: '',      kind: 'nav', icon: Ic.Gauge },
