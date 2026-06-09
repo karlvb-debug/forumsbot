@@ -353,6 +353,13 @@ export const MoreHorizontal = (props) => (
   </svg>
 );
 
+export const Sidebar = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <rect x="3" y="4" width="14" height="12" rx="1.5" />
+    <path d="M8 4v12" />
+  </svg>
+);
+
 export const Palette = (props) => (
   <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
     <path d="M10 3a7 7 0 0 0 0 14c1.1 0 1.5-.9 1.5-1.7 0-1 .8-1.8 1.8-1.8H15a2.5 2.5 0 0 0 2.5-2.5C17.5 6.4 14.2 3 10 3z" />

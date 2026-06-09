@@ -90,6 +90,7 @@ export default function App() {
   const isMobile = useMediaQuery('(max-width: 759px)');
   const showThoughts = useForumState(s => s.settings?.showThoughts || false);
   const autoRunning = useForumState(s => s.autoRunning || false);
+  const inspectorCollapsed = useForumState(s => s.ui?.inspectorCollapsed || false);
 
   const { stopGeneration, directorBrief, continueConversation, setContinueMode } = useActions();
   const stopModal = useForumState(s => s.ui?.stopModal || null);
@@ -190,6 +191,13 @@ export default function App() {
         import('./modules/session.js').then(m => m.saveCurrentSession?.());
         return;
       }
+      // Ctrl+B / ⌘B — toggle inspector (full-width transcript for watch mode)
+      if (mod && !e.shiftKey && !e.altKey && e.key === 'b') {
+        e.preventDefault();
+        mutateState(s => { s.ui.inspectorCollapsed = !s.ui.inspectorCollapsed; });
+        saveState();
+        return;
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -225,6 +233,9 @@ export default function App() {
       });
     } else if (item.id === 'act:theme') {
       setTheme(t => (t === 'dark' ? 'light' : 'dark'));
+    } else if (item.id === 'act:inspector') {
+      mutateState(s => { s.ui.inspectorCollapsed = !s.ui.inspectorCollapsed; });
+      saveState();
     }
   }, [setContinueMode, stopGeneration]);
 
@@ -273,6 +284,7 @@ export default function App() {
   }, [isMobile]);
 
   const inspectorOnLeft = inspectorPos === 'left';
+  const showInspector = !isMobile && !inspectorCollapsed;
   const meta = NAV_TITLES[activePanel] || { title: '', sub: '' };
 
   // Mobile bottom-nav highlight + the "More" panel list
@@ -303,9 +315,9 @@ export default function App() {
       />
       <div className="main">
         <Topbar onOpenCmd={() => setCmdOpen(true)} />
-        <div className={'workspace' + (inspectorOnLeft ? ' inspector-left-pos' : '')}>
-          {!isMobile && inspectorOnLeft && (
-            <Inspector active={activePanel} meta={meta} nav={NAV} />
+        <div className={'workspace' + (showInspector && inspectorOnLeft ? ' inspector-left-pos' : '') + (showInspector ? '' : ' no-inspector')}>
+          {showInspector && inspectorOnLeft && (
+            <Inspector active={activePanel} meta={meta} nav={NAV} collapsible />
           )}
           {focusedDocId ? (
             <DocEditorStage
@@ -334,8 +346,8 @@ export default function App() {
               />
             </div>
           )}
-          {!isMobile && !inspectorOnLeft && (
-            <Inspector active={activePanel} meta={meta} nav={NAV} />
+          {showInspector && !inspectorOnLeft && (
+            <Inspector active={activePanel} meta={meta} nav={NAV} collapsible />
           )}
         </div>
       </div>

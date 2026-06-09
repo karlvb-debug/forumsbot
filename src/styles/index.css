@@ -348,6 +348,15 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
 }
 .icon-btn:hover { background: var(--bg-card); color: var(--fg); border-color: var(--border); }
 
+/* Inspector collapse button (in the panel header) */
+.inspector-collapse-btn {
+  appearance: none; background: transparent; border: 1px solid transparent;
+  color: var(--fg-mute); width: 26px; height: 26px; border-radius: 6px;
+  cursor: pointer; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.inspector-collapse-btn:hover { background: var(--bg-elev); color: var(--fg); border-color: var(--border); }
+
 /* ───── Workspace: stage + inspector ───── */
 .workspace {
   display: grid;

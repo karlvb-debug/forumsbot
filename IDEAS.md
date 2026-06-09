@@ -377,11 +377,15 @@ command palette, ReadinessStrip→CSS, topbar overflow menu) shipped. Queued:
   destinations (Library, You, Prompts, Help) and dropped the fake single-letter
   hints (S/A/M/T/D/G/L/K) that implied shortcuts which were never wired. Files:
   `App.jsx`, `Rail.jsx`, `Inspector.jsx`, `CommandPalette.jsx`.
-- [ ] **Collapsible / resizable inspector (#9).** On desktop the inspector
-  permanently eats horizontal width even during watch-mode auto-run. Add a
-  collapse toggle (or drag handle) so the transcript can go full-width; pairs
-  with a "focus mode" that also hides the rail. Files: `App.jsx`, `Shell.jsx`,
-  CSS. Size: medium–large.
+- [x] **Collapsible inspector (#9).** (2026-06-09) The inspector can now be
+  hidden so the transcript goes full-width for watch mode. Collapse via the
+  Topbar sidebar button, the chevron in the inspector header, ⌘/Ctrl+B, or the
+  command palette ("Toggle inspector panel"). State lives in
+  `s.ui.inspectorCollapsed` (persisted), and the workspace reuses the
+  previously-orphaned `.no-inspector` grid modifier. Files: `App.jsx`,
+  `Topbar.jsx`, `Inspector.jsx`, `Icons.jsx` (new Sidebar icon),
+  `CommandPalette.jsx`, CSS. Follow-up not done: drag-to-resize width, and a
+  "focus mode" that also hides the rail — both deferred as lower-value.
 
 - [ ] **Output synthesis ("Session Outcome" doc).** On-demand and
   session-end pass that produces a structured doc: decisions, open

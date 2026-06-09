@@ -32,7 +32,13 @@ export function Topbar() {
   const connClass = connStatus.tone === 'ok' ? 'live' : connStatus.tone === 'error' ? 'err' : '';
 
   const turboMode = useForumState(s => s.settings?.turboMode || false);
+  const inspectorCollapsed = useForumState(s => s.ui?.inspectorCollapsed || false);
   const { directorBrief } = useActions();
+
+  const toggleInspector = () => {
+    mutateState(s => { s.ui.inspectorCollapsed = !s.ui.inspectorCollapsed; });
+    saveState();
+  };
 
   const isSummarizing = useForumState(s => s.memory?.isSummarizing || false);
   const isExtracting = useForumState(s => s.outcomes?.isExtracting || false);
@@ -88,6 +94,16 @@ export function Topbar() {
       </div>
 
       <RunControl />
+
+      <button
+        className={`icon-btn${!inspectorCollapsed ? ' active' : ''}`}
+        onClick={toggleInspector}
+        title={inspectorCollapsed ? 'Show inspector (⌘B)' : 'Hide inspector — full-width transcript (⌘B)'}
+        aria-label={inspectorCollapsed ? 'Show inspector' : 'Hide inspector'}
+        aria-pressed={!inspectorCollapsed}
+      >
+        <Ic.Sidebar width={16} height={16} />
+      </button>
 
       <button
         className={`icon-btn${assistantOpen ? ' active' : ''}`}

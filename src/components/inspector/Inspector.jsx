@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import * as Ic from '../Icons';
+import { mutateState, saveState } from '../../hooks/useForumState';
 import { ConnectionPanel } from './ConnectionPanel';
 import { ScenarioPanel } from './ScenarioPanel';
 import { ActorsPanel } from './ActorsPanel';
@@ -29,9 +30,11 @@ const PANELS = {
   help: HelpPanel,
 };
 
-export function Inspector({ active, meta, nav, embedded = false }) {
+export function Inspector({ active, meta, nav, embedded = false, collapsible = false }) {
   const [showPrompt, setShowPrompt] = useState(false);
   const canShowPrompt = active === 'telemetry';
+
+  const collapse = () => { mutateState(s => { s.ui.inspectorCollapsed = true; }); saveState(); };
 
   useEffect(() => {
     setShowPrompt(false);
@@ -81,6 +84,17 @@ export function Inspector({ active, meta, nav, embedded = false }) {
           <small>· {showPrompt ? 'last assembled prompt' : meta.sub}</small>
         </h2>
         {promptToggle}
+        {collapsible && (
+          <button
+            className="inspector-collapse-btn"
+            onClick={collapse}
+            title="Hide inspector — give the transcript full width"
+            aria-label="Hide inspector"
+            style={promptToggle ? undefined : { marginLeft: 'auto' }}
+          >
+            <Ic.Sidebar width={15} height={15} />
+          </button>
+        )}
       </header>
       {body}
     </aside>
