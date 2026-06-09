@@ -4,6 +4,7 @@ node_modules_old/
 
 # Build output
 dist/
+release/
 
 # OS files
 .DS_Store

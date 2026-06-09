@@ -4,6 +4,7 @@
   "private": true,
   "description": "A local multi-actor AI forum for LM Studio.",
   "type": "module",
+  "main": "electron/main.js",
   "scripts": {
     "server": "node server.js",
     "dev": "vite --config vite.config.js",
@@ -12,7 +13,32 @@
     "start": "node server.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint src/"
+    "lint": "eslint src/",
+    "electron:dev": "electron .",
+    "electron:build": "npm run build && electron-builder"
+  },
+  "build": {
+    "appId": "com.forum.app",
+    "productName": "Forum",
+    "files": [
+      "dist/**",
+      "electron/**",
+      "server.js",
+      "node_modules/**",
+      "!node_modules/.cache/**",
+      "!node_modules/electron/**",
+      "!node_modules/electron-builder/**"
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   },
   "engines": {
     "node": ">=20.19.0"
@@ -32,6 +58,8 @@
     "@typescript-eslint/parser": "^8.61.0",
     "@vitejs/plugin-react": "^6.0.2",
     "@vitest/ui": "^4.1.7",
+    "electron": "^42.4.0",
+    "electron-builder": "^26.15.2",
     "eslint": "^10.4.1",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",

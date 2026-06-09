@@ -392,7 +392,18 @@ const server = createServer(async (req, res) => {
   sendJson(res, 405, { error: "Method not allowed." });
 });
 
-server.listen(port, host, () => {
-  console.log(`Forum is running at http://${host}:${port}`);
-  console.log("Point it at LM Studio's local server, usually http://127.0.0.1:1234");
-});
+// Used by Electron main process to start the server on a specific port.
+export function startServer(listenPort) {
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(listenPort, "127.0.0.1", () => resolve());
+  });
+}
+
+// Auto-start when invoked directly via `node server.js` / `npm start`.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  server.listen(port, host, () => {
+    console.log(`Forum is running at http://${host}:${port}`);
+    console.log("Point it at LM Studio's local server, usually http://127.0.0.1:1234");
+  });
+}
