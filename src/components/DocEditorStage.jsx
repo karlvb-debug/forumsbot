@@ -103,6 +103,10 @@ export function DocEditorStage({ transcript, composer }) {
     });
   }, [focusedDocId, documents]);
 
+  useEffect(() => {
+    return () => { if (kbDebounceRef.current) clearTimeout(kbDebounceRef.current); };
+  }, [focusedDocId]);
+
   const restoreVersion = useCallback((version) => {
     if (!version?.content) return;
     updateDoc({ content: version.content });
@@ -317,7 +321,7 @@ export function DocEditorStage({ transcript, composer }) {
                   const vIdx = versions.length - 1 - i;
                   const isSelected = historyIdx === vIdx;
                   return (
-                    <div key={i} className={`history-item ${isSelected ? 'selected' : ''}`} onClick={() => setHistoryIdx(vIdx)}>
+                    <div key={v.timestamp || v.at || i} className={`history-item ${isSelected ? 'selected' : ''}`} onClick={() => setHistoryIdx(vIdx)}>
                       <div className="history-item-meta">
                         <strong>v{versions.length - i}</strong>
                         <span>{v.author || 'System'}</span>

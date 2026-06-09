@@ -101,7 +101,7 @@ export function AiAssistant() {
           )}
 
           {history.map((entry, i) => (
-            <div key={i} className={`ai-msg ai-msg-${entry.role}`}>
+            <div key={entry.id ?? i} className={`ai-msg ai-msg-${entry.role}`}>
               {entry.role === 'user' ? (
                 <div className="ai-bubble ai-bubble-user">{entry.content}</div>
               ) : (

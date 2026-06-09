@@ -117,7 +117,7 @@ const MessageCard = React.memo(function MessageCard({ msg, actor, showThoughts, 
         </div>
 
         {toolCalls.length > 0 && toolCalls.map((tc, i) => (
-          <div className="tool-call" key={i} style={{ marginBottom: 8 }}>
+          <div className="tool-call" key={`${tc.tool}-${i}`} style={{ marginBottom: 8 }}>
             <div className="tc-head">⌕ {tc.tool}{tc.query ? ` · "${tc.query}"` : ''}{tc.domain ? ` → ${tc.domain}` : ''}</div>
           </div>
         ))}

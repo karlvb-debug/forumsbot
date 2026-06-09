@@ -366,7 +366,7 @@ export function TelemetryPanel() {
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
             {intentData.needHistory.map((entry, i) => (
-              <NeedChip key={i} need={entry.need} speaker={entry.speaker} />
+              <NeedChip key={`${entry.speaker}-${entry.need}-${i}`} need={entry.need} speaker={entry.speaker} />
             ))}
           </div>
           {intentData.confidencePoints.length > 1 && (

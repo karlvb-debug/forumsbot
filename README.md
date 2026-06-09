@@ -8,7 +8,7 @@ AI inference and session storage are fully local. If web tools are enabled, rese
 
 ## Requirements
 
-- **Node.js** ≥ 18
+- **Node.js** ≥ 20.19
 - **LM Studio** with the local server running (defaults to `http://127.0.0.1:1234`)
 - A loaded chat model (any OpenAI-compatible model works)
 - Optional: a dedicated embedding model for semantic memory features (e.g. `nomic-embed-text-v1.5`)

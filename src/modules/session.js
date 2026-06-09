@@ -182,12 +182,14 @@ export async function exportSession(mode = 'debug') {
       chunks: cleanChunks
     };
   } else {
-    // Debug mode: full export with everything
+    // Debug mode: full export — strip API key so debug exports are safe to share
+    const { apiKey: _omitKey, ...safeSettings } = state.settings || {};
     payload = {
       version: PRESET_VERSION,
       exportedAt: new Date().toISOString(),
       exportMode: 'debug',
       ...state,
+      settings: safeSettings,
       messages,
       chunks
     };
@@ -433,7 +435,7 @@ export async function generateQuickStart(promptOverride = "") {
 
   // Add user bubble immediately
   if (!Array.isArray(state.ui.quickStartHistory)) state.ui.quickStartHistory = [];
-  state.ui.quickStartHistory.push({ role: "user", content: prompt });
+  state.ui.quickStartHistory.push({ id: crypto.randomUUID(), role: "user", content: prompt });
 
 
   try {
@@ -471,16 +473,16 @@ export async function generateQuickStart(promptOverride = "") {
       }
       if (changes && typeof changes === "object" && Object.keys(changes).length > 0) {
         state.ui.quickStartDraft = { type: "patch", changes };
-        state.ui.quickStartHistory.push({ role: "assistant", content: raw, type: "patch", message, draft: state.ui.quickStartDraft });
+        state.ui.quickStartHistory.push({ id: crypto.randomUUID(), role: "assistant", content: raw, type: "patch", message, draft: state.ui.quickStartDraft });
         setQuickStartStatus("Changes ready — click Apply to update current session.");
       } else {
         // type=patch but no actual changes — treat as chat to avoid wiping session
         console.warn('[generateQuickStart] type=patch but no changes found, treating as chat');
-        state.ui.quickStartHistory.push({ role: "assistant", content: raw, type: "chat", message });
+        state.ui.quickStartHistory.push({ id: crypto.randomUUID(), role: "assistant", content: raw, type: "chat", message });
         setQuickStartStatus("");
       }
     } else if (type === "chat") {
-      state.ui.quickStartHistory.push({ role: "assistant", content: raw, type: "chat", message });
+      state.ui.quickStartHistory.push({ id: crypto.randomUUID(), role: "assistant", content: raw, type: "chat", message });
       setQuickStartStatus("");
     } else {
       // fullSetup — fields should be at top level, but handle LLM nesting under "changes"
@@ -492,14 +494,14 @@ export async function generateQuickStart(promptOverride = "") {
       }
       console.debug('[generateQuickStart] fullSetup source keys:', Object.keys(setupSource).join(','), 'actors:', Array.isArray(setupSource.actors) ? setupSource.actors.length : 'NONE');
       state.ui.quickStartDraft = normalizeQuickStartConfig(setupSource);
-      state.ui.quickStartHistory.push({ role: "assistant", content: raw, type: "fullSetup", message, draft: state.ui.quickStartDraft });
+      state.ui.quickStartHistory.push({ id: crypto.randomUUID(), role: "assistant", content: raw, type: "fullSetup", message, draft: state.ui.quickStartDraft });
       setQuickStartStatus("Full setup ready — click Apply to replace current scenario.");
     }
 
     saveState();
 
   } catch (error) {
-    state.ui.quickStartHistory.push({ role: "assistant", content: "", type: "error", message: error.message || "Request failed." });
+    state.ui.quickStartHistory.push({ id: crypto.randomUUID(), role: "assistant", content: "", type: "error", message: error.message || "Request failed." });
     setQuickStartStatus("Error: " + (error.message || "Request failed."));
 
   } finally {

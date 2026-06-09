@@ -83,7 +83,7 @@ export function MemoryPanel() {
             <div className="card-title"><h3>Pinned Facts</h3></div>
             <div className="fact-list">
               {pinnedFacts.map((f, i) => (
-                <div className="fact-item" key={i}>
+                <div className="fact-item" key={f}>
                   <span className="pin">◆</span>
                   <span>{f}</span>
                   <span className="x" onClick={() => removeFact(i)}>×</span>
@@ -97,7 +97,7 @@ export function MemoryPanel() {
             <div className="card-title"><h3>Open Questions</h3></div>
             <div className="fact-list">
               {(Array.isArray(openQuestions) ? openQuestions : []).map((q, i) => (
-                <div className="fact-item" key={i}>
+                <div className="fact-item" key={q}>
                   <span className="pin" style={{ color: 'var(--warn)' }}>?</span>
                   <span>{q}</span>
                   <span className="x" onClick={() => removeQuestion(i)}>×</span>
