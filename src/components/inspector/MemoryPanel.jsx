@@ -6,83 +6,87 @@ import { useForumState, mutateState } from '../../hooks/useForumState';
 export function MemoryPanel() {
   const [section, setSection] = useState('facts');
   const [actionBusy, setActionBusy] = useState('');
-  const pinnedFacts = useForumState(s => s.memory?.pinnedFacts || []);
-  const openQuestions = useForumState(s => s.memory?.openQuestions || []);
-  const sharedSummary = useForumState(s => s.memory?.sharedSummary || '');
-  const dmState = useForumState(s => s.memory?.dmState || '');
-  const anchors = useForumState(s => s.anchors || []);
+  const pinnedFacts    = useForumState(s => s.memory?.pinnedFacts || []);
+  const openQuestions  = useForumState(s => s.memory?.openQuestions || []);
+  const sharedSummary  = useForumState(s => s.memory?.sharedSummary || '');
+  const dmState        = useForumState(s => s.memory?.dmState || '');
+  const anchors        = useForumState(s => s.anchors || []);
   const pendingAnchors = useForumState(s => s.memory?.pendingAnchors || []);
-  const outcomes = useForumState(s => s.outcomes || {});
-  const cycleCount = useForumState(s => s.memory?.cycleCount || 0);
-  const archivedCount = useForumState(s => s.memory?.archivedCount || 0);
-  const memoryStatus = useForumState(s => s.memory?.status || '');
-  const outcomeStatus = useForumState(s => s.outcomes?.status || '');
-  const injections = useForumState(s => s.pendingInjections || []);
+  const outcomes       = useForumState(s => s.outcomes || {});
+  const cycleCount     = useForumState(s => s.memory?.cycleCount || 0);
+  const archivedCount  = useForumState(s => s.memory?.archivedCount || 0);
+  const memoryStatus   = useForumState(s => s.memory?.status || '');
+  const outcomeStatus  = useForumState(s => s.outcomes?.status || '');
+  const injections     = useForumState(s => s.pendingInjections || []);
   const privateMessages = useForumState(s => s.pendingPrivateMessages || []);
-  const actors = useForumState(s => s.actors || []);
+  const actors         = useForumState(s => s.actors || []);
 
-  const removeFact = (index) => mutateState(s => { s.memory.pinnedFacts.splice(index, 1); });
-  const removeQuestion = (index) => mutateState(s => { s.memory.openQuestions.splice(index, 1); });
-  const removeAnchor = (index) => mutateState(s => { s.anchors.splice(index, 1); });
+  const removeFact     = i => mutateState(s => { s.memory.pinnedFacts.splice(i, 1); });
+  const removeQuestion = i => mutateState(s => { s.memory.openQuestions.splice(i, 1); });
+  const removeAnchor   = i => mutateState(s => { s.anchors.splice(i, 1); });
+
   const runMemoryAction = async (label, fn) => {
     setActionBusy(label);
-    try {
-      await fn();
-    } finally {
-      setActionBusy('');
-    }
+    try { await fn(); } finally { setActionBusy(''); }
   };
 
   return (
     <div>
+      {/* ── Actions ── */}
       <div className="btn-row" style={{ marginBottom: 8 }}>
         <button className="btn sm" disabled={!!actionBusy} onClick={() => runMemoryAction('summarize', async () => {
-          const memory = await import('../../modules/memory.js');
-          await memory.summarizeMemory('manual');
+          const m = await import('../../modules/memory.js');
+          await m.summarizeMemory('manual');
         })}>Summarize Now</button>
         <button className="btn sm" disabled={!!actionBusy} onClick={() => runMemoryAction('extract', async () => {
-          const memory = await import('../../modules/memory.js');
-          await memory.extractOutcomes();
+          const m = await import('../../modules/memory.js');
+          await m.extractOutcomes();
           setSection('outcomes');
         })}>Extract Outcomes</button>
       </div>
+
       <details className="card-disclosure" style={{ marginBottom: 12 }}>
-        <summary>
-          <span className="disclosure-sub">More actions — rebuild · compact · clear archive</span>
-        </summary>
+        <summary><span className="disclosure-sub">Rebuild · Compact · Clear archive</span></summary>
         <div className="btn-row" style={{ marginTop: 8 }}>
           <button className="btn sm" disabled={!!actionBusy} onClick={() => runMemoryAction('rebuild', async () => {
-            const memory = await import('../../modules/memory.js');
-            await memory.summarizeMemory('rebuild', null, { reset: true });
+            const m = await import('../../modules/memory.js');
+            await m.summarizeMemory('rebuild', null, { reset: true });
           })}>Rebuild Summary</button>
           <button className="btn sm" disabled={!!actionBusy} onClick={() => runMemoryAction('compact', async () => {
-            const memory = await import('../../modules/memory.js');
-            await memory.compactPinnedFacts();
+            const m = await import('../../modules/memory.js');
+            await m.compactPinnedFacts();
           })}>Compact Facts</button>
           <button className="btn sm ghost" disabled={!!actionBusy} onClick={() => runMemoryAction('clear', async () => {
-            const memory = await import('../../modules/memory.js');
-            await memory.clearArchivedMemory();
+            const m = await import('../../modules/memory.js');
+            await m.clearArchivedMemory();
           })}>Clear Archive</button>
         </div>
       </details>
+
       {(memoryStatus || outcomeStatus || actionBusy) && (
         <div className="field-hint" style={{ marginBottom: 10 }}>
-          {actionBusy ? `Working: ${actionBusy}...` : memoryStatus || outcomeStatus}
+          {actionBusy ? `Working: ${actionBusy}…` : memoryStatus || outcomeStatus}
         </div>
       )}
+
+      {/* ── Nav ── */}
       <div className="subnav">
-        <button className={section === "facts" ? "active" : ""} onClick={() => setSection("facts")}>Facts</button>
-        <button className={section === "summary" ? "active" : ""} onClick={() => setSection("summary")}>Summary</button>
-        <button className={section === "anchors" ? "active" : ""} onClick={() => setSection("anchors")}>Anchors</button>
-        <button className={section === "actors" ? "active" : ""} onClick={() => setSection("actors")}>Actors</button>
-        <button className={section === "outcomes" ? "active" : ""} onClick={() => setSection("outcomes")}>Outcomes</button>
+        <button className={section === 'facts'    ? 'active' : ''} onClick={() => setSection('facts')}>
+          Facts {pinnedFacts.length > 0 && <span className="badge sm">{pinnedFacts.length}</span>}
+        </button>
+        <button className={section === 'summary'  ? 'active' : ''} onClick={() => setSection('summary')}>Summary</button>
+        <button className={section === 'anchors'  ? 'active' : ''} onClick={() => setSection('anchors')}>
+          Anchors {anchors.length > 0 && <span className="badge sm">{anchors.length}</span>}
+        </button>
+        <button className={section === 'actors'   ? 'active' : ''} onClick={() => setSection('actors')}>Actors</button>
+        <button className={section === 'outcomes' ? 'active' : ''} onClick={() => setSection('outcomes')}>Outcomes</button>
       </div>
 
-      {section === "facts" && (
+      {/* ── Facts ── */}
+      {section === 'facts' && (
         <div>
           <div className="card">
-            <div className="card-title"><h3>Pinned Facts</h3><span className="badge">{pinnedFacts.length}</span></div>
-            <div className="field-hint" style={{ marginBottom: 10 }}>Injected into every actor prompt. Semantic dedup prevents near-duplicates.</div>
+            <div className="card-title"><h3>Pinned Facts</h3></div>
             <div className="fact-list">
               {pinnedFacts.map((f, i) => (
                 <div className="fact-item" key={i}>
@@ -91,7 +95,7 @@ export function MemoryPanel() {
                   <span className="x" onClick={() => removeFact(i)}>×</span>
                 </div>
               ))}
-              {!pinnedFacts.length && <div className="empty">No pinned facts yet. Run memory to generate.</div>}
+              {!pinnedFacts.length && <div className="empty">No pinned facts yet.</div>}
             </div>
           </div>
 
@@ -100,45 +104,66 @@ export function MemoryPanel() {
             <div className="fact-list">
               {(Array.isArray(openQuestions) ? openQuestions : []).map((q, i) => (
                 <div className="fact-item" key={i}>
-                  <span className="pin" style={{ color: "var(--warn)" }}>?</span>
+                  <span className="pin" style={{ color: 'var(--warn)' }}>?</span>
                   <span>{q}</span>
                   <span className="x" onClick={() => removeQuestion(i)}>×</span>
                 </div>
               ))}
-              {(!openQuestions.length) && <div className="empty">No open questions yet.</div>}
+              {!openQuestions.length && <div className="empty">No open questions yet.</div>}
             </div>
           </div>
 
-          <div className="card">
-            <div className="card-title"><h3>Archive</h3><span className="badge">{archivedCount} chunks</span></div>
-            <div className="card-row"><span className="lbl">Memory cycles</span><span className="val">{cycleCount}</span></div>
-            <div className="card-row"><span className="lbl">Archived chunks</span><span className="val">{archivedCount}</span></div>
-          </div>
+          {(cycleCount > 0 || archivedCount > 0) && (
+            <div className="card">
+              <div className="card-title"><h3>Archive</h3></div>
+              <div className="card-row">
+                <span className="lbl">Memory cycles</span><span className="val">{cycleCount}</span>
+              </div>
+              <div className="card-row">
+                <span className="lbl">Archived chunks</span><span className="val">{archivedCount}</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {section === "summary" && (
+      {/* ── Summary ── */}
+      {section === 'summary' && (
         <div>
           <div className="card">
-            <div className="card-title"><h3>Shared Summary</h3><span className="badge">{sharedSummary.split(/\s+/).filter(Boolean).length} words</span></div>
-            <textarea rows={14} value={sharedSummary} onChange={(e) => mutateState(s => { s.memory.sharedSummary = e.target.value; })} />
+            <div className="card-title">
+              <h3>Shared Summary</h3>
+              <span className="badge">{sharedSummary.split(/\s+/).filter(Boolean).length} words</span>
+            </div>
+            <textarea rows={14} value={sharedSummary}
+              onChange={e => mutateState(s => { s.memory.sharedSummary = e.target.value; })} />
           </div>
-          <div className="card">
-            <div className="card-title"><h3>DM State</h3></div>
-            <textarea rows={5} value={dmState} onChange={(e) => mutateState(s => { s.memory.dmState = e.target.value; })} />
-          </div>
+          {dmState && (
+            <div className="card">
+              <div className="card-title"><h3>DM State</h3></div>
+              <textarea rows={5} value={dmState}
+                onChange={e => mutateState(s => { s.memory.dmState = e.target.value; })} />
+            </div>
+          )}
+          {!dmState && (
+            <div className="card">
+              <div className="card-title"><h3>DM State</h3></div>
+              <textarea rows={3} placeholder="Scenario / world state (roleplay sessions)." value={dmState}
+                onChange={e => mutateState(s => { s.memory.dmState = e.target.value; })} />
+            </div>
+          )}
         </div>
       )}
 
-      {section === "anchors" && (
+      {/* ── Anchors ── */}
+      {section === 'anchors' && (
         <div>
           {pendingAnchors.length > 0 && (
             <div className="card" style={{ marginBottom: 8 }}>
               <div className="card-title">
-                <h3><Ic.Anchor /> Pending Approval</h3>
+                <h3><Ic.Anchor /> Pending</h3>
                 <span className="badge warn">{pendingAnchors.length}</span>
               </div>
-              <div className="field-hint" style={{ marginBottom: 8 }}>Suggested by the Director — approve to lock in as a settled agreement, or dismiss.</div>
               {pendingAnchors.map((a, i) => (
                 <div className="anchor-item" key={a.id || i} style={{ alignItems: 'flex-start' }}>
                   <div style={{ flex: 1 }}>
@@ -146,8 +171,6 @@ export function MemoryPanel() {
                     <div>{a.text}</div>
                   </div>
                   <button className="btn sm primary" style={{ marginLeft: 6, flexShrink: 0 }} onClick={() => mutateState(s => {
-                    // Locate by identity, not the render-time index — the pending
-                    // list can change between render and click.
                     const idx = s.memory.pendingAnchors.findIndex(p => p === a || (a.id && p.id === a.id));
                     if (idx >= 0) { s.anchors.push(s.memory.pendingAnchors[idx]); s.memory.pendingAnchors.splice(idx, 1); }
                   })}>⚓ Approve</button>
@@ -160,8 +183,10 @@ export function MemoryPanel() {
             </div>
           )}
           <div className="card">
-            <div className="card-title"><h3><Ic.Anchor /> Anchored Agreements</h3><span className="badge">{anchors.length}</span></div>
-            <div className="field-hint" style={{ marginBottom: 10 }}>Settled claims injected into every subsequent prompt. Click ⚓ on any message to anchor it.</div>
+            <div className="card-title">
+              <h3><Ic.Anchor /> Anchored</h3>
+              <span className="badge">{anchors.length}</span>
+            </div>
             {anchors.map((a, i) => (
               <div className="anchor-item" key={a.id || i}>
                 <div className="src">{a.source || a.speaker} · {a.time || new Date(a.createdAt).toLocaleTimeString()}</div>
@@ -169,12 +194,13 @@ export function MemoryPanel() {
                 <span className="x" onClick={() => removeAnchor(i)} style={{ cursor: 'pointer' }}>×</span>
               </div>
             ))}
-            {!anchors.length && <div className="empty">Click ⚓ on a message to anchor a new claim.</div>}
+            {!anchors.length && <div className="empty">Click ⚓ on any message to anchor a claim.</div>}
           </div>
         </div>
       )}
 
-      {section === "actors" && (
+      {/* ── Actors ── */}
+      {section === 'actors' && (
         <div>
           {actors.filter(a => a.enabled !== false).length === 0 && (
             <div className="card"><div className="empty">No active actors.</div></div>
@@ -192,19 +218,18 @@ export function MemoryPanel() {
                   </h3>
                   <span className="badge">{actor.role}</span>
                 </div>
-                <div className="field-hint" style={{ marginBottom: 6 }}>Private memory — injected into this actor's prompt each turn.</div>
                 <textarea
                   rows={4}
                   value={actor.thoughts || ''}
-                  placeholder="No memory yet."
+                  placeholder="No memory accumulated yet."
                   onChange={e => mutateState(s => {
                     const a = s.actors.find(x => x.id === actor.id);
                     if (a) a.thoughts = e.target.value;
                   })}
                 />
                 {rels.length > 0 && (
-                  <div style={{ marginTop: 8 }}>
-                    <div className="field-hint" style={{ marginBottom: 4 }}>Relationships</div>
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg-mute)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Relationships</div>
                     {rels.map(([name, opinion]) => (
                       <div key={name} className="card-row" style={{ alignItems: 'flex-start', gap: 6 }}>
                         <span className="lbl" style={{ minWidth: 80, flexShrink: 0 }}>{name}</span>
@@ -219,20 +244,31 @@ export function MemoryPanel() {
         </div>
       )}
 
-      {section === "outcomes" && (
-        <div>
-          <div className="card">
-            <div className="card-title"><h3>Outcomes</h3></div>
-            <Field label="Final recommendation"><textarea rows={3} value={outcomes.finalRecommendation || ''} onChange={(e) => mutateState(s => { s.outcomes.finalRecommendation = e.target.value; })} /></Field>
-            <Field label="Decisions"><textarea rows={2} value={Array.isArray(outcomes.decisions) ? outcomes.decisions.join('\n') : (outcomes.decisions || '')} onChange={(e) => mutateState(s => { s.outcomes.decisions = e.target.value.split('\n'); })} /></Field>
-            <Field label="Action items"><textarea rows={2} value={Array.isArray(outcomes.actionItems) ? outcomes.actionItems.join('\n') : (outcomes.actionItems || '')} onChange={(e) => mutateState(s => { s.outcomes.actionItems = e.target.value.split('\n'); })} /></Field>
-            <Field label="Risks"><textarea rows={2} value={Array.isArray(outcomes.risks) ? outcomes.risks.join('\n') : (outcomes.risks || '')} onChange={(e) => mutateState(s => { s.outcomes.risks = e.target.value.split('\n'); })} /></Field>
-            <div className="field-hint">Run after the discussion finishes to mine structured findings.</div>
-          </div>
+      {/* ── Outcomes ── */}
+      {section === 'outcomes' && (
+        <div className="card">
+          <div className="card-title"><h3>Outcomes</h3></div>
+          <Field label="Final recommendation">
+            <textarea rows={3} value={outcomes.finalRecommendation || ''}
+              onChange={e => mutateState(s => { s.outcomes.finalRecommendation = e.target.value; })} />
+          </Field>
+          <Field label="Decisions">
+            <textarea rows={2} value={Array.isArray(outcomes.decisions) ? outcomes.decisions.join('\n') : (outcomes.decisions || '')}
+              onChange={e => mutateState(s => { s.outcomes.decisions = e.target.value.split('\n'); })} />
+          </Field>
+          <Field label="Action items">
+            <textarea rows={2} value={Array.isArray(outcomes.actionItems) ? outcomes.actionItems.join('\n') : (outcomes.actionItems || '')}
+              onChange={e => mutateState(s => { s.outcomes.actionItems = e.target.value.split('\n'); })} />
+          </Field>
+          <Field label="Risks">
+            <textarea rows={2} value={Array.isArray(outcomes.risks) ? outcomes.risks.join('\n') : (outcomes.risks || '')}
+              onChange={e => mutateState(s => { s.outcomes.risks = e.target.value.split('\n'); })} />
+          </Field>
         </div>
       )}
 
-      {(injections.length > 0 || privateMessages.length > 0) && (
+      {/* ── Active Steering ── */}
+      {(injections.length > 0 || privateMessages.filter(m => !m.consumed).length > 0) && (
         <details className="card">
           <summary>Active Steering ({injections.length + privateMessages.filter(m => !m.consumed).length})</summary>
           <div className="steering-list">
