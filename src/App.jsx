@@ -83,8 +83,8 @@ export default function App() {
   const [density, setDensity] = useState('comfy');
   const [accent, setAccent] = useState('amber');
   const [activePanel, setActivePanel] = useState('actors');
-  const [inspectorPos, setInspectorPos] = useState('left');
-  const [ready, setReady] = useState(false);
+  const [inspectorPos, _setInspectorPos] = useState('left');
+  const [_ready, setReady] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [sheet, setSheet] = useState(null); // mobile only: null | 'panel' | 'more'
   const isMobile = useMediaQuery('(max-width: 759px)');

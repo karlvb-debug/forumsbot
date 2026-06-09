@@ -4,8 +4,8 @@ import { chatCompletion, getEmbedding, getEmbeddingsBatch, setStatus } from './a
 import { saveState as _hookSaveState } from './stateStore.js';
 import { setBusy, getBusy as getIsGenerating } from './uiStore.js';
 import { hideBackgroundActivity, showBackgroundActivity, updateBackgroundActivity } from './streamingStore.js';
-import { getAllChunks, putChunk, clearChunks, countChunks, getAllMessages } from './db.js';
-import { trimWords, stringifyList, normalizeStringArray, extractKeywords, stringifyBullets, stripCodeFence, extractBalancedObjects, sanitizeJsonString, cosineSimilarity, appendMemory, formatTranscript } from './utils.js';
+import { getAllChunks, putChunk, clearChunks, getAllMessages } from './db.js';
+import { trimWords, stringifyList, normalizeStringArray, extractKeywords, stripCodeFence, extractBalancedObjects, sanitizeJsonString, cosineSimilarity, appendMemory, formatTranscript } from './utils.js';
 
 // Minimum cosine similarity for a chunk to be injected into a prompt.
 // Chunks scoring below this are noise, not signal. Only applies when
@@ -20,6 +20,7 @@ export { cosineSimilarity };
 // when the archive grows or the transcript advances, with no manual bookkeeping.
 const _recallVectorCache = new Map();
 const RECALL_CACHE_MAX = 16; // cap so it doesn't grow unboundedly in very long sessions
+const _factVectorCache = new Map();
 
 export async function recallRelevantChunks(actor) {
   const chunks = await getAllChunks();
@@ -78,7 +79,7 @@ export async function recallRelevantChunks(actor) {
   }
 
   const scored = chunks.map((chunk, index) => {
-    let similarity = 0;
+    let similarity;
     let usedVector = false;
     if (queryVector && Array.isArray(chunk.vector) && !modelMismatch) {
       similarity = cosineSimilarity(queryVector, chunk.vector);
@@ -347,25 +348,6 @@ export async function applyMemoryUpdate(update) {
   await applyPinnedFactSuggestions(update.pinnedFactSuggestions);
 }
 
-// Session-scoped vector cache for pinned/pending fact strings.
-// Keyed by lowercased fact text — avoids re-embedding the same string multiple times.
-// Cleared on page reload (in-memory only, never persisted).
-const _factVectorCache = new Map();
-
-async function getFactVector(factText) {
-  const key = factText.toLowerCase().trim();
-  if (_factVectorCache.has(key)) return _factVectorCache.get(key);
-  try {
-    const vec = await getEmbedding(factText);
-    if (Array.isArray(vec) && vec.length > 0) {
-      _factVectorCache.set(key, vec);
-      return vec;
-    }
-  } catch {
-    // Embedding unavailable — caller falls back to exact-match dedup
-  }
-  return null;
-}
 
 async function applyPinnedFactSuggestions(suggestions) {
   const embeddingModel = state.settings.embeddingModel || state.settings.model || "";

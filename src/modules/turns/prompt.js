@@ -167,7 +167,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
         : `⚠ PRIORITY — FACILITATOR DIRECTIVE: The human facilitator has sent a message that has NOT been adequately addressed yet: ${preview}. You MUST respond to the facilitator's input directly and substantively in your public message on THIS turn. Acknowledge what they said and address it. This overrides the skip rule — do NOT skip when the facilitator has spoken.${docReminder}`;
     }
 
-    let docActionNudge = "";
+    const docActionNudge = "";
 
     const openDeferred = (state.pendingPauses || []).filter(p => p.outcome === "deferred" && p.deferredRound === state.currentRound);
     const deferredNote = openDeferred.length > 0

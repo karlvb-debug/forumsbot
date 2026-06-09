@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useForumState, mutateState } from '../../hooks/useForumState';
 import {
-  frag, getDefault, getOverride, setOverride, clearOverride,
+  getDefault, getOverride, setOverride, clearOverride,
   clearAllOverrides, getAllKeys, getOverrideCount, hasOverride,
   PROMPT_GROUPS, keyLabel
 } from '../../prompts/index.js';

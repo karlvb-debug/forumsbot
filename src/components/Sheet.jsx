@@ -6,7 +6,7 @@ import React, { useEffect } from 'react';
  * top bar, dismissible via the backdrop, the close button, or Escape.
  * Pure CSS animation — no dependency.
  */
-export function Sheet({ open, title, sub, onClose, children }) {
+export function Sheet({ open, title, sub: _sub, onClose, children }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } };

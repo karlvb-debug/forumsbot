@@ -1,4 +1,3 @@
-import React from 'react';
 import * as Ic from './Icons';
 
 export function Rail({ nav, active, onSelect, theme, onToggleTheme, onOpenCmd }) {

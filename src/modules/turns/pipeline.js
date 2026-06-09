@@ -1,5 +1,5 @@
-import { state, saveState, logTransition } from '../state.js';
-import { chatJson, chatCompletion, chatStructured, setStatus, setCurrentSpeaker, getLastToolCalls, isJsonSchemaSupported, resolveModelTier } from '../api.js';
+import { state, saveState } from '../state.js';
+import { chatJson, chatStructured, setStatus, setCurrentSpeaker, getLastToolCalls, isJsonSchemaSupported, resolveModelTier } from '../api.js';
 import { mutateState } from '../stateStore.js';
 import { setBusy, getBusy as getIsGenerating, showToast } from '../uiStore.js';
 import { showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble, showBackgroundActivity, updateBackgroundActivity, hideBackgroundActivity, clearBackgroundActivities } from '../streamingStore.js';
@@ -10,7 +10,7 @@ import { buildNarrativeDmInstruction, buildRoleplayContextLine, buildRoleplaySty
 import { frag } from '../../prompts/index.js';
 import { addMessage, wait, participantCycleCount, resolveSystemSettings, validateActorOutput, resolveActorThinkingTier, globalStyleInstruction, nextParticipant, generateDiscussionPlan, advancePlanStep } from './config.js';
 import { resolverCandidates, resolveNextSpeaker } from './resolver.js';
-import { buildPromptContext, scenarioBlock, privateThoughtDigest, relationshipBlock, getLastPromptParts, setLastPromptParts, getAndConsumeInjectionMaxTokens } from './prompt.js';
+import { buildPromptContext, privateThoughtDigest, relationshipBlock, getLastPromptParts, setLastPromptParts, getAndConsumeInjectionMaxTokens } from './prompt.js';
 import { applyAiResult, finalizeDeferredQuestions, getAndClearResumeAfterPause, cancelPendingPause, distillAllActorsMemory } from './result.js';
 
 let _sessionController = null;
@@ -276,7 +276,6 @@ async function _runTurn(options = {}) {
   }
   setBusy(true);
 
-  let lastError = null;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     if (abortController?.signal.aborted) break;
     try {
@@ -285,7 +284,7 @@ async function _runTurn(options = {}) {
 
       const startTime = Date.now();
 
-      let twoPhase = !!options.forceSpeak;
+      const twoPhase = !!options.forceSpeak;
 
       const streamingColor = participant.data.color || "var(--accent)";
       showStreamingBubble(participant.data.name, streamingColor, "actor");
@@ -375,7 +374,6 @@ async function _runTurn(options = {}) {
       _sessionController = null;
       return true;
     } catch (error) {
-      lastError = error;
       setCurrentSpeaker("");
       forceRemoveStreamingBubble();
       clearBackgroundActivities();
@@ -394,7 +392,7 @@ async function _runTurn(options = {}) {
         continue;
       }
 
-      const msg = lastError.message || "Generation failed.";
+      const msg = error.message || "Generation failed.";
       const label = attempt > 1 ? `${msg} (failed after ${attempt} attempts)` : msg;
       setStatus(label, "error");
       showToast(label, "error");
@@ -451,7 +449,7 @@ async function _runRound(options = {}) {
   state.currentRound = (state.currentRound || 0) + 1;
   if (state.currentRound > 1) advancePlanStep();
   if (state.currentRound === 1 && hasTask() && !state.scenario.plan) {
-    try { await generateDiscussionPlan(abortController?.signal); } catch (e) { /* silent */ }
+    try { await generateDiscussionPlan(abortController?.signal); } catch { /* silent */ }
   }
 
   const userTriggerFired = consumeRecentUserTriggerActorIds();
@@ -687,7 +685,7 @@ export function resolveStopOrContinue(shouldStop) {
   }
 }
 
-export async function promptStopOrContinue(reason, options = {}) {
+export async function promptStopOrContinue(reason, _options = {}) {
   state.autoRunning = false;
   setAutoStopStatus(reason);
   showToast(reason, "warn");

@@ -78,8 +78,8 @@ const MessageCard = React.memo(function MessageCard({ msg, actor, showThoughts, 
   }
 
   // Parse thought from AI JSON envelope
-  let thought = msg.thought || null;
-  let text = cleanMessageText(msg.content || msg.text || msg.message || '');
+  const thought = msg.thought || null;
+  const text = cleanMessageText(msg.content || msg.text || msg.message || '');
 
   // Message collapse: >250 words collapses to 80
   const totalWords = wordCount(text);

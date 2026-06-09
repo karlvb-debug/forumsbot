@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import * as Ic from '../Icons';
 import { Field, Toggle, Range } from '../shared/FormControls';
-import { useForumState, mutateState, saveState } from '../../hooks/useForumState';
+import { useForumState, mutateState } from '../../hooks/useForumState';
 import { putActorMemory } from '../../modules/db.js';
 import { ACTOR_LIBRARY } from '../../modules/blueprints.js';
 

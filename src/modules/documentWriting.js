@@ -1,7 +1,6 @@
 import { state, saveState, logTransition } from './state.js';
 import { chatStructured, setStatus } from './api.js';
 import { showToast } from './uiStore.js';
-import { WORD_LIMITS } from './constants.js';
 import { trimWords } from './utils.js';
 import { buildDocumentWriterPromptLine, buildDocumentWriterSchema } from './schemas.js';
 import { actorCanReadDocument, countWords, ensureDefaultWriter, putKbEntry, resolveDesignatedWriter } from './knowledge.js';

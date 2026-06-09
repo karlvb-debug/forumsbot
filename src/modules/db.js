@@ -39,7 +39,7 @@ export function openMemoryDb() {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.addEventListener("upgradeneeded", (event) => {
       const database = request.result;
-      const oldVersion = event.oldVersion;
+      const _oldVersion = event.oldVersion;
       if (!database.objectStoreNames.contains(MESSAGE_STORE)) {
         const messages = database.createObjectStore(MESSAGE_STORE, { keyPath: "id" });
         messages.createIndex("createdAt", "createdAt");

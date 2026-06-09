@@ -1,4 +1,3 @@
-import React from 'react';
 import { Field, Toggle } from '../shared/FormControls';
 import { useForumState, mutateState } from '../../hooks/useForumState';
 

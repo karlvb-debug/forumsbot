@@ -157,7 +157,7 @@ const FIELDS = {
  * @returns {{ required: string[], optional: string[] }}
  */
 function selectFields(actor, options = {}) {
-  const { showThoughts = true, hasEditable = false, stageDirections = false, allowNextSpeaker = true } = options;
+  const { showThoughts: _showThoughts = true, hasEditable: _hasEditable = false, stageDirections: _stageDirections = false, allowNextSpeaker = true } = options;
 
   const required = [];
   const optional = [];

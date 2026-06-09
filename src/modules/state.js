@@ -102,7 +102,6 @@ function normalizeState(value = {}) {
         canInject: false,
         cadence: null,
         actorMode: 'participant',
-        triggerOn: [],
         ...a,
         // NOTE: on_every_turn is intentionally NOT stripped here — the second
         // pass (migrateEveryTurnTrigger) folds it into a cadence first, then
@@ -367,10 +366,10 @@ export function registerSaveCallback(fn) {
 }
 
 export function saveState() {
-  const { messages, autoRunning, ...persisted } = state;
+  const { messages: _messages, autoRunning: _autoRunning, ...persisted } = state;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...persisted, messages: [] }));
-  } catch (err) {
+  } catch (_err) {
     // Most likely QuotaExceededError — large diagnostics logs and/or imported
     // PR diffs in documents can blow the localStorage budget. Shed the heaviest
     // disposable arrays and retry once before giving up.

@@ -129,7 +129,7 @@ export function sanitizeJsonString(content) {
     const ch = content[i];
     if (escaped) {
       if (inString) {
-        const isValidEscape = /["\\\/bfnrtu]/.test(ch);
+        const isValidEscape = /["\\/bfnrtu]/u.test(ch);
         if (!isValidEscape) {
           result = result.slice(0, -1) + "\\\\" + ch;
         } else {

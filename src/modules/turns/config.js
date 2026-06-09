@@ -3,9 +3,9 @@
  * No pipeline state, no streaming, no prompt assembly.
  */
 import { RECENT_MESSAGE_LIMIT } from '../constants.js';
-import { state, saveState, logTransition } from '../state.js';
+import { state, saveState } from '../state.js';
 import { chatStructured } from '../api.js';
-import { cleanStoredMessage, normalizeSpeakingOrderStrategy, isQueueActor, trimWords } from '../utils.js';
+import { cleanStoredMessage, normalizeSpeakingOrderStrategy, isQueueActor } from '../utils.js';
 import { putMessage } from '../db.js';
 
 // ── System settings ──────────────────────────────────────────────────────────

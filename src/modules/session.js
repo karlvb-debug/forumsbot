@@ -3,7 +3,7 @@ import { state, setState, normalizeState, saveState } from './state.js';
 import { saveState as _saveState, mutateState } from './stateStore.js';
 import { setStatus } from './api.js';
 import { clearMessages, clearChunks, putMessages, putChunk, countChunks, getRecentMessages, getAllMessages, getAllChunks, putSession, getAllSessions, deleteSession, clearKbEntries, clearActorMemories } from './db.js';
-import { chatCompletion, chatCompletionMessages } from './api.js';
+import { chatCompletionMessages } from './api.js';
 import { colors } from './constants.js';
 import {
   cleanStoredMessage,
@@ -12,7 +12,6 @@ import {
   cleanConfigText,
   stripCodeFence,
   extractBalancedObjects,
-  stringifyList,
   sanitizeJsonString
 } from './utils.js';
 import { frag } from '../prompts/index.js';
@@ -145,7 +144,7 @@ export async function exportSession(mode = 'debug') {
     const cleanState = { ...state };
     delete cleanState.diagnostics; // strip raw API logs
     // Strip private actor thoughts (personal memory, session-internal reasoning)
-    cleanState.actors = (cleanState.actors || []).map(({ thoughts, ...rest }) => rest);
+    cleanState.actors = (cleanState.actors || []).map(({ thoughts: _thoughts, ...rest }) => rest);
     // Strip memory.dmState (can contain session-private director context)
     if (cleanState.memory) {
       cleanState.memory = { ...cleanState.memory };
@@ -503,8 +502,6 @@ export async function generateQuickStart(promptOverride = "") {
   } catch (error) {
     state.ui.quickStartHistory.push({ id: crypto.randomUUID(), role: "assistant", content: "", type: "error", message: error.message || "Request failed." });
     setQuickStartStatus("Error: " + (error.message || "Request failed."));
-
-  } finally {
 
   }
 }

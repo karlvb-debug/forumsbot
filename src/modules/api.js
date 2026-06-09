@@ -44,10 +44,6 @@ function extractJsonField(accumulated, fieldName) {
   return result;
 }
 
-function extractStreamingMessage(accumulated) {
-  return extractJsonField(accumulated, "message");
-}
-
 // Returns { thought, message } from the accumulated partial JSON so the
 // streaming bubble can show both fields simultaneously. Both are empty strings
 // during the initial preamble (JSON envelope tokens before any field begins).
@@ -615,7 +611,6 @@ ${result}
 --- end ---`;
         }
         const toolCallsSnapshot = [..._lastToolCalls]; // snapshot before follow-up resets it
-        const cleanedContent = stripTextToolCalls(content);
         const followUpUser = [
           `Here are the tool results you requested:${toolResults}`,
           "",

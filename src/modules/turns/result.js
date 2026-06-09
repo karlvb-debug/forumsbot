@@ -116,7 +116,7 @@ export async function applyAiResult(participant, result, { justSpokeId = null, o
   });
 
   const speakerName = participant.data.name;
-  let docEdited = false;
+  const docEdited = false;
   if (Array.isArray(result.documentEdits) && result.documentEdits.length) {
     console.warn(`[document] ${speakerName} returned documentEdits during a normal turn — ignored. Use a Writer task instead.`);
   } else if (result.documentEdit) {

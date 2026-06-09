@@ -113,13 +113,13 @@ export function ConnectionPanel() {
 
   const pendingStyleUpdate = useForumState(s => s.pendingStyleUpdate || null);
 
-  const [loadingModel, setLoadingModel] = useState(null);
+  const [_loadingModel, _setLoadingModel] = useState(null);
   const [loadError, setLoadError] = useState(null);
 
   const { pingConnection } = useActions();
 
-  const handleLoadModel = async (identifier) => {
-    setLoadingModel(identifier);
+  const _handleLoadModel = async (identifier) => {
+    _setLoadingModel(identifier);
     setLoadError(null);
     try {
       const { loadLmStudioModel, loadModels } = await import('../../modules/api.js');
@@ -129,7 +129,7 @@ export function ConnectionPanel() {
     } catch (err) {
       setLoadError(err.message);
     } finally {
-      setLoadingModel(null);
+      _setLoadingModel(null);
     }
   };
 

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { useForumState, mutateState, saveState } from '../hooks/useForumState';
+import { useForumState, mutateState } from '../hooks/useForumState';
 import { renderMarkdown } from '../modules/markdown.js';
 import { Toggle } from './shared/FormControls';
 import * as Ic from './Icons';
@@ -114,28 +114,22 @@ export function DocEditorStage({ transcript, composer }) {
     setHistoryIdx(null);
   }, [updateDoc]);
 
-  if (!doc) {
-    // Doc was deleted while we had it open
-    close();
-    return null;
-  }
-
-  const versions = doc.versions || [];
-  const wordCount = doc.wordCount || 0;
+  // Derived values needed by hooks below (computed with optional chaining so they're
+  // safe before the doc null-check).
   const writerActors = actors.filter(a => a.enabled && a.canWriteDocuments);
-  const writer = writerActors.find(a => a.id === (doc.writerId || designatedWriterId));
-  const proposals = pendingDocumentEdits.filter(p => p.documentId === doc.id && ['pending', 'conflicted'].includes(p.status));
+  const writer = writerActors.find(a => a.id === (doc?.writerId || designatedWriterId));
 
   const selectedLines = useCallback(() => {
     const el = editorRef.current;
-    if (!el || el.selectionStart === el.selectionEnd) return null;
+    if (!el || !doc || el.selectionStart === el.selectionEnd) return null;
     const content = doc.content || '';
     const startLine = content.slice(0, el.selectionStart).split('\n').length;
     const endLine = content.slice(0, el.selectionEnd).split('\n').length;
     return { startLine, endLine };
-  }, [doc.content]);
+  }, [doc]);
 
   const askWriter = useCallback(async (instruction) => {
+    if (!doc) return;
     if (!doc.aiEditable) {
       setWriterError('Turn on Writable by Writer before asking for document edits.');
       return;
@@ -197,6 +191,16 @@ export function DocEditorStage({ transcript, composer }) {
       s.documentWriting.scribeMode = mode;
     });
   }, []);
+
+  if (!doc) {
+    // Doc was deleted while we had it open
+    close();
+    return null;
+  }
+
+  const versions = doc.versions || [];
+  const wordCount = doc.wordCount || 0;
+  const proposals = pendingDocumentEdits.filter(p => p.documentId === doc.id && ['pending', 'conflicted'].includes(p.status));
 
   return (
     <div

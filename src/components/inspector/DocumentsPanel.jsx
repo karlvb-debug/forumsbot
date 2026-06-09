@@ -138,7 +138,7 @@ function WriterQueue({ documents, actors }) {
 }
 
 function DocRow({
-  entry, actors, writerActors, designatedWriterId, pendingCount,
+  entry, actors: _actors, writerActors, designatedWriterId, pendingCount,
   bulkMode, isSelected, onToggleSelect,
   isDragOver, isDragging, onDragStart, onDragOver, onDragLeave, onDrop,
   onUpdate, onDelete,
