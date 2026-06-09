@@ -259,7 +259,7 @@ export function ConnectionPanel() {
         </Field>
 
         {cfg.supportsEmbeddings ? (
-          <Field label="Embedding model" hint="Optional — improves memory recall">
+          <Field label="Embedding model" info="Optional. A dedicated text-embedding model produces better semantic memory recall. Without one, the chat model is used as a fallback.">
             {isLocal ? (
               <select value={embModel} onChange={(e) => updateSetting('embeddingModel', e.target.value)}>
                 <option value="">— fall back to chat model —</option>
@@ -321,18 +321,18 @@ export function ConnectionPanel() {
           <Field label="Temperature" info="Global default. Per-actor overrides are set on each actor card.">
             <Range value={temperature} onChange={(v) => updateSetting('temperature', v)} min={0} max={2} step={0.05} />
           </Field>
-          <Field label="Max tokens / response">
+          <Field label="Max tokens / response" info="Hard ceiling on how long each actor's reply can be. Increase if actors are cut off mid-sentence; decrease if responses feel padded.">
             <Range value={maxTokens} onChange={(v) => updateSetting('maxTokens', v)} min={200} max={8000} step={100} format={(v) => `${v}`} />
           </Field>
-          <Field label="Top-P (nucleus)">
+          <Field label="Top-P (nucleus)" info="Limits token selection to the most probable tokens whose probabilities sum to P. Lower = more predictable; higher = more varied. Usually leave near 0.95.">
             <Range value={topP} onChange={(v) => updateSetting('topP', v)} min={0.1} max={1} step={0.05} />
           </Field>
-          <Field label="Repeat penalty">
+          <Field label="Repeat penalty" info="Discourages the model from repeating the same words or phrases. Values above 1.1 noticeably reduce loops; too high can make output feel choppy.">
             <Range value={repeatPenalty} onChange={(v) => updateSetting('repeatPenalty', v)} min={1} max={1.5} step={0.05} />
           </Field>
           <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-            <Toggle checked={streaming} onChange={(v) => updateSetting('streamingEnabled', v)} label="Streaming" />
-            <Toggle checked={globalStyleEnabled} onChange={(v) => updateSetting('globalStyleEnabled', v)} label="Global style" />
+            <Toggle checked={streaming} onChange={(v) => updateSetting('streamingEnabled', v)} label="Streaming" title="Stream tokens as they arrive. Gives live feedback but may be unsupported by some endpoints." />
+            <Toggle checked={globalStyleEnabled} onChange={(v) => updateSetting('globalStyleEnabled', v)} label="Global style" title="Apply the global style prompt below to every actor and document-writer turn." />
           </div>
           {pendingStyleUpdate && (
             <div className="style-proposal">

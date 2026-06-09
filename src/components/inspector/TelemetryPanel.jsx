@@ -391,6 +391,7 @@ export function TelemetryPanel() {
             checked={settings.includeTraces !== false}
             onChange={v => mutateState(s => { s.settings.includeTraces = v; })}
             label="Include prompt traces in diagnostics"
+            title="When enabled, the full assembled prompt is stored with each API call log and is viewable in Prompts → Last Prompt. Disable to reduce memory usage."
           />
         </div>
       </details>

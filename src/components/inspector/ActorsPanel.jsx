@@ -306,9 +306,9 @@ export function ActorsPanel() {
                     <Field label="Name"><input value={a.name} onChange={(e) => updateActor(a.id, 'name', e.target.value)} /></Field>
                     <Field label="Role"><input value={a.role} onChange={(e) => updateActor(a.id, 'role', e.target.value)} /></Field>
                   </div>
-                  <Field label="Persona"><textarea rows={3} value={a.persona} onChange={(e) => updateActor(a.id, 'persona', e.target.value)} /></Field>
-                  <Field label="Responsibility" info="This actor's personal focus — not the session completion criteria."><textarea rows={2} value={a.goal} onChange={(e) => updateActor(a.id, 'goal', e.target.value)} /></Field>
-                  <Field label="Voice"><input value={a.voice || ''} onChange={(e) => updateActor(a.id, 'voice', e.target.value)} /></Field>
+                  <Field label="Persona" info="Who this actor is — their background, beliefs, personality, and expertise. The more detailed, the more distinctive and consistent their contributions."><textarea rows={3} value={a.persona} onChange={(e) => updateActor(a.id, 'persona', e.target.value)} /></Field>
+                  <Field label="Responsibility" info="This actor's personal focus or agenda within the session — not the overall session completion criteria."><textarea rows={2} value={a.goal} onChange={(e) => updateActor(a.id, 'goal', e.target.value)} /></Field>
+                  <Field label="Voice" info="Writing style guidance: sentence length, vocabulary level, tone (formal/casual), characteristic phrases. e.g. 'Terse. Uses rhetorical questions. Never hedges.'"><input value={a.voice || ''} onChange={(e) => updateActor(a.id, 'voice', e.target.value)} /></Field>
                   <Field label="Example dialogue" info="A few lines showing how this character talks. The model imitates the style."><textarea rows={2} value={a.exampleDialogue || ''} onChange={(e) => updateActor(a.id, 'exampleDialogue', e.target.value)} /></Field>
                 </div>
 
@@ -459,7 +459,7 @@ export function ActorsPanel() {
                                 </Field>
                               )}
                             </div>
-                            <Field label="Visibility">
+                            <Field label="Visibility" info="Participant: actor's turns appear in the transcript. Background: actor runs silently — useful for directors or routers that inject guidance without having a visible 'voice'.">
                               <select value={a.actorMode || 'participant'} onChange={e => updateActor(a.id, 'actorMode', e.target.value)}>
                                 <option value="participant">Participant</option>
                                 <option value="background">Background</option>

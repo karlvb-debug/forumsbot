@@ -62,14 +62,14 @@ export function ParticipationPanel() {
     <div>
       <div className="card">
         <div className="card-title"><h3>Your Participation</h3></div>
-        <Field label="Display name">
+        <Field label="Display name" info="How actors address you when they pause for your input. Leave blank to stay anonymous.">
           <input
             value={userContext.displayName || ''}
             onChange={e => updateCtx('displayName', e.target.value)}
             placeholder="Leave blank to stay anonymous"
           />
         </Field>
-        <Field label="Participation mode">
+        <Field label="Participation mode" info="Controls how often the discussion pauses for your input. Sponsor = only major decisions; Collaborator = frequent check-ins; Observer = never pauses.">
           <select
             value={mode}
             onChange={e => updateCtx('interactionMode', e.target.value)}
@@ -84,7 +84,7 @@ export function ParticipationPanel() {
         </div>
 
         {mode !== 'observer' && (
-          <Field label="Max pauses per round">
+          <Field label="Max pauses per round" info="Caps how many times actors can interrupt the auto-run per round to ask for your input. Prevents being pestered on every turn.">
             <input
               type="number"
               min={1}
@@ -96,7 +96,7 @@ export function ParticipationPanel() {
           </Field>
         )}
 
-        <Field label="Story role (optional)">
+        <Field label="Story role (optional)" info="In narrative or roleplay sessions, actors can address you by this character title rather than your display name.">
           <input
             value={userContext.storyRole || ''}
             onChange={e => updateCtx('storyRole', e.target.value)}

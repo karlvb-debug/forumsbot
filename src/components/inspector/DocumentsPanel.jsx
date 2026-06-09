@@ -274,13 +274,13 @@ function DocRow({
       {settingsOpen && (
         <div className="doc-row-settings">
           <div className="doc-row-setting">
-            <label>Writable by Writer</label>
+            <label title="When enabled, the designated Writer actor can propose edits to this document during the session.">Writable by Writer</label>
             <Toggle checked={!!entry.aiEditable} onChange={(v) => update({ aiEditable: v })} />
           </div>
 
           {entry.aiEditable && (
             <div className="doc-row-setting">
-              <label>Document writer</label>
+              <label title="Override which actor handles write tasks for this specific document. Defaults to the session writer.">Document writer</label>
               <select
                 value={entry.writerId || ''}
                 onChange={(e) => update({ writerId: e.target.value })}
@@ -296,7 +296,7 @@ function DocRow({
           )}
 
           <div className="doc-row-setting vertical">
-            <label>Purpose</label>
+            <label title="Describes what this document is for — injected as context when the writer works on it.">Purpose</label>
             <textarea
               rows={2}
               value={entry.purpose || ''}
@@ -306,7 +306,7 @@ function DocRow({
           </div>
 
           <div className="doc-row-setting vertical">
-            <label>Format</label>
+            <label title="Desired output structure, tone, or section headings — the writer uses this as a style guide.">Format</label>
             <textarea
               rows={2}
               value={entry.format || ''}
@@ -564,7 +564,7 @@ export function DocumentsPanel() {
           {totalPending > 0 && <span className="doc-pending-header-badge">⚠ {totalPending} pending</span>}
         </div>
         <div className="doc-row-setting">
-          <label>Writer</label>
+          <label title="The actor responsible for executing document-writing tasks. Must have the Write Documents ability enabled.">Writer</label>
           <select value={designatedWriterId} onChange={(e) => setDesignatedWriter(e.target.value)}>
             <option value="">No active writer</option>
             {writerActors.map(a => <option key={a.id} value={a.id}>{a.name} — {a.role}</option>)}
@@ -572,7 +572,7 @@ export function DocumentsPanel() {
           <button className="btn sm" onClick={createWriter}><Ic.Plus width={11} height={11} /> New</button>
         </div>
         <div className="doc-row-setting">
-          <label>Scribe mode</label>
+          <label title="Controls how the writer handles document edits. Auto-apply makes changes immediately; Auto-review queues them for your approval; Ask always checks with you first; Manual disables autonomous writing.">Scribe mode</label>
           <select value={scribeMode} onChange={(e) => setScribeMode(e.target.value)}>
             <option value="auto_apply">Auto · apply directly</option>
             <option value="auto_review">Auto · review-first</option>

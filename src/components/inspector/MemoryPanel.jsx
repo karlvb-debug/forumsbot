@@ -133,7 +133,10 @@ export function MemoryPanel() {
           <div className="card">
             <div className="card-title">
               <h3>Shared Summary</h3>
-              <span className="badge">{sharedSummary.split(/\s+/).filter(Boolean).length} words</span>
+              <span className="badge" title="Word count of the shared memory">{sharedSummary.split(/\s+/).filter(Boolean).length} words</span>
+            </div>
+            <div className="field-hint" style={{ marginBottom: 6 }}>
+              Injected at the top of every actor's context. Summarized automatically by memory cycles; you can also edit it directly.
             </div>
             <textarea rows={14} value={sharedSummary}
               onChange={e => mutateState(s => { s.memory.sharedSummary = e.target.value; })} />
@@ -148,6 +151,9 @@ export function MemoryPanel() {
           {!dmState && (
             <div className="card">
               <div className="card-title"><h3>DM State</h3></div>
+              <div className="field-hint" style={{ marginBottom: 6 }}>
+                Separate world/scene state maintained by the Director in roleplay sessions. Injected into the Director's context.
+              </div>
               <textarea rows={3} placeholder="Scenario / world state (roleplay sessions)." value={dmState}
                 onChange={e => mutateState(s => { s.memory.dmState = e.target.value; })} />
             </div>
@@ -248,19 +254,19 @@ export function MemoryPanel() {
       {section === 'outcomes' && (
         <div className="card">
           <div className="card-title"><h3>Outcomes</h3></div>
-          <Field label="Final recommendation">
+          <Field label="Final recommendation" info="AI-extracted summary of what the group concluded. Run 'Extract Outcomes' to populate automatically, or edit directly.">
             <textarea rows={3} value={outcomes.finalRecommendation || ''}
               onChange={e => mutateState(s => { s.outcomes.finalRecommendation = e.target.value; })} />
           </Field>
-          <Field label="Decisions">
+          <Field label="Decisions" info="Choices the group committed to. One per line. Auto-extracted from the transcript.">
             <textarea rows={2} value={Array.isArray(outcomes.decisions) ? outcomes.decisions.join('\n') : (outcomes.decisions || '')}
               onChange={e => mutateState(s => { s.outcomes.decisions = e.target.value.split('\n'); })} />
           </Field>
-          <Field label="Action items">
+          <Field label="Action items" info="Tasks assigned to people or roles. One per line. Auto-extracted from the transcript.">
             <textarea rows={2} value={Array.isArray(outcomes.actionItems) ? outcomes.actionItems.join('\n') : (outcomes.actionItems || '')}
               onChange={e => mutateState(s => { s.outcomes.actionItems = e.target.value.split('\n'); })} />
           </Field>
-          <Field label="Risks">
+          <Field label="Risks" info="Concerns, blockers, or open uncertainties identified during the session.">
             <textarea rows={2} value={Array.isArray(outcomes.risks) ? outcomes.risks.join('\n') : (outcomes.risks || '')}
               onChange={e => mutateState(s => { s.outcomes.risks = e.target.value.split('\n'); })} />
           </Field>

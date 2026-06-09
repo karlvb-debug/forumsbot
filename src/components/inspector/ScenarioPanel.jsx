@@ -88,7 +88,7 @@ export function ScenarioPanel() {
           </div>
         )}
 
-        <Field label="Stage Directions">
+        <Field label="Stage Directions" info="Adds theatrical action cues between dialogue (*walks to the window*). Great for roleplay or storytelling; leave off for analytical debates.">
           <Toggle
             checked={stageEnabled}
             onChange={v => updateSystem('stageDirections', 'enabled', v)}
@@ -98,14 +98,14 @@ export function ScenarioPanel() {
 
         {stageEnabled && (
           <>
-            <Field label="Intensity">
+            <Field label="Intensity" info="How richly actors describe physical actions and environment. Minimal keeps it functional; Immersive adds full sensory detail.">
               <select value={stageIntensity} onChange={e => updateSystem('stageDirections', 'intensity', e.target.value)}>
                 <option value="minimal">Minimal — actions only when necessary</option>
                 <option value="moderate">Moderate — regular action beats</option>
                 <option value="immersive">Immersive — rich sensory description</option>
               </select>
             </Field>
-            <Field label={`Max stage share — ${Math.round(stageMaxShare * 100)}%`}>
+            <Field label={`Max stage share — ${Math.round(stageMaxShare * 100)}%`} info="Maximum fraction of an actor's response that can be stage directions. Prevents physical descriptions from crowding out dialogue.">
               <input type="range" min={0.1} max={0.6} step={0.05}
                 value={stageMaxShare}
                 onChange={e => updateSystem('stageDirections', 'maxTokenShare', parseFloat(e.target.value))}
@@ -123,7 +123,7 @@ export function ScenarioPanel() {
           </select>
         </Field>
 
-        <Field label="Direct Addressing">
+        <Field label="Direct Addressing" info="When on, an actor can end their turn by addressing a named peer ('...right, Alex?'), which routes the next turn to that person. When off, the configured turn order is always followed.">
           <Toggle
             checked={allowDirectAddress}
             onChange={v => updateSystem('turnRouting', 'allowDirectAddress', v)}

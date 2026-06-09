@@ -89,7 +89,7 @@ export function SessionsPanel() {
 
       <div className="card">
         <div className="card-title"><h3>Export / Import</h3></div>
-        <Field label="Export mode">
+        <Field label="Export mode" info="Debug includes private actor thoughts and full diagnostics. Shareable strips thoughts and personal data. Markdown is a clean human-readable transcript. Evaluation outputs a structured dataset for fine-tuning or benchmarking.">
           <select value={exportMode} onChange={(e) => setExportMode(e.target.value)}>
             <option value="debug">Debug — full state, private thoughts, traces & metrics</option>
             <option value="shareable">Shareable — redacted privacy mode</option>

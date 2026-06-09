@@ -28,7 +28,7 @@ export default function AutoStopPanel() {
   return (
     <div>
       <div className="card">
-        <div className="card-title"><h3>Auto Stop</h3><Toggle checked={autoStop.enabled ?? false} onChange={(v) => update('enabled', v)} label="Enabled" /></div>
+        <div className="card-title"><h3>Auto Stop</h3><Toggle checked={autoStop.enabled ?? false} onChange={(v) => update('enabled', v)} label="Enabled" title="When enabled, the engine automatically halts after completing a round if the goal judge declares the task done, max rounds is hit, or every actor skips." /></div>
 
         {task.trim() && (
           <div className="card-row" style={{ marginBottom: 4 }}>
@@ -54,10 +54,10 @@ export default function AutoStopPanel() {
           <span className="disclosure-sub">goal judge · skip · max rounds</span>
         </summary>
         <div className="disclosure-body">
-          <Toggle checked={autoStop.goalCheckEnabled ?? true} onChange={(v) => update('goalCheckEnabled', v)} label="Judge completion after each round" />
-          <Toggle checked={autoStop.stopOnAllSkip ?? true} onChange={(v) => update('stopOnAllSkip', v)} label="Stop when everyone skips" />
-          <Toggle checked={autoStop.maxRoundsEnabled ?? false} onChange={(v) => update('maxRoundsEnabled', v)} label="Max rounds" />
-          <Field label="Max rounds">
+          <Toggle checked={autoStop.goalCheckEnabled ?? true} onChange={(v) => update('goalCheckEnabled', v)} label="Judge completion after each round" title="After each round the model reads the recent transcript and checks whether the 'Done When' criteria in Scenario have been met." />
+          <Toggle checked={autoStop.stopOnAllSkip ?? true} onChange={(v) => update('stopOnAllSkip', v)} label="Stop when everyone skips" title="If every enabled actor skips their turn in the same round, the session has stalled — auto-stop fires." />
+          <Toggle checked={autoStop.maxRoundsEnabled ?? false} onChange={(v) => update('maxRoundsEnabled', v)} label="Max rounds" title="Hard limit on the number of rounds. Useful as a budget guard when running in auto mode." />
+          <Field label="Max rounds" info="Stop after this many rounds regardless of whether the goal is met.">
             <input type="number" value={autoStop.maxRounds ?? 5} min={1} max={50}
               onChange={(e) => update('maxRounds', parseInt(e.target.value) || 5)}
               disabled={!autoStop.maxRoundsEnabled} />
@@ -71,7 +71,7 @@ export default function AutoStopPanel() {
           <span className="disclosure-sub">pacing · speaker selection</span>
         </summary>
         <div className="disclosure-body">
-          <Field label="Turn delay (s)" hint="Pause between actor turns when auto-running (0 = instant).">
+          <Field label="Turn delay (s)" info="Pause between actor turns when auto-running (0 = instant). Useful for reading along or for rate-limited endpoints.">
             <input
               type="number"
               value={turnDelay}
@@ -79,7 +79,7 @@ export default function AutoStopPanel() {
               onChange={(e) => updateSetting('turnDelay', parseFloat(e.target.value) || 0)}
             />
           </Field>
-          <Field label="Speaker selection" hint="How the engine decides who speaks next when multiple candidates are equally scored.">
+          <Field label="Speaker selection" info="How the engine picks the next speaker. Smart uses a fast LLM intent pass on ambiguous turns only; Always reasons before every turn (more coherent but slower); Off uses a lightweight heuristic name-matcher.">
             <select value={intentPass} onChange={(e) => updateSetting('intentPass', e.target.value)}>
               <option value="auto">Smart — grounded intent (ambiguous turns only)</option>
               <option value="always">Always — reason before every turn</option>
