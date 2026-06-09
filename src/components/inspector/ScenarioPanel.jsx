@@ -20,7 +20,6 @@ export function ScenarioPanel() {
     }
   });
   const updateSystem = (group, key, val) => {
-    // mutateState already persists via saveState — no extra call needed.
     mutateState(s => {
       if (!s.scenario.systems) s.scenario.systems = {};
       if (!s.scenario.systems[group]) s.scenario.systems[group] = {};
@@ -28,9 +27,6 @@ export function ScenarioPanel() {
     });
   };
   const updateDirectorMode = (role) => {
-    // Director mode lives on the director actor (single source of truth). The
-    // engine derives narration etc. from it; the legacy scenario.systems.dmRole
-    // copy is seed-only and no longer written here.
     mutateState(s => {
       const director = (s.actors || []).find(a => a.canDirect && a.enabled)
         || (s.actors || []).find(a => a.canDirect);
@@ -38,7 +34,6 @@ export function ScenarioPanel() {
     });
   };
 
-  // Warn if the director is narrating while a non-director actor has a narrator-like name.
   const directorMode = activeDirector?.directorMode || systems.dmRole?.role || 'facilitator';
   const collisionActors = useMemo(() => {
     if (directorMode !== 'narrator') return [];
@@ -53,10 +48,20 @@ export function ScenarioPanel() {
 
   return (
     <div>
-      <div className="field-hint" style={{ marginBottom: 12 }}>
-        Configure this forum's premise, task, and systems below. For a ready-made
-        setup with a recommended cast, start from a{' '}
-        <button className="link-btn" onClick={() => navigateToPanel('library')}>blueprint in the Library</button>.
+      <div className="card">
+        <div className="card-title"><h3>Core Context</h3><span className="badge">non-compressible</span></div>
+        <Field label="Title">
+          <input value={title} onChange={e => updateScenario('title', e.target.value)} />
+        </Field>
+        <Field label="Premise" info="The backstory injected into every actor prompt.">
+          <textarea rows={4} value={premise} onChange={e => updateScenario('premise', e.target.value)} />
+        </Field>
+        <Field label="Task" info="What should the group accomplish?">
+          <textarea rows={3} value={task} onChange={e => updateScenario('task', e.target.value)} />
+        </Field>
+        <Field label="Done When" info="Concrete completion criteria — enables the auto-stop judge. Leave blank for open-ended.">
+          <textarea rows={2} value={doneWhen} onChange={e => updateScenario('doneWhen', e.target.value)} />
+        </Field>
       </div>
 
       <div className="card">
@@ -64,12 +69,12 @@ export function ScenarioPanel() {
 
         {collisionActors.length > 0 && (
           <div className="warn-card" style={{ marginBottom: 10 }}>
-            ⚠ Director behavior is Narrator, but {collisionActors.map(a => a.name).join(', ')} has a narrator-like role. Consider disabling or renaming to avoid conflicts. Director behavior is also set on the director actor card in{' '}
-            <button className="link-btn" onClick={() => navigateToPanel('actors')}>Actors</button>.
+            ⚠ Director is set to Narrator but {collisionActors.map(a => a.name).join(', ')} has a narrator-like role — consider disabling or renaming to avoid conflicts. Also editable on the{' '}
+            <button className="link-btn" onClick={() => navigateToPanel('actors')}>actor card</button>.
           </div>
         )}
 
-        <Field label="Director Behavior" info="How the active Director frames their turns. This is also editable on the Director actor card.">
+        <Field label="Director Behavior" info="How the active Director frames their turns. Also editable on the Director actor card.">
           <select value={directorMode} onChange={e => updateDirectorMode(e.target.value)}>
             <option value="facilitator">Facilitator — guides discussion, summarizes</option>
             <option value="narrator">Narrator — describes scene, drives story</option>
@@ -79,7 +84,7 @@ export function ScenarioPanel() {
         </Field>
         {!activeDirector && (
           <div className="field-hint" style={{ marginTop: -4, marginBottom: 8 }}>
-            Add or enable a Director actor for this setting to affect director turns.
+            No active Director — add one in <button className="link-btn" onClick={() => navigateToPanel('actors')}>Actors</button>.
           </div>
         )}
 
@@ -109,44 +114,23 @@ export function ScenarioPanel() {
           </>
         )}
 
-        <Field label="Alignment Strictness" info="How frequently actors are reminded of the scenario's Task. Stricter settings inject periodic reminders more often.">
+        <Field label="Alignment Strictness" info="How often actors receive a task reminder. Stricter = more frequent.">
           <select value={alignStrictness} onChange={e => updateSystem('alignment', 'strictness', e.target.value)}>
-            <option value="strict">Strict — task reminder every 3 turns</option>
-            <option value="moderate">Moderate — task reminder every 5 turns</option>
-            <option value="loose">Loose — task reminder every 8 turns</option>
-            <option value="off">Off — no periodic task reminders</option>
+            <option value="strict">Strict — every 3 turns</option>
+            <option value="moderate">Moderate — every 5 turns</option>
+            <option value="loose">Loose — every 8 turns</option>
+            <option value="off">Off — no reminders</option>
           </select>
-        </Field>
-
-        <Field label="Speaking Order" info="The resolver picks the next speaker based on conversation context: who was addressed, actor handoffs, recency, and relevance. Falls back to a tiny LLM call only when ambiguous.">
-          <span className="field-value muted">Hybrid resolver (automatic)</span>
         </Field>
 
         <Field label="Direct Addressing">
           <Toggle
             checked={allowDirectAddress}
             onChange={v => updateSystem('turnRouting', 'allowDirectAddress', v)}
-            label={allowDirectAddress ? 'On — actors can route to a named speaker' : 'Off — follow the configured turn route'}
+            label={allowDirectAddress ? 'On — actors can route to a named speaker' : 'Off — follow configured turn order'}
           />
         </Field>
       </div>
-
-      <div className="card">
-        <div className="card-title"><h3>Core Context</h3><span className="badge">non-compressible</span></div>
-        <Field label="Title">
-          <input value={title} onChange={(e) => updateScenario('title', e.target.value)} />
-        </Field>
-        <Field label="Premise" info="The backstory that grounds every actor prompt">
-          <textarea rows={4} value={premise} onChange={(e) => updateScenario('premise', e.target.value)} />
-        </Field>
-        <Field label="Task" info="What should the group accomplish? Injected into every actor prompt.">
-          <textarea rows={3} value={task} onChange={(e) => updateScenario('task', e.target.value)} />
-        </Field>
-        <Field label="Done When" info="Concrete completion criteria. Enables the auto-stop judge. Leave blank for open-ended conversations.">
-          <textarea rows={2} value={doneWhen} onChange={(e) => updateScenario('doneWhen', e.target.value)} />
-        </Field>
-      </div>
-
     </div>
   );
 }

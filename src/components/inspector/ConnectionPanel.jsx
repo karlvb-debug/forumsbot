@@ -311,11 +311,6 @@ export function ConnectionPanel() {
             <input value={reasoningModel} onChange={(e) => updateSetting('reasoningModel', e.target.value)} placeholder="reasoning model name (optional)…" />
           )}
         </Field>
-        {reasoningModel && (
-          <div className="field-hint">
-            Reason-tier calls (directors, writers) will use <strong>{reasoningModel}</strong>.
-          </div>
-        )}
       </div>
 
       <details className="card card-disclosure">
@@ -324,15 +319,9 @@ export function ConnectionPanel() {
           <span className="disclosure-sub">global defaults · advanced</span>
         </summary>
         <div className="disclosure-body">
-          <Field label="Temperature" info="Global default actor creativity. Individual actors can override this in Actors → Behavior.">
+          <Field label="Temperature" info="Global default. Per-actor overrides are set on each actor card.">
             <Range value={temperature} onChange={(v) => updateSetting('temperature', v)} min={0} max={2} step={0.05} />
           </Field>
-          <div className="field-hint" style={{ marginTop: -4 }}>
-            These are global defaults. &nbsp;
-            <button type="button" className="link-btn" onClick={() => navigateToPanel('actors')}>
-              Per-actor overrides →
-            </button>
-          </div>
           <Field label="Max tokens / response">
             <Range value={maxTokens} onChange={(v) => updateSetting('maxTokens', v)} min={200} max={8000} step={100} format={(v) => `${v}`} />
           </Field>

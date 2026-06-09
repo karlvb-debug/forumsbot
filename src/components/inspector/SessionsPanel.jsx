@@ -83,7 +83,7 @@ export function SessionsPanel() {
         })}
         {!sessions.length && <div className="empty">No saved sessions yet.</div>}
         <div className="field-hint" style={{ marginTop: 8 }}>
-          Sessions snapshot the whole conversation. To reuse a <em>setup</em> (scenario + cast) without the transcript, save it in the Library.
+          To reuse a setup without the transcript, save it in the <button className="link-btn" onClick={async () => { const { navigateToPanel } = await import('../../hooks/navigation.js'); navigateToPanel('library'); }}>Library</button>.
         </div>
       </div>
 
@@ -97,12 +97,9 @@ export function SessionsPanel() {
             <option value="eval">Evaluation — structured QA dataset</option>
           </select>
         </Field>
-        <div className="field-hint" style={{ marginTop: -4, marginBottom: 8 }}>
-          Debug exports include private thoughts and full prompt traces. Use Shareable before sending to others.
-        </div>
         <div className="btn-row">
           <button className="btn" onClick={handleExport}><Ic.Download width={13} height={13} /> Export</button>
-          <button className="btn" onClick={() => presetInputRef.current?.click()}><Ic.Upload width={13} height={13} /> Load preset</button>
+          <button className="btn" onClick={() => presetInputRef.current?.click()}><Ic.Upload width={13} height={13} /> Import</button>
           <input ref={presetInputRef} type="file" accept="application/json" hidden onChange={handlePresetFile} />
         </div>
       </div>
