@@ -2,14 +2,22 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as Ic from './Icons';
 
 const COMMANDS = [
-  { id: 'scenario',   label: 'Open Scenario',      hint: 'S',     kind: 'nav', icon: Ic.Target },
-  { id: 'actors',     label: 'Open Actors',         hint: 'A',     kind: 'nav', icon: Ic.Actors },
-  { id: 'memory',     label: 'Open Memory',         hint: 'M',     kind: 'nav', icon: Ic.Brain },
-  { id: 'telemetry',  label: 'Open Telemetry',      hint: 'T',     kind: 'nav', icon: Ic.Gauge },
-  { id: 'documents',  label: 'Open Documents',      hint: 'D',     kind: 'nav', icon: Ic.Doc },
-  { id: 'goal',       label: 'Open Goal',           hint: 'G',     kind: 'nav', icon: Ic.Sliders },
-  { id: 'sessions',   label: 'Open Sessions',       hint: 'L',     kind: 'nav', icon: Ic.Sessions },
-  { id: 'connection', label: 'Open Connection',     hint: 'K',     kind: 'nav', icon: Ic.Plug },
+  // Build
+  { id: 'scenario',   label: 'Open Scenario',       hint: '',      kind: 'nav', icon: Ic.Target },
+  { id: 'actors',     label: 'Open Actors',         hint: '',      kind: 'nav', icon: Ic.Actors },
+  { id: 'connection', label: 'Open Connection',     hint: '',      kind: 'nav', icon: Ic.Plug },
+  { id: 'library',    label: 'Open Library',        hint: '',      kind: 'nav', icon: Ic.Stage },
+  // Inspect
+  { id: 'memory',     label: 'Open Memory',         hint: '',      kind: 'nav', icon: Ic.Brain },
+  { id: 'telemetry',  label: 'Open Telemetry',      hint: '',      kind: 'nav', icon: Ic.Gauge },
+  { id: 'documents',  label: 'Open Documents',      hint: '',      kind: 'nav', icon: Ic.Doc },
+  { id: 'autostop',   label: 'Open Auto Stop',      hint: '',      kind: 'nav', icon: Ic.Sliders },
+  // Manage
+  { id: 'participation', label: 'Open You (Participation)', hint: '', kind: 'nav', icon: Ic.MessageSquare },
+  { id: 'sessions',   label: 'Open Sessions',       hint: '',      kind: 'nav', icon: Ic.Sessions },
+  { id: 'prompts',    label: 'Open Prompts',        hint: '',      kind: 'nav', icon: Ic.Terminal },
+  { id: 'help',       label: 'Open Help',           hint: '',      kind: 'nav', icon: Ic.Info },
+  // Actions
   { id: 'act:next',   label: 'Select Next mode',    hint: 'Alt+N', kind: 'act', icon: Ic.Step },
   { id: 'act:round',  label: 'Select Round mode',   hint: 'Alt+R', kind: 'act', icon: Ic.Round },
   { id: 'act:auto',   label: 'Select Auto mode',    hint: 'Alt+A', kind: 'act', icon: Ic.Play },

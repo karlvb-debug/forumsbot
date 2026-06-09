@@ -367,13 +367,16 @@ command palette, ReadinessStrip→CSS, topbar overflow menu) shipped. Queued:
   only — won't accidentally trigger an expensive auto-run). Composer Send/
   Continue, Enter, and Alt+N/R/A unchanged. Files: `RunControl.jsx` (new),
   `Topbar.jsx`, CSS.
-- [ ] **Nav IA reshuffle (#7–8).** The 12-item rail's "advanced" tier is a junk
-  drawer (You/Memory/Telemetry/Auto-Stop/Documents/Library/Sessions/Prompts).
-  Regroup into Build (Scenario, Actors, Connection, Library) / Inspect (Memory,
-  Telemetry, Documents, Auto-Stop) / Manage (You, Sessions, Prompts, Help). Also
-  fix the Auto-Stop naming drift: id `goal`, label `Auto Stop`, icon `Sliders`,
-  file `AutoStopPanel` — pick one name. Files: `App.jsx` (NAV), `Rail.jsx`,
-  `CommandPalette.jsx`. Size: medium.
+- [x] **Nav IA reshuffle (#7–8).** (2026-06-09) Regrouped the rail's old
+  primary/advanced split into three labelled tiers — Build (Scenario, Actors,
+  Connection, Library) / Inspect (Memory, Telemetry, Documents, Auto Stop) /
+  Manage (You, Sessions, Prompts); Help stays pinned to the foot beside the
+  command palette and theme toggle. Fixed the Auto-Stop naming drift by renaming
+  the panel id `goal` → `autostop` everywhere (App NAV + titles, Inspector
+  PANELS, CommandPalette). Also filled the command palette's missing nav
+  destinations (Library, You, Prompts, Help) and dropped the fake single-letter
+  hints (S/A/M/T/D/G/L/K) that implied shortcuts which were never wired. Files:
+  `App.jsx`, `Rail.jsx`, `Inspector.jsx`, `CommandPalette.jsx`.
 - [ ] **Collapsible / resizable inspector (#9).** On desktop the inspector
   permanently eats horizontal width even during watch-mode auto-run. Add a
   collapse toggle (or drag handle) so the transcript can go full-width; pairs

@@ -37,37 +37,43 @@ function useMediaQuery(query) {
   return matches;
 }
 
-// Navigation items for the rail
-// Two tiers: `primary` = the core setup loop (connect → scenario → cast);
-// `advanced` = monitoring, artifacts & history. `bottom` pins to the rail
-// foot. On mobile, Actors/Memory live in the bottom nav and the rest are
+// Navigation items for the rail, grouped into three tiers:
+//   `build`   — configure the forum (scenario, cast, model, starting blueprints)
+//   `inspect` — monitor & control the live run (memory, telemetry, docs, stop)
+//   `manage`  — your involvement & app-level concerns (you, sessions, prompts)
+// `bottom` pins Help to the rail foot beside the command palette and theme
+// toggle. On mobile, Actors/Memory live in the bottom nav and the rest are
 // grouped under the "More" sheet by tier.
 const NAV = [
-  { id: 'scenario',      label: 'Scenario',     icon: 'Target',        tier: 'primary'  },
-  { id: 'actors',        label: 'Actors',       icon: 'Actors',        tier: 'primary'  },
-  { id: 'connection',    label: 'Connection',   icon: 'Plug',          tier: 'primary'  },
-  { id: 'participation', label: 'You',          icon: 'MessageSquare', tier: 'advanced' },
-  { id: 'memory',        label: 'Memory',       icon: 'Brain',         tier: 'advanced' },
-  { id: 'telemetry',     label: 'Telemetry',    icon: 'Gauge',         tier: 'advanced' },
-  { id: 'goal',          label: 'Auto Stop',    icon: 'Sliders',       tier: 'advanced' },
-  { id: 'documents',     label: 'Documents',    icon: 'Doc',           tier: 'advanced' },
-  { id: 'library',       label: 'Library',      icon: 'Stage',         tier: 'advanced' },
-  { id: 'sessions',      label: 'Sessions',     icon: 'Sessions',      tier: 'advanced' },
-  { id: 'prompts',       label: 'Prompts',      icon: 'Terminal',      tier: 'advanced' },
-  { id: 'help',          label: 'Help',         icon: 'Info',          tier: 'bottom'   },
+  // Build
+  { id: 'scenario',      label: 'Scenario',     icon: 'Target',        tier: 'build'   },
+  { id: 'actors',        label: 'Actors',       icon: 'Actors',        tier: 'build'   },
+  { id: 'connection',    label: 'Connection',   icon: 'Plug',          tier: 'build'   },
+  { id: 'library',       label: 'Library',      icon: 'Stage',         tier: 'build'   },
+  // Inspect
+  { id: 'memory',        label: 'Memory',       icon: 'Brain',         tier: 'inspect' },
+  { id: 'telemetry',     label: 'Telemetry',    icon: 'Gauge',         tier: 'inspect' },
+  { id: 'documents',     label: 'Documents',    icon: 'Doc',           tier: 'inspect' },
+  { id: 'autostop',      label: 'Auto Stop',    icon: 'Sliders',       tier: 'inspect' },
+  // Manage
+  { id: 'participation', label: 'You',          icon: 'MessageSquare', tier: 'manage'  },
+  { id: 'sessions',      label: 'Sessions',     icon: 'Sessions',      tier: 'manage'  },
+  { id: 'prompts',       label: 'Prompts',      icon: 'Terminal',      tier: 'manage'  },
+  // Foot
+  { id: 'help',          label: 'Help',         icon: 'Info',          tier: 'bottom'  },
 ];
 
 const NAV_TITLES = {
   scenario:      { title: 'Scenario',      sub: 'premise · task · systems' },
   actors:        { title: 'Actors',        sub: 'panel composition' },
-  participation: { title: 'Participation', sub: 'your role · pause policy' },
+  connection:    { title: 'Connection',    sub: 'LM Studio · model · generation' },
+  library:       { title: 'Library',       sub: 'blueprints · saved setups' },
   memory:        { title: 'Memory',        sub: 'facts · summary · anchors · actors · outcomes' },
   telemetry:     { title: 'Telemetry',     sub: 'context · speed · health · budget' },
   documents:     { title: 'Documents',     sub: 'working docs · references · links' },
-  goal:          { title: 'Auto Stop',    sub: 'completion criteria · judges' },
-  library:       { title: 'Library',       sub: 'blueprints · saved setups' },
+  autostop:      { title: 'Auto Stop',     sub: 'completion criteria · judges' },
+  participation: { title: 'Participation', sub: 'your role · pause policy' },
   sessions:      { title: 'Sessions',      sub: 'save · load · export' },
-  connection:    { title: 'Connection',    sub: 'LM Studio · model · generation' },
   prompts:       { title: 'Prompts',       sub: 'system prompt editor' },
   help:          { title: 'Help',          sub: 'documentation · reference' },
 };
@@ -279,8 +285,9 @@ export default function App() {
   // else is grouped by tier inside the "More" sheet.
   const inBottomNav = ['actors', 'memory'];
   const moreGroups = [
-    { label: 'Setup',   items: NAV.filter(n => n.tier === 'primary'  && !inBottomNav.includes(n.id)) },
-    { label: 'Session', items: NAV.filter(n => n.tier === 'advanced' && !inBottomNav.includes(n.id)) },
+    { label: 'Build',   items: NAV.filter(n => n.tier === 'build'   && !inBottomNav.includes(n.id)) },
+    { label: 'Inspect', items: NAV.filter(n => n.tier === 'inspect' && !inBottomNav.includes(n.id)) },
+    { label: 'Manage',  items: NAV.filter(n => n.tier === 'manage') },
     { label: 'Help',    items: NAV.filter(n => n.tier === 'bottom') },
   ].filter(g => g.items.length);
 

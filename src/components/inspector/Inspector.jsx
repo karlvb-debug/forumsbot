@@ -21,7 +21,7 @@ const PANELS = {
   participation: ParticipationPanel,
   memory: MemoryPanel,
   telemetry: TelemetryPanel,
-  goal: AutoStopPanel,
+  autostop: AutoStopPanel,
   library: LibraryPanel,
   sessions: SessionsPanel,
   documents: DocumentsPanel,

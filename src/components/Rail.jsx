@@ -2,8 +2,9 @@ import React from 'react';
 import * as Ic from './Icons';
 
 export function Rail({ nav, active, onSelect, theme, onToggleTheme, onOpenCmd }) {
-  const primary = nav.filter(n => n.tier === 'primary');
-  const advanced = nav.filter(n => n.tier === 'advanced');
+  const build = nav.filter(n => n.tier === 'build');
+  const inspect = nav.filter(n => n.tier === 'inspect');
+  const manage = nav.filter(n => n.tier === 'manage');
   const bottom = nav.filter(n => n.tier === 'bottom');
 
   const renderBtn = (n) => {
@@ -28,14 +29,20 @@ export function Rail({ nav, active, onSelect, theme, onToggleTheme, onOpenCmd })
     <nav className="rail" aria-label="Systems">
       <div className="rail-brand" title="Forum">F</div>
 
-      <div className="rail-group" aria-label="Primary">
-        {primary.map(renderBtn)}
+      <div className="rail-group" aria-label="Build">
+        {build.map(renderBtn)}
       </div>
 
       <div className="rail-divider" role="separator" />
 
-      <div className="rail-group" aria-label="Advanced">
-        {advanced.map(renderBtn)}
+      <div className="rail-group" aria-label="Inspect">
+        {inspect.map(renderBtn)}
+      </div>
+
+      <div className="rail-divider" role="separator" />
+
+      <div className="rail-group" aria-label="Manage">
+        {manage.map(renderBtn)}
       </div>
 
       <div className="rail-spacer" />
