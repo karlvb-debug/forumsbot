@@ -99,9 +99,6 @@ export function ParticipationPanel() {
       {mode !== 'observer' && (
         <div className="card">
           <div className="card-title"><h3>Allowed Pause Reasons</h3></div>
-          <div className="field-hint" style={{ marginBottom: 8 }}>
-            Actors can only pause for the reasons checked below.
-          </div>
           {Object.entries(PAUSE_REASON_LABELS).map(([key, label]) => {
             const allowed = userContext.pausePolicy?.allowedReasons
               ? userContext.pausePolicy.allowedReasons.includes(key)

@@ -3,7 +3,6 @@ import * as Ic from '../Icons';
 import { Field, Toggle, Range } from '../shared/FormControls';
 import { useForumState, mutateState, saveState } from '../../hooks/useForumState';
 import { putActorMemory } from '../../modules/db.js';
-import { navigateToPanel } from '../../hooks/navigation.js';
 import { ACTOR_LIBRARY } from '../../modules/blueprints.js';
 
 const PERM_DEFS = [
@@ -315,21 +314,12 @@ export function ActorsPanel() {
                 {/* ── Behavior (always visible) ── */}
                 <div className="actor-section-divider" />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <Field label={`Authority — ${a.authority ?? 50}`} info="How much weight other actors give this actor's claims. Does NOT change speaking order.">
+                  <Field label={`Authority — ${a.authority ?? 50}`} info="How much weight other actors give this actor's claims. 0 = background voice, 50 = peer, 100 = domain authority. Does NOT change speaking order.">
                     <Range value={a.authority ?? 50} min={0} max={100} step={5} onChange={(v) => updateActor(a.id, 'authority', v)} />
                   </Field>
-                  <div className="field-hint" style={{ marginTop: -4 }}>
-                    0 = background voice &nbsp;·&nbsp; 50 = peer &nbsp;·&nbsp; 100 = domain authority
-                  </div>
-                  <Field label={`Temperature — ${(a.temperature ?? 0.8).toFixed(2)}`} info="Per-actor creativity. Overrides the global default set in Connection → Generation.">
+                  <Field label={`Temperature — ${(a.temperature ?? 0.8).toFixed(2)}`} info="Per-actor creativity. Low = focused, high = unpredictable. Overrides the global default set in Connection → Generation.">
                     <Range value={a.temperature ?? 0.8} min={0.1} max={1.5} step={0.05} onChange={(v) => updateActor(a.id, 'temperature', v)} />
                   </Field>
-                  <div className="field-hint" style={{ marginTop: -4 }}>
-                    Low = focused &nbsp;·&nbsp; High = creative / unpredictable &nbsp;·&nbsp;
-                    <button type="button" className="link-btn" onClick={() => navigateToPanel('connection')}>
-                      Global default →
-                    </button>
-                  </div>
                   <div>
                     <div className="actor-section-label" style={{ marginBottom: 6 }}>Thinking Tier</div>
                     <div className="perm-chips">
@@ -352,9 +342,6 @@ export function ActorsPanel() {
                           </button>
                         );
                       })}
-                    </div>
-                    <div className="field-hint" style={{ marginTop: 4 }}>
-                      auto = role default &nbsp;·&nbsp; fast = no thought &nbsp;·&nbsp; think = JSON thought &nbsp;·&nbsp; reason = deep / reasoning model
                     </div>
                   </div>
                   <div>
@@ -403,7 +390,6 @@ export function ActorsPanel() {
                 <details className="actor-advanced card-disclosure">
                   <summary>
                     <span className="actor-section-label" style={{ textTransform: 'none', fontSize: 12, letterSpacing: 0 }}>Advanced</span>
-                    <span className="disclosure-sub">scheduling · triggers · relationships · tokens</span>
                   </summary>
                   <div className="disclosure-body">
                     <Field label="Max tokens" info="Cap on this actor's response length. Leave blank to use the global default.">

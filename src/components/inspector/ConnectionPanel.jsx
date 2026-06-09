@@ -211,9 +211,6 @@ export function ConnectionPanel() {
       {isLocal && status.tone === 'ok' && availableModels.length > 0 && !model && (
         <div className="card getting-started-card">
           <div className="card-title"><h3>Select a model</h3></div>
-          <p style={{ marginBottom: 8, fontSize: '0.85em', color: 'var(--fg-dim)' }}>
-            LM Studio is connected. Pick a loaded model to get started.
-          </p>
           {availableModels.map(id => (
             <button key={id} className="btn sm" style={{ display: 'block', width: '100%', marginBottom: 4, textAlign: 'left' }}
               onClick={() => mutateState(s => { s.settings.model = id; })}>

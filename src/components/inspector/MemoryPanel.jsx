@@ -33,23 +33,20 @@ export function MemoryPanel() {
   return (
     <div>
       {/* ── Actions ── */}
-      <div className="btn-row" style={{ marginBottom: 8 }}>
-        <button className="btn sm" disabled={!!actionBusy} onClick={() => runMemoryAction('summarize', async () => {
+      <div className="btn-row" style={{ marginBottom: 12, flexWrap: 'wrap' }}>
+        <button className="btn sm" disabled={!!actionBusy} title="Summarize the recent transcript into the shared memory" onClick={() => runMemoryAction('summarize', async () => {
           const m = await import('../../modules/memory.js');
           await m.summarizeMemory('manual');
-        })}>Summarize Now</button>
-        <button className="btn sm" disabled={!!actionBusy} onClick={() => runMemoryAction('extract', async () => {
+        })}>Summarize</button>
+        <button className="btn sm" disabled={!!actionBusy} title="Extract decisions, action items, and risks from the transcript" onClick={() => runMemoryAction('extract', async () => {
           const m = await import('../../modules/memory.js');
           await m.extractOutcomes();
           setSection('outcomes');
         })}>Extract Outcomes</button>
-      </div>
-
-      <div className="btn-row" style={{ marginBottom: 12 }}>
         <button className="btn sm" disabled={!!actionBusy} title="Discard the current summary and rebuild it from the full transcript" onClick={() => runMemoryAction('rebuild', async () => {
           const m = await import('../../modules/memory.js');
           await m.summarizeMemory('rebuild', null, { reset: true });
-        })}>Rebuild Summary</button>
+        })}>Rebuild</button>
         <button className="btn sm" disabled={!!actionBusy} title="Merge and deduplicate pinned facts to save context space" onClick={() => runMemoryAction('compact', async () => {
           const m = await import('../../modules/memory.js');
           await m.compactPinnedFacts();

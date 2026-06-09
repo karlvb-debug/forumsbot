@@ -51,7 +51,6 @@ export default function AutoStopPanel() {
       <details className="card card-disclosure">
         <summary className="card-title">
           <h3>Stop Conditions</h3>
-          <span className="disclosure-sub">goal judge · skip · max rounds</span>
         </summary>
         <div className="disclosure-body">
           <Toggle checked={autoStop.goalCheckEnabled ?? true} onChange={(v) => update('goalCheckEnabled', v)} label="Judge completion after each round" title="After each round the model reads the recent transcript and checks whether the 'Done When' criteria in Scenario have been met." />
@@ -68,7 +67,6 @@ export default function AutoStopPanel() {
       <details className="card card-disclosure">
         <summary className="card-title">
           <h3>Auto-run</h3>
-          <span className="disclosure-sub">pacing · speaker selection</span>
         </summary>
         <div className="disclosure-body">
           <Field label="Turn delay (s)" info="Pause between actor turns when auto-running (0 = instant). Useful for reading along or for rate-limited endpoints.">

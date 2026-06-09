@@ -81,9 +81,6 @@ export function SessionsPanel() {
           );
         })}
         {!sessions.length && <div className="empty">No saved sessions yet.</div>}
-        <div className="field-hint" style={{ marginTop: 8 }}>
-          To reuse a setup without the transcript, save it in the <button className="link-btn" onClick={async () => { const { navigateToPanel } = await import('../../hooks/navigation.js'); navigateToPanel('library'); }}>Library</button>.
-        </div>
       </div>
 
       <div className="card">
