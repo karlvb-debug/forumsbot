@@ -17,6 +17,9 @@ const COMMANDS = [
   { id: 'act:nudge',  label: 'Trigger steering nudge', hint: '',   kind: 'act', icon: Ic.Bolt },
   { id: 'act:save',   label: 'Save session',        hint: 'Ctrl+S', kind: 'act', icon: Ic.Download },
   { id: 'act:export', label: 'Export transcript',    hint: '',      kind: 'act', icon: Ic.Download },
+  { id: 'act:density', label: 'Toggle density (comfy / compact)', hint: '', kind: 'act', icon: Ic.Sliders },
+  { id: 'act:accent', label: 'Cycle accent color',   hint: '',      kind: 'act', icon: Ic.Palette },
+  { id: 'act:theme',  label: 'Toggle light / dark theme', hint: '', kind: 'act', icon: Ic.Moon },
 ];
 
 export function CommandPalette({ open, onClose, onSelect }) {

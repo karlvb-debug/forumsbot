@@ -5,7 +5,6 @@ import { useForumState, mutateState } from '../../hooks/useForumState';
 import { isEmbeddingModel } from '../../modules/api.js';
 import { useActions, getConnectionStatus, getConnectionStatusVersion, subscribeConnectionStatus } from '../../hooks/useActions';
 import { useSyncExternalStore } from 'react';
-import { navigateToPanel } from '../../hooks/navigation.js';
 
 const PROVIDERS = {
   'lm-studio': {

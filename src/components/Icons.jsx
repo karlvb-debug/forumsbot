@@ -290,3 +290,74 @@ export const Terminal = (props) => (
     <line x1="10" y1="14" x2="16" y2="14" />
   </svg>
 );
+
+export const Copy = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <rect x="7" y="7" width="9" height="9" rx="1.5" />
+    <path d="M13 7V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" />
+  </svg>
+);
+
+export const Check = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M4 10l4 4 8-9" />
+  </svg>
+);
+
+export const ThumbUp = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M6 9v8H3.5a.5.5 0 0 1-.5-.5V9.5a.5.5 0 0 1 .5-.5z" />
+    <path d="M6 9l3.5-6a2 2 0 0 1 2 2v3h4a1.5 1.5 0 0 1 1.5 1.8l-1 5A1.5 1.5 0 0 1 14.5 17H6" />
+  </svg>
+);
+
+export const ThumbDown = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M6 11V3H3.5a.5.5 0 0 0-.5.5v7a.5.5 0 0 0 .5.5z" />
+    <path d="M6 11l3.5 6a2 2 0 0 0 2-2v-3h4a1.5 1.5 0 0 0 1.5-1.8l-1-5A1.5 1.5 0 0 0 14.5 3H6" />
+  </svg>
+);
+
+export const Fork = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <circle cx="6" cy="5" r="2" /><circle cx="14" cy="5" r="2" /><circle cx="10" cy="15" r="2" />
+    <path d="M6 7v2a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V7M10 11v2" />
+  </svg>
+);
+
+export const Pin = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M10 13v4" />
+    <path d="M6 3h8l-1.5 2.5L13 9l2 2H5l2-2 .5-3.5z" />
+  </svg>
+);
+
+export const Beaker = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M8 3v5L4 15a1.5 1.5 0 0 0 1.3 2.2h9.4A1.5 1.5 0 0 0 16 15l-4-7V3" />
+    <path d="M7 3h6M6.5 11h7" />
+  </svg>
+);
+
+export const Clipboard = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <rect x="5" y="4" width="10" height="13" rx="1.5" />
+    <path d="M8 4V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1" />
+    <path d="M8 9h4M8 12h4" />
+  </svg>
+);
+
+export const MoreHorizontal = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="currentColor" {...props}>
+    <circle cx="5" cy="10" r="1.5" /><circle cx="10" cy="10" r="1.5" /><circle cx="15" cy="10" r="1.5" />
+  </svg>
+);
+
+export const Palette = (props) => (
+  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M10 3a7 7 0 0 0 0 14c1.1 0 1.5-.9 1.5-1.7 0-1 .8-1.8 1.8-1.8H15a2.5 2.5 0 0 0 2.5-2.5C17.5 6.4 14.2 3 10 3z" />
+    <circle cx="6.5" cy="9" r="1" fill="currentColor" stroke="none" />
+    <circle cx="10" cy="6.5" r="1" fill="currentColor" stroke="none" />
+    <circle cx="13.5" cy="9" r="1" fill="currentColor" stroke="none" />
+  </svg>
+);

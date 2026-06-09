@@ -143,13 +143,13 @@ const MessageCard = React.memo(function MessageCard({ msg, actor, showThoughts, 
         <div className="msg-actions">
           <button
             title={copied ? 'Copied!' : 'Copy message'}
-            style={{ opacity: copied ? 1 : undefined }}
+            className={copied ? 'active' : ''}
             onClick={handleCopy}
           >
-            {copied ? '✓' : '📋'}
+            {copied ? <Ic.Check width={13} height={13} /> : <Ic.Copy width={13} height={13} />}
           </button>
-          <button className={msg.feedback === "up" ? "active" : ""} title="Helpful" onClick={() => onFeedback?.(msg.id, "up")}>👍</button>
-          <button className={msg.feedback === "down" ? "active" : ""} title="Unhelpful" onClick={() => onFeedback?.(msg.id, "down")}>👎</button>
+          <button className={msg.feedback === "up" ? "active" : ""} title="Helpful" onClick={() => onFeedback?.(msg.id, "up")}><Ic.ThumbUp width={13} height={13} /></button>
+          <button className={msg.feedback === "down" ? "active" : ""} title="Unhelpful" onClick={() => onFeedback?.(msg.id, "down")}><Ic.ThumbDown width={13} height={13} /></button>
           <button
             className={msg.anchored ? "active" : ""}
             title="Anchor this claim"
@@ -157,7 +157,7 @@ const MessageCard = React.memo(function MessageCard({ msg, actor, showThoughts, 
           >
             <Ic.Anchor width={13} height={13} />
           </button>
-          <button title="Fork from here" onClick={() => onFork?.(msg.id)}>⑂</button>
+          <button title="Fork from here" onClick={() => onFork?.(msg.id)}><Ic.Fork width={13} height={13} /></button>
         </div>
       </div>
     </article>
@@ -195,7 +195,7 @@ function StreamingBubble({ streaming, showThoughts }) {
           <>
             {showThoughts && hasThought && (
               <details className="streaming-thought-summary" open>
-                <summary>💭 {streaming.thought.trim().split(/\s+/).filter(Boolean).length}w of reasoning</summary>
+                <summary>{streaming.thought.trim().split(/\s+/).filter(Boolean).length}w of reasoning</summary>
                 <div className="streaming-thought-summary-body">{streaming.thought}</div>
               </details>
             )}
@@ -408,12 +408,12 @@ export function Transcript({ showThoughts }) {
             </span>
           )}
           <button
-            className="chip-btn"
-            style={{ marginLeft: 'auto', fontSize: 11 }}
+            className={"chip-btn" + (searchOpen ? " active" : "")}
+            style={{ marginLeft: 'auto' }}
             title="Search transcript (Ctrl+F)"
             onClick={() => { setSearchOpen(v => !v); if (searchOpen) setSearchQuery(''); }}
           >
-            🔍
+            <Ic.Search width={13} height={13} />
           </button>
         </div>
 
@@ -480,7 +480,7 @@ export function Transcript({ showThoughts }) {
 
       {!messages.length && !streaming && !backgroundActivities.length && (
         <div className="empty-transcript">
-          <div className="empty-transcript-icon">💬</div>
+          <div className="empty-transcript-icon"><Ic.Forum width={40} height={40} /></div>
           <div className="empty-transcript-text">No messages yet</div>
           <div className="empty-transcript-hint">Send a message or press Next to start</div>
         </div>

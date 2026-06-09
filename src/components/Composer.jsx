@@ -119,7 +119,7 @@ export function Composer({ showThoughts, onToggleThoughts }) {
             onClick={() => setNoteOpen(v => !v)}
             title="Inject a moderator note into the transcript"
           >
-            📌 Note
+            <Ic.Pin width={12} height={12} /> Note
           </button>
           <span className="grow" />
           <button

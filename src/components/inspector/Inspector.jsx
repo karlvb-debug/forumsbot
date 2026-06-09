@@ -44,11 +44,11 @@ export function Inspector({ active, meta, nav, embedded = false }) {
   const promptToggle = canShowPrompt ? (
     <button
       className={"chip-btn" + (showPrompt ? " active" : "")}
-      style={{ marginLeft: 'auto' }}
+      style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4 }}
       title="View the last actor prompt sent to the model"
       onClick={() => setShowPrompt(v => !v)}
     >
-      {showPrompt ? '← Back' : '🔬 Prompt'}
+      {showPrompt ? <><Ic.Chevron width={13} height={13} style={{ transform: 'rotate(180deg)' }} /> Back</> : <><Ic.Beaker width={13} height={13} /> Prompt</>}
     </button>
   ) : null;
 

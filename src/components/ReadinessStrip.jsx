@@ -46,36 +46,12 @@ export function ReadinessStrip() {
   if (allOk) return null;
 
   return (
-    <div
-      className="readiness-strip"
-      style={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: 6,
-        padding: '4px 12px',
-        borderTop: '1px solid var(--border)',
-        background: 'var(--bg-raised, rgba(0,0,0,0.15))',
-        fontSize: 11,
-      }}
-    >
+    <div className="readiness-strip">
       {checks.map(c => {
-        const color = c.ok ? 'var(--ok, #4caf50)' : c.warn ? 'var(--warn, #ff9800)' : 'var(--danger, #f44336)';
+        const color = c.ok ? 'var(--ok)' : c.warn ? 'var(--warn)' : 'var(--danger)';
         return (
-          <span
-            key={c.key}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              padding: '2px 6px',
-              borderRadius: 10,
-              background: `${color}22`,
-              color,
-              border: `1px solid ${color}66`,
-              fontWeight: 500,
-            }}
-          >
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
+          <span key={c.key} className="readiness-chip" style={{ '--chip': color }}>
+            <span className="readiness-dot" />
             {c.label}
           </span>
         );

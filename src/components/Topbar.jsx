@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import * as Ic from './Icons';
 import { useForumState, mutateState, saveState } from '../hooks/useForumState';
 import { useActions, getConnectionStatus, getConnectionStatusVersion, subscribeConnectionStatus } from '../hooks/useActions';
@@ -9,6 +9,8 @@ export function Topbar() {
   const assistantOpen = useForumState(s => s.ui?.assistantOpen || false);
   const toggleAssistant = () => mutateState(s => { s.ui.assistantOpen = !s.ui.assistantOpen; });
   const [mdCopied, setMdCopied] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
 
   const handleCopyMd = async () => {
     const { copyMarkdownToClipboard } = await import('../modules/session.js');
@@ -36,6 +38,16 @@ export function Topbar() {
   const isExtracting = useForumState(s => s.outcomes?.isExtracting || false);
   const isDistilling = useForumState(s => s.memory?.isDistilling || false);
   const distillingActor = useForumState(s => s.memory?.distillingActor || "");
+
+  // Close the overflow menu on outside click or Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [menuOpen]);
 
   let bgTaskText = "";
   if (isSummarizing) {
@@ -111,39 +123,48 @@ export function Topbar() {
           <Ic.Play width={12} height={12} /><span>Auto</span>
         </button>
       </div>
-      <button
-        className="icon-btn"
-        onClick={directorBrief}
-        title="Director brief — ask the Director for a progress summary"
-        aria-label="Director brief"
-        style={{ fontSize: 13 }}
-      >
-        📋
-      </button>
 
-      <button
-        className={`icon-btn${turboMode ? ' active warn' : ''}`}
-        title={turboMode ? 'Turbo mode ON — memory/alignment/thoughts disabled (click to turn off)' : 'Turbo mode — skip memory cycles, alignment, and thoughts for maximum speed'}
-        style={{ fontSize: 11, fontWeight: 600 }}
-        onClick={() => { mutateState(s => { s.settings.turboMode = !s.settings.turboMode; }); saveState(); }}
-      >
-        ⚡
-      </button>
-      <button
-        className="icon-btn"
-        onClick={handleCopyMd}
-        title="Copy session as Markdown"
-        style={{ fontSize: 11, fontWeight: 600 }}
-      >
-        {mdCopied ? '✓' : '⬇ MD'}
-      </button>
       <button
         className={`icon-btn${assistantOpen ? ' active' : ''}`}
         onClick={toggleAssistant}
         title="AI Assistant · Alt+I"
+        aria-label="AI Assistant"
       >
         <Ic.Robot width={16} height={16} />
       </button>
+
+      <div className="topbar-overflow" ref={menuRef}>
+        <button
+          className={`icon-btn${menuOpen ? ' active' : ''}${turboMode ? ' warn' : ''}`}
+          onClick={() => setMenuOpen(v => !v)}
+          title="More actions"
+          aria-label="More actions"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+        >
+          <Ic.MoreHorizontal width={16} height={16} />
+        </button>
+        {menuOpen && (
+          <div className="topbar-menu" role="menu">
+            <button role="menuitem" onClick={() => { directorBrief(); setMenuOpen(false); }}>
+              <Ic.Clipboard width={15} height={15} /><span>Director brief</span>
+            </button>
+            <button
+              role="menuitemcheckbox"
+              aria-checked={turboMode}
+              className={turboMode ? 'checked' : ''}
+              onClick={() => { mutateState(s => { s.settings.turboMode = !s.settings.turboMode; }); saveState(); }}
+              title="Skip memory cycles, alignment, and thoughts for maximum speed"
+            >
+              <Ic.Bolt width={15} height={15} /><span>Turbo mode</span>
+              {turboMode && <Ic.Check width={14} height={14} style={{ marginLeft: 'auto' }} />}
+            </button>
+            <button role="menuitem" onClick={() => { handleCopyMd(); setMenuOpen(false); }}>
+              <Ic.Download width={15} height={15} /><span>{mdCopied ? 'Copied!' : 'Copy as Markdown'}</span>
+            </button>
+          </div>
+        )}
+      </div>
     </header>
   );
 }

@@ -61,8 +61,8 @@ const NAV_TITLES = {
   scenario:      { title: 'Scenario',      sub: 'premise · task · systems' },
   actors:        { title: 'Actors',        sub: 'panel composition' },
   participation: { title: 'Participation', sub: 'your role · pause policy' },
-  memory:        { title: 'Memory',        sub: 'facts · summary · anchors · outcomes' },
-  telemetry:     { title: 'Telemetry',     sub: 'alignment · drift · influence' },
+  memory:        { title: 'Memory',        sub: 'facts · summary · anchors · actors · outcomes' },
+  telemetry:     { title: 'Telemetry',     sub: 'context · speed · health · budget' },
   documents:     { title: 'Documents',     sub: 'working docs · references · links' },
   goal:          { title: 'Auto Stop',    sub: 'completion criteria · judges' },
   library:       { title: 'Library',       sub: 'blueprints · saved setups' },
@@ -210,6 +210,15 @@ export default function App() {
       import('./modules/session.js').then(m => m.saveCurrentSession?.());
     } else if (item.id === 'act:export') {
       import('./modules/session.js').then(m => m.exportSession?.('debug'));
+    } else if (item.id === 'act:density') {
+      setDensity(d => (d === 'compact' ? 'comfy' : 'compact'));
+    } else if (item.id === 'act:accent') {
+      setAccent(a => {
+        const order = ['amber', 'violet', 'teal', 'coral'];
+        return order[(order.indexOf(a) + 1) % order.length];
+      });
+    } else if (item.id === 'act:theme') {
+      setTheme(t => (t === 'dark' ? 'light' : 'dark'));
     }
   }, [setContinueMode, stopGeneration]);
 

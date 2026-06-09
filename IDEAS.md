@@ -355,6 +355,30 @@ models.
 
 ## UX & debugging
 
+### Interface review (2026-06-09) — remaining tracks
+
+Batch #1–5 (emoji→SVG icons, stale subtitles, surfaced density/accent in the
+command palette, ReadinessStrip→CSS, topbar overflow menu) shipped. Queued:
+
+- [ ] **Run-control consolidation (#6).** Continue-mode (Next/Round/Auto) is
+  smeared across the Topbar selector, the Composer's send button label, the
+  mobile More sheet, the command palette, and Alt+N/R/A. Collapse to one
+  split-button (primary "Continue" action + caret dropdown for the mode) in a
+  single location. Biggest usability win. Files: `Topbar.jsx`, `Composer.jsx`,
+  `App.jsx`, CSS. Size: medium.
+- [ ] **Nav IA reshuffle (#7–8).** The 12-item rail's "advanced" tier is a junk
+  drawer (You/Memory/Telemetry/Auto-Stop/Documents/Library/Sessions/Prompts).
+  Regroup into Build (Scenario, Actors, Connection, Library) / Inspect (Memory,
+  Telemetry, Documents, Auto-Stop) / Manage (You, Sessions, Prompts, Help). Also
+  fix the Auto-Stop naming drift: id `goal`, label `Auto Stop`, icon `Sliders`,
+  file `AutoStopPanel` — pick one name. Files: `App.jsx` (NAV), `Rail.jsx`,
+  `CommandPalette.jsx`. Size: medium.
+- [ ] **Collapsible / resizable inspector (#9).** On desktop the inspector
+  permanently eats horizontal width even during watch-mode auto-run. Add a
+  collapse toggle (or drag handle) so the transcript can go full-width; pairs
+  with a "focus mode" that also hides the rail. Files: `App.jsx`, `Shell.jsx`,
+  CSS. Size: medium–large.
+
 - [ ] **Output synthesis ("Session Outcome" doc).** On-demand and
   session-end pass that produces a structured doc: decisions, open
   questions, dissent, recommended next steps. Ties together documents +
