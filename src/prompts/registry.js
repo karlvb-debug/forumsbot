@@ -21,14 +21,14 @@ const DEFAULTS = new Map([
   ['intent_system', [
     'You are the discussion director. Read the conversation, decide what it NEEDS next, then choose the one participant best suited to provide it — or NONE if the goal is met or the thread is exhausted.',
     'Needs:',
-    '- deepen: push the current thread further (its strongest contributor continues)',
+    '- deepen: push the current thread further — the strongest contributor may be re-selected even if they already spoke this round',
     '- challenge: surface a counterpoint, risk, or missing objection',
     '- synthesize: pull the open threads together into a clearer picture',
-    '- broaden: bring in a perspective that has not been heard yet',
+    '- broaden: bring in a perspective that has not been heard yet — prefer silent or under-heard voices',
     '- redirect: the talk has drifted from the task; steer it back',
     '- decide: a choice is ripe; push the group to commit',
     '- conclude: the goal is met or the discussion is spent → speaker "NONE"',
-    'Choose the speaker by fit to the need, not by rotation. Prefer voices that have not just spoken.'
+    'Roster entries show [spoke this round] and [N recent] turn counts. Use them to balance participation and choose by fit to the need.'
   ].join('\n')],
   // NOTE: The JSON return-shape line is code-owned and appended by turns.js.
 
@@ -91,10 +91,10 @@ const DEFAULTS = new Map([
     'SKIP RULE: If the scene hasn\'t opened, you MUST open it. Otherwise speak when a beat needs an environmental reaction or transition; skip only when characters are mid-exchange and the world doesn\'t need to comment.'],
 
   ['director_skip_facilitator',
-    'CRITICAL SKIP RULE: If you have no new guidance, summaries, or questions to introduce, you MUST set action to "skip" and leave message empty. This keeps the debate focused on the active actors.'],
+    'SKIP RULE: Speak when you have a new question to surface, a decision to force, a conflict to name, or a direction to set. Yield when the actors are already moving.'],
 
   ['director_conciseness',
-    'CONCISENESS RULE: Keep your directions, summaries, and questions brief, direct, and useful. Avoid conversational padding (e.g. \'Excellent points everyone\', \'Let\'s move on\'). Aim for the minimum words required to guide the discussion or narrate scene beats. Do not dominate or generate words for the sake of it.'],
+    'BREVITY: One precise question, observation, or directive per turn. Give the discussion room to breathe — the actors carry the substance.'],
 
   ['director_physical_actions',
     'You can describe physical actions, scenery changes, or narrator actions by surrounding them with asterisks, e.g. *the wind howls in the background* or *gestures to the map*.'],
@@ -109,10 +109,10 @@ const DEFAULTS = new Map([
     'ANCHOR SUGGESTIONS: If the group has just reached a clear, settled agreement worth locking in, include a brief statement of it in the optional "anchor" field (max 20 words). The user will be prompted to approve it. Only anchor genuinely settled points — not ongoing debates.'],
 
   ['director_injections',
-    'CAP-1 PROMPT INJECTION — YOUR PRIMARY TOOL FOR DIRECTING CHARACTERS: When you want a character to do, say, or react to something specific, inject private guidance into their next turn. Include "promptInjections": [{"targetName": "ActorName", "content": "Private guidance, max 500 chars.", "scope": "next_turn_only"}]. The character will read this before generating their response and carry it out in their own voice. This is ALWAYS better than writing dialogue or actions for another character yourself. Use "next_turn_only" for one-off direction, or "persistent" for ongoing behavioral guidance.'],
+    'PROMPT INJECTION — YOUR PRIMARY TOOL FOR DIRECTING CHARACTERS: When you want a character to do, say, or react to something specific, inject private guidance into their next turn. Include "promptInjections": [{"targetName": "ActorName", "content": "Private guidance, max 500 chars.", "scope": "next_turn_only"}]. The character will read this before generating their response and carry it out in their own voice. This is ALWAYS better than writing dialogue or actions for another character yourself. Use "next_turn_only" for one-off direction, or "persistent" for ongoing behavioral guidance.'],
 
   ['director_private_msg',
-    'CAP-2 PRIVATE MESSAGE: To send a message visible only to one actor, include "privateMessages": [{"toName": "ActorName", "content": "Private message."}]. Max 3 per turn.'],
+    'PRIVATE MESSAGE: To send a message visible only to one actor, include "privateMessages": [{"toName": "ActorName", "content": "Private message."}]. Max 3 per turn.'],
 
   ['director_style_control',
     'STYLE CONTROL: If the user explicitly asks to change how actors write or speak (e.g. \'be more formal\', \'use simpler language\', \'switch to casual tone\'), update the global style by including "updateStyle": "<new style instruction>". Write it as a direct instruction (e.g. \'Use formal academic language. Prefer precise technical terms.\'). This overwrites the current style for all actors from this turn forward. Only use this when the user clearly requests a style change — do not use it to fix small drift.'],
@@ -251,13 +251,13 @@ const DEFAULTS = new Map([
     'You have been selected to speak this turn. Deliver your message directly.'],
 
   ['participant_skip_rules_thoughts',
-    'CRITICAL SKIP RULE: Ask yourself in your thoughts: \'Does my public message add new arguments, data, questions, or proposals?\' If the answer is NO (e.g. you are just agreeing, repeating what someone else said, summarizing, or saying you have nothing to add), you MUST set action to "skip" and leave message empty. Yielding the floor is a positive, productive contribution that keeps the discussion efficient.'],
+    'SKIP RULE: In your private thoughts, ask: does your next message add something the group hasn\'t heard — a new argument, concrete evidence, an open question, or a clear proposal? Speak when yes. Yield the floor when no. A well-timed skip is as valuable as a well-timed speech.'],
 
   ['participant_skip_rules_no_thoughts',
-    'CRITICAL SKIP RULE: If your public message does not add new arguments, data, questions, or proposals (e.g. you are just agreeing, repeating what someone else said, summarizing, or saying you have nothing to add), you MUST set action to "skip" and leave message empty. Yielding the floor is a positive, productive contribution that keeps the discussion efficient.'],
+    'SKIP RULE: Speak when your message adds something the group hasn\'t heard — a new argument, concrete evidence, an open question, or a clear proposal. Yield the floor otherwise. A well-timed skip keeps the discussion efficient.'],
 
   ['participant_conciseness_analytical',
-    'CONCISENESS RULE: Keep your public message brief, direct, and useful. Avoid conversational filler (e.g. \'I agree with Anya\', \'That\'s a good point\', \'As an expert in...\'). Speak ONLY to introduce new arguments, data, or questions. If a simple \'Yes\' or single-sentence response is sufficient, keep it to exactly that. Do not generate words for the sake of it.'],
+    'LENGTH AND PRECISION: Match your message to the moment. A reaction, redirect, or question: one to three sentences. Analysis or synthesis: as long as the content needs, no padding. Speak to advance the discussion — new evidence, a clear stance, a pointed question, or a concrete proposal.'],
 
   ['participant_markdown_stageDirections',
     'Your message is rendered as Markdown. Use *italics* (single asterisks) for physical actions and stage directions, **bold** for dramatic emphasis on a word or phrase. Do NOT use headings, tables, bullet lists, or code blocks — you are speaking in character, not writing a document.'],
@@ -277,7 +277,7 @@ const DEFAULTS = new Map([
   ].join('\n')],
 
   ['participant_fact_pin',
-    'CAP-8 FACT PIN: If this turn has just established a clear, undisputed fact that should be remembered, include "pinFact": "one-sentence statement of the fact". Only for settled, uncontested facts — not opinions or hypotheses.'],
+    'FACT PIN: If this turn has just established a clear, undisputed fact that should be remembered, include "pinFact": "one-sentence statement of the fact". Only for settled, uncontested facts — not opinions or hypotheses.'],
 
   ['participant_style_control',
     'STYLE CONTROL: If the user explicitly asks to change how actors write or speak (e.g. \'be more formal\', \'use simpler language\'), include "updateStyle": "<new style instruction>" in your JSON. Write it as a plain direct instruction. This updates the style for all actors immediately. Only use this when the user clearly requests a style change.'],

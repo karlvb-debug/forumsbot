@@ -497,7 +497,7 @@ describe('askActor style defaults', () => {
 
     const system = chatJson.mock.calls[0][0];
     expect(system).toContain('GLOBAL STYLE: Use plain everyday language');
-    expect(system).toContain('brief, direct, and useful');
+    expect(system).toContain('Speak to advance the discussion');
     expect(system).not.toContain('high-density');
   });
 

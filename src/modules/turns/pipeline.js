@@ -235,6 +235,7 @@ export async function runSingleResponse(options = {}) {
     abortController = null;
     _sessionController = null;
     _stopFlag = false;
+    ensureSessionController();
     const candidates = resolverCandidates();
     const resolved = await resolveNextSpeaker(candidates, {
       signal: _sessionController?.signal
@@ -437,6 +438,7 @@ async function _runRound(options = {}) {
   abortController = null;
   _sessionController = null;
   _stopFlag = false;
+  ensureSessionController();
 
   const candidates = resolverCandidates();
   if (!candidates.length) {
@@ -463,7 +465,19 @@ async function _runRound(options = {}) {
       signal: _sessionController?.signal,
       alreadySpokeThisRound
     });
-    if (!resolved) break;
+    if (!resolved) {
+      if (state.lastIntent?.need === 'conclude' && completedTurns > 0) {
+        const summary = (state.lastIntent.read || '').trim();
+        if (summary) {
+          await addMessage({
+            type: 'system', speaker: 'System',
+            content: `[The discussion has reached a natural conclusion: ${summary}]`,
+            color: 'var(--fg-mute)'
+          });
+        }
+      }
+      break;
+    }
 
     state._pendingTurnIntent = { reason: resolved.reason, ...(resolved.intent || {}) };
 
@@ -971,6 +985,20 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     return NEED_TOKEN_BUDGET[li.need] || null;
   })();
 
+  // Suppress skip when the intent pass deliberately chose this actor with high confidence
+  const intentChoseThis = (() => {
+    const li = state.lastIntent;
+    if (!li?.need || !li?.speaker) return false;
+    if (li.speaker.toLowerCase() !== actor.name.toLowerCase()) return false;
+    if (Date.now() - new Date(li.at).getTime() > 60_000) return false;
+    return typeof li.confidence === 'number' && li.confidence >= 0.8;
+  })();
+  const effectiveSkipAllowed = skipAllowed && !intentChoseThis;
+
+  const intentBudgetHint = intentBudget
+    ? `TOKEN BUDGET: Keep your response to roughly ${Math.round(intentBudget * 0.75)} words or fewer this turn.`
+    : '';
+
   const relationships = relationshipBlock(actor);
   const system = [
     `You are ${actor.name}.`,
@@ -984,17 +1012,18 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     relationships,
     contextLine,
     intentHint,
+    intentBudgetHint,
     sysCfg.stageDirectionsEnabled
       ? frag('participant_user_msg_stageDirections')
       : frag('participant_user_msg_analytical'),
-    skipAllowed
+    effectiveSkipAllowed
       ? (showThoughts
           ? frag('participant_think_speak_thoughts')
           : frag('participant_think_speak_no_thoughts'))
       : (showThoughts
           ? frag('participant_forced_thoughts')
           : frag('participant_forced_no_thoughts')),
-    skipAllowed
+    effectiveSkipAllowed
       ? (showThoughts
           ? frag('participant_skip_rules_thoughts')
           : frag('participant_skip_rules_no_thoughts'))

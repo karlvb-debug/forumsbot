@@ -23,8 +23,11 @@ function detectAddressedActor(text, candidates, speakerName) {
     const name = actor.name.toLowerCase();
     if (lower.includes(`@${name}`)) return actor;
     try {
-      if (new RegExp(`\\b${escapeRegex(name)}[,?!]`).test(lower)) return actor;
-      if (lower.includes(`you think, ${name}`) || lower.includes(`you think ${name}`)) return actor;
+      const esc = escapeRegex(name);
+      // Name at message start or after sentence-end punctuation, followed by comma/colon/question
+      if (new RegExp(`(?:^|[.!?]\\s+)${esc}[,?!:]`).test(lower)) return actor;
+      // Explicit second-person cues: "you think, Name", "right, Name?", "thoughts, Name"
+      if (new RegExp(`(?:you think|thoughts|right|agree)[,?\\s]+${esc}`).test(lower)) return actor;
     } catch { /* regex safety */ }
   }
   return null;
@@ -80,7 +83,8 @@ async function tinyRouter(candidates, alreadySpokeThisRound, signal) {
     return available.find(a => a.name.toLowerCase() === result.speaker.toLowerCase()) || null;
   } catch (err) {
     console.warn('[resolver] tiny router failed, using fallback:', err.message);
-    return available[0] || null;
+    const scored = scoreCandidates(available, alreadySpokeThisRound);
+    return scored[0]?.actor || null;
   }
 }
 
@@ -104,9 +108,13 @@ const INTENT_SCHEMA = {
 const INTENT_SHAPE = 'Return JSON only: {"read":"<one sentence on the current state>","need":"<one need>","speaker":"<participant name or NONE>","rationale":"<one clause: why them>","confidence":<0..1>,"expectedOutput":"<optional turn directive>"}';
 function getIntentSystem() { return frag('intent_system') + '\n' + INTENT_SHAPE; }
 
-async function resolveIntent(eligible, alreadySpokeThisRound, signal) {
+async function resolveIntent(eligible, alreadySpokeThisRound, signal, allCandidates = null) {
   const available = eligible.filter(a => !alreadySpokeThisRound.has(a.id));
   if (!available.length) return null;
+
+  // Show full roster (including spoke actors) so the model can make informed choices,
+  // e.g. 'deepen' can re-select the strongest contributor even if they already spoke.
+  const rosterActors = allCandidates || available;
 
   const activityId = showBackgroundActivity(
     'Director is reading the room',
@@ -117,9 +125,21 @@ async function resolveIntent(eligible, alreadySpokeThisRound, signal) {
     const sc = state.scenario || {};
     const mem = state.memory || {};
 
-    const roster = available.map(a => {
+    // Count recent turns per actor so the model can balance participation
+    const recentTurns = new Map();
+    state.messages.slice(-20).forEach(m => {
+      if (m.type !== 'skip' && m.type !== 'management') {
+        const a = rosterActors.find(r => r.name === m.speaker);
+        if (a) recentTurns.set(a.id, (recentTurns.get(a.id) || 0) + 1);
+      }
+    });
+
+    const roster = rosterActors.map(a => {
+      const spokeFlag = alreadySpokeThisRound.has(a.id) ? ' [spoke this round]' : '';
+      const turns = recentTurns.get(a.id) || 0;
+      const turnsLabel = turns > 0 ? ` [${turns} recent]` : ' [silent]';
       const aim = trimWords(String(a.goal || a.role || 'participant'), 14);
-      return `- ${a.name} (${a.role || 'participant'}) — ${aim}`;
+      return `- ${a.name} (${a.role || 'participant'}) — ${aim}${spokeFlag}${turnsLabel}`;
     }).join('\n');
 
     const recent = state.messages
@@ -150,7 +170,7 @@ async function resolveIntent(eligible, alreadySpokeThisRound, signal) {
       'What does the discussion need next, and who is best placed to provide it?'
     ].filter(v => v !== null).join('\n');
 
-    const validNames = available.map(a => a.name);
+    const validNames = rosterActors.map(a => a.name);
     let data;
     let correction = '';
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -166,7 +186,7 @@ async function resolveIntent(eligible, alreadySpokeThisRound, signal) {
 
       const name = String(data?.speaker || '').trim();
       const isNone = !name || name.toUpperCase() === 'NONE';
-      const matched = isNone ? null : available.find(a => a.name.toLowerCase() === name.toLowerCase());
+      const matched = isNone ? null : rosterActors.find(a => a.name.toLowerCase() === name.toLowerCase());
       if (isNone || matched) break;
       correction = `"${name}" is not a participant. Choose exactly one of: ${validNames.join(', ')} — or NONE. Return the name verbatim.`;
       console.warn(`[intent] corrective retry: "${name}" not in roster`);
@@ -192,7 +212,9 @@ async function resolveIntent(eligible, alreadySpokeThisRound, signal) {
       return { actor: null, conclude: true, data: state.lastIntent };
     }
 
-    const matched = available.find(a => a.name.toLowerCase() === speakerName.toLowerCase());
+    // For 'deepen', allow re-selecting an actor who already spoke this round
+    const lookupPool = need === 'deepen' ? rosterActors : available;
+    const matched = lookupPool.find(a => a.name.toLowerCase() === speakerName.toLowerCase());
     updateBackgroundActivity(activityId, {
       detail: matched
         ? `Needs to ${need || 'continue'} → ${matched.name}`
@@ -237,7 +259,7 @@ export async function resolveNextSpeaker(candidates, { signal, alreadySpokeThisR
   const intentMode = state.settings?.intentPass || 'auto';
 
   if (intentMode === 'always') {
-    const intent = await resolveIntent(eligible, alreadySpokeThisRound, signal);
+    const intent = await resolveIntent(eligible, alreadySpokeThisRound, signal, candidates);
     if (intent) {
       if (intent.actor) return { actor: intent.actor, reason: 'intent', intent: intent.data };
       if (intent.conclude) return null;
@@ -257,7 +279,7 @@ export async function resolveNextSpeaker(candidates, { signal, alreadySpokeThisR
       if (routed === null) return null;
       if (routed) return { actor: routed, reason: 'router' };
     } else if (intentMode === 'auto') {
-      const intent = await resolveIntent(eligible, alreadySpokeThisRound, signal);
+      const intent = await resolveIntent(eligible, alreadySpokeThisRound, signal, candidates);
       if (intent) {
         if (intent.actor) return { actor: intent.actor, reason: 'intent', intent: intent.data };
         if (intent.conclude) return null;
