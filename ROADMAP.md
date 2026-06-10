@@ -52,6 +52,25 @@ Second batch (same day, suite now 377):
   Telemetry card with a calls-per-round sparkline. The "then cut" half —
   per-round intent mini-plans, two-stage scribe judge — remains open.
 
+Third batch (same day, suite now 393):
+
+- **Intent mini-plan** (agent report rec. #2, second half): the intent pass
+  can return up to two follow-up speakers, validated and queued so the rest
+  of the round routes via the free handoff path — at most one routing call
+  per round instead of one per ambiguous turn.
+- **Two-stage scribe judge** (rec. #2): a ~60-token fast-tier recordability
+  gate runs before the reason-tier draft call; negative gates consume the
+  transcript marker, gate errors fail open.
+- **Document semantic retrieval** (Part 2 verdict + IDEAS): over-budget
+  reference docs now contribute embedding-ranked paragraph excerpts instead
+  of top-of-file truncation; per-content-hash doc vectors and a per-round
+  rendered-section cache preserve KV-prefix stability; full fallback chain
+  to the even split.
+- **Versioned state migrations** (§1.3 item 9): `modules/migrations.js`
+  scaffold with `schemaVersion` stamping; objective→task and
+  autoStop.goal→doneWhen moved as the proving case; remaining inline
+  migrations move incrementally as touched.
+
 Two corrections to this report from implementation:
 
 - §1.2-1: a top-level error boundary **already existed** in `main.jsx` (missed
