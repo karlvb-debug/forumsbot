@@ -195,21 +195,26 @@ Forum/
     │   ├── inspector/      # Sidebar panels (Actors, Scenario, Memory, etc.)
     │   └── shared/         # Reusable form controls
     ├── hooks/
-    │   ├── useForumState.js  # React ↔ vanilla state bridge
-    │   ├── useActions.js     # Turn orchestration hooks
-    │   └── useStreaming.js   # SSE streaming state
+    │   ├── useForumState.ts  # React ↔ vanilla state bridge
+    │   ├── useActions.ts     # Turn orchestration hooks
+    │   └── useStreaming.ts   # Streaming bubble + background activity state
+    ├── prompts/
+    │   └── registry.js     # Named prompt fragments (user-overridable)
     └── modules/
         ├── api.js          # LLM call wrappers, tool call parsing
         ├── constants.js    # Default state shape, actor colors
-        ├── db.js           # IndexedDB access (chunks, messages)
-        ├── knowledge.js    # Cross-session knowledge base
-        ├── markdown.js     # Lightweight markdown renderer
+        ├── db.js           # IndexedDB access (chunks, messages, sessions)
+        ├── documentWriting.js # Writer tasks, scribe autonomy, edit proposals
+        ├── knowledge.js    # Document store, prompt knowledge sections
+        ├── markdown.js     # Sanitized markdown renderer (marked + DOMPurify)
         ├── memory.js       # Summarisation, chunk archiving, semantic recall
-        ├── preflight.js    # Actor relevance pre-screening
+        ├── schemas.js      # Actor output JSON schemas
         ├── session.js      # Preset save/load, session management
         ├── state.js        # Single mutable state object, persistence
-        ├── telemetry.js    # Drift detection, canvas animations, metrics
-        ├── turns.js        # Prompt assembly, budget scaling, orchestration
+        ├── stateStore.ts   # Framework-agnostic subscription registry
+        ├── telemetry.js    # Session metrics
+        ├── turns.js        # Barrel for turns/ — see below
+        ├── turns/          # config / resolver / prompt / result / pipeline
         └── utils.js        # Pure utilities — parsing, normalisation
 ```
 

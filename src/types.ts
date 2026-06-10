@@ -277,7 +277,8 @@ export interface ForumState {
   turnQueue: string[];
   contextInfo: ContextInfo;
   autoRunning: boolean;
-  _currentSessionId: string;
+  // Set lazily by session.js on first save — absent in the default state shape.
+  _currentSessionId?: string;
 }
 
 // ── Connection status ────────────────────────────────────────────────────────

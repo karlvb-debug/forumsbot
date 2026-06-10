@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development branch
 
-All work goes on `claude/upbeat-davinci-KMdWu`. Push to that branch, not `main`.
+Work on the branch assigned for your session. Never push directly to `main`.
 
 ## Commands
 
@@ -22,7 +22,7 @@ npm run electron:dev    # requires `npm run dev` + `npm run server` already runn
 npm run electron:build  # produces installers in release/
 
 # Quality gates (must all pass before pushing)
-npm test         # 342 tests — no LM Studio connection required
+npm test         # full suite — no LM Studio connection required
 npm run lint     # ESLint across src/
 npm run build    # must complete with no new errors
 
