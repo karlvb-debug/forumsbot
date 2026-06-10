@@ -1047,7 +1047,10 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     return NEED_TOKEN_BUDGET[li.need] || null;
   })();
 
-  // Suppress skip when the intent pass deliberately chose this actor with high confidence
+  // Suppress skip when the intent pass deliberately chose this actor with
+  // high confidence. Delivered as a user-tail directive (like the facilitator
+  // override) rather than by swapping system fragments — the system prompt
+  // must stay byte-stable across turns for KV-cache prefix reuse.
   const intentChoseThis = (() => {
     const li = state.lastIntent;
     if (!li?.need || !li?.speaker) return false;
@@ -1055,13 +1058,16 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     if (Date.now() - new Date(li.at).getTime() > 60_000) return false;
     return typeof li.confidence === 'number' && li.confidence >= 0.8;
   })();
-  const effectiveSkipAllowed = skipAllowed && !intentChoseThis;
+  const intentNoSkipDirective = (skipAllowed && intentChoseThis) ? frag('participant_intent_no_skip') : '';
 
   const intentBudgetHint = intentBudget
     ? `TOKEN BUDGET: Keep your response to roughly ${Math.round(intentBudget * 0.75)} words or fewer this turn.`
     : '';
 
   const relationships = relationshipBlock(actor);
+  // NOTE: intentHint/intentBudgetHint are per-turn and therefore appended to
+  // the USER message tail, not the system prompt — a byte-stable system
+  // prompt is what lets the local server reuse its KV cache across turns.
   const system = [
     `You are ${actor.name}.`,
     actor.role ? `Role: ${actor.role}` : "",
@@ -1073,19 +1079,17 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     "LENGTH: Match response length to the turn. Reactions, questions, and redirects: 2–3 sentences. Proposals, analysis, and synthesis: as long as needed, no padding.",
     relationships,
     contextLine,
-    intentHint,
-    intentBudgetHint,
     sysCfg.stageDirectionsEnabled
       ? frag('participant_user_msg_stageDirections')
       : frag('participant_user_msg_analytical'),
-    effectiveSkipAllowed
+    skipAllowed
       ? (showThoughts
           ? frag('participant_think_speak_thoughts')
           : frag('participant_think_speak_no_thoughts'))
       : (showThoughts
           ? frag('participant_forced_thoughts')
           : frag('participant_forced_no_thoughts')),
-    effectiveSkipAllowed
+    skipAllowed
       ? (showThoughts
           ? frag('participant_skip_rules_thoughts')
           : frag('participant_skip_rules_no_thoughts'))
@@ -1150,7 +1154,8 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     persona: `Name: ${actor.name}\nRole: ${actor.role || ""}\nPersona: ${actor.persona || ""}\nVoice: ${actor.voice || ""}`
   };
 
-  let actorUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
+  let actorUser = [user, triggerBlock, intentHint, intentNoSkipDirective, intentBudgetHint]
+    .filter(Boolean).join("\n\n");
   if (options.correction) actorUser += `\n\n[CORRECTION: ${options.correction}]`;
   const actorSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak, validSpeakerNames });
   const dynamicMaxTokens = getAndConsumeInjectionMaxTokens() || options.maxTokensOverride || actor.maxTokens || intentBudget || null;

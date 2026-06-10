@@ -190,16 +190,21 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
       return `Other participants: ${lines}.`;
     })() : "";
 
+    // Section order is stability-sorted for KV-cache prefix reuse: static
+    // session framing and documents first, per-round memory next, per-turn
+    // content (actor memory, transcript, directives) last. Reordering here
+    // changes how much prompt the local server can skip re-ingesting.
     return [
       scenarioBlock(),
-      state.memory.enabled ? memoryBlock(chunks) : "",
       editableDocsSection,
       docActionNudge,
-      crossSessionBlock,
       kbSection,
+      crossSessionBlock,
+      state.memory.enabled ? memoryBlock(chunks) : "",
       memOverride || participantMemory,
       privateThoughts,
       `### Recent transcript\n${formatTranscript(msgs, WORD_LIMITS.recentTranscript, state.actors)}`,
+      goalDirectivesBlock(),
       periodicReminder,
 
       nudgeReminder,
@@ -366,6 +371,10 @@ export function memoryBlock(recallChunks) {
   ].filter(Boolean).join("\n");
 }
 
+// Static session framing only. Per-round volatile context (goal progress,
+// plan step) lives in goalDirectivesBlock(), placed AFTER the transcript —
+// local inference servers reuse the prompt KV cache only up to the first
+// changed byte, so anything that changes every round must not sit in the head.
 export function scenarioBlock() {
   const storyRole = state.userContext?.storyRole?.trim();
   const displayName = state.userContext?.displayName?.trim();
@@ -378,6 +387,18 @@ export function scenarioBlock() {
   const doneWhenLine = state.scenario.doneWhen?.trim()
     ? `Done when: ${state.scenario.doneWhen}`
     : '';
+  return [
+    `Title: ${state.scenario.title || "Untitled forum"}`,
+    state.scenario.premise ? `Context: ${state.scenario.premise}` : "",
+    taskLine,
+    doneWhenLine,
+    userLabel ? `The human participant in this session is: ${userLabel}. Messages labelled [USER] in the transcript are from them.` : ""
+  ].filter(Boolean).join("\n");
+}
+
+// Goal progress + plan step — changes every round, so it renders in the
+// volatile tail of the prompt rather than inside scenarioBlock().
+export function goalDirectivesBlock() {
   const progressHint = (() => {
     const g = state.discussion?.goal;
     if (!g?.verdict || !g.verdictReason || !state.scenario.doneWhen?.trim()) return '';
@@ -396,15 +417,7 @@ export function scenarioBlock() {
   const planBlock = plan?.steps?.length
     ? `Discussion plan:\n${plan.steps.map((s, i) => `${i === plan.currentStep ? '►' : ' '} ${i + 1}. ${s}`).join('\n')}`
     : '';
-  return [
-    `Title: ${state.scenario.title || "Untitled forum"}`,
-    state.scenario.premise ? `Context: ${state.scenario.premise}` : "",
-    taskLine,
-    doneWhenLine,
-    progressHint,
-    planBlock,
-    userLabel ? `The human participant in this session is: ${userLabel}. Messages labelled [USER] in the transcript are from them.` : ""
-  ].filter(Boolean).join("\n");
+  return [progressHint, planBlock].filter(Boolean).join("\n");
 }
 
 export function privateThoughtDigest() {

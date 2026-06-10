@@ -217,4 +217,64 @@ describe('pipeline integration (mock LM Studio)', () => {
     expect(aliceSystems[0]).toBe(aliceSystems[1]);
     expect(bobSystems[0]).toBe(bobSystems[1]);
   });
+
+  it('keeps the system prompt stable even when intent routing targets the actor (hint moves to the user tail)', async () => {
+    const { chatCalls } = installMockLmStudio();
+    seedState({
+      actors: [actor('Alice'), actor('Bob')],
+      messages: [userMessage('@Alice round one.')],
+    });
+
+    await runRound();
+    // Simulate the intent pass choosing Alice with a turn directive.
+    state.lastIntent = {
+      read: 'Needs a counterpoint.', need: 'challenge', speaker: 'Alice',
+      rationale: 'most contrarian', confidence: 0.9,
+      expectedOutput: 'one concrete risk', at: new Date().toISOString(),
+    };
+    state.messages.push(userMessage('@Alice round two.'));
+    await runRound();
+
+    const aliceCalls = chatCalls.filter(c => systemOf(c).includes('You are Alice.'));
+    expect(aliceCalls).toHaveLength(2);
+    // System prompt unchanged — the per-turn hint must not break the prefix.
+    expect(systemOf(aliceCalls[0])).toBe(systemOf(aliceCalls[1]));
+    // The hint still reaches the model, in the volatile user tail.
+    expect(userOf(aliceCalls[1])).toContain('DISCUSSION FOCUS');
+    expect(userOf(aliceCalls[1])).toContain('THIS TURN, produce: one concrete risk');
+    expect(userOf(aliceCalls[0])).not.toContain('DISCUSSION FOCUS');
+  });
+
+  it('keeps the user-prompt head stable while goal progress changes between rounds', async () => {
+    const { chatCalls } = installMockLmStudio();
+    seedState({
+      actors: [actor('Alice'), actor('Bob')],
+      messages: [userMessage('@Alice round one.')],
+      scenario: { doneWhen: 'A decision is recorded.' },
+    });
+    state.discussion.goal = {
+      ...state.discussion.goal,
+      verdict: 'continue', verdictReason: 'Still exploring options.', progressPct: 30,
+    };
+
+    await runRound();
+    // Judge updates progress between rounds — this must not invalidate the head.
+    state.discussion.goal.progressPct = 60;
+    state.discussion.goal.verdictReason = 'Options narrowed to two.';
+    state.messages.push(userMessage('@Alice round two.'));
+    await runRound();
+
+    const aliceUsers = chatCalls.filter(c => systemOf(c).includes('You are Alice.')).map(userOf);
+    expect(aliceUsers).toHaveLength(2);
+    // Progress renders after the transcript, not in the head…
+    for (const u of aliceUsers) {
+      const progressIdx = u.indexOf('Progress: ~');
+      expect(progressIdx).toBeGreaterThan(u.indexOf('### Recent transcript'));
+    }
+    expect(aliceUsers[1]).toContain('Progress: ~60%');
+    // …so everything before the actor's own (per-turn) memory is byte-stable.
+    const headOf = (u) => u.slice(0, u.indexOf('Your private actor memory'));
+    expect(headOf(aliceUsers[0]).length).toBeGreaterThan(50);
+    expect(headOf(aliceUsers[0])).toBe(headOf(aliceUsers[1]));
+  });
 });

@@ -233,6 +233,9 @@ const DEFAULTS = new Map([
   ['participant_intent_hint',
     'DISCUSSION FOCUS: The forum currently needs to {{need}}{{rationale}}. Let that shape your contribution.'],
 
+  ['participant_intent_no_skip',
+    'The director specifically selected you for this turn — this overrides the skip rule. Do not skip.'],
+
   // participant_goal_progress: rendered directly in scenarioBlock() with conditional logic;
   // not a registry-driven fragment.
 
