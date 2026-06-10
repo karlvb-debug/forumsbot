@@ -1,0 +1,147 @@
+/* ─────────────────────────────────────────────
+   Forum — refreshed design system
+   Cool-neutral surfaces · warm accent · oklch tokens
+   Single source of truth: tune the look from here.
+   ───────────────────────────────────────────── */
+
+:root {
+  /* ── Surfaces (dark) ── */
+  --bg: oklch(0.15 0.01 255);
+  --bg-rail: oklch(0.12 0.01 255);
+  --bg-elev: oklch(0.195 0.011 255);
+  --bg-card: oklch(0.215 0.012 255);
+  --bg-input: oklch(0.17 0.011 255);
+  --bg-raised: oklch(0.24 0.013 255);
+  --surface-1: var(--bg-elev);
+  --surface-2: var(--bg-card);
+  --overlay: oklch(0.02 0.01 255 / 0.6);
+  --border: oklch(0.31 0.012 255);
+  --border-soft: oklch(0.25 0.011 255);
+
+  /* ── Foreground ramp ── */
+  --fg: oklch(0.96 0.004 255);
+  --fg-dim: oklch(0.80 0.006 255);
+  --fg-mute: oklch(0.63 0.008 255);
+  --fg-muted: var(--fg-mute);        /* alias for legacy `--fg-muted` references */
+  --fg-faint: oklch(0.50 0.008 255);
+  --fg-talk: oklch(0.99 0.002 255);
+  --fg-action: var(--accent);
+
+  /* ── Accent + semantic ── */
+  --accent: oklch(0.80 0.13 70);
+  --accent-soft: oklch(0.80 0.13 70 / 0.16);
+  --accent-fg: oklch(0.20 0.04 70);
+  --ok: oklch(0.76 0.14 155);
+  --warn: oklch(0.82 0.14 85);
+  --danger: oklch(0.67 0.17 25);
+  --info: oklch(0.74 0.11 240);
+  --violet: oklch(0.72 0.13 295);
+  /* Actor permission accents (Direct / Inject / See-Thoughts) */
+  --gold: oklch(0.80 0.13 90);
+  --teal: oklch(0.74 0.11 190);
+  --purple: oklch(0.72 0.13 305);
+
+  /* ── Radii ── */
+  --r-sm: 7px;
+  --r: 11px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+
+  /* ── Shadows ── */
+  --shadow-1: 0 1px 0 0 oklch(1 0 0 / 0.04) inset, 0 1px 2px oklch(0 0 0 / 0.4);
+  --shadow-2: 0 12px 44px -12px oklch(0 0 0 / 0.62);
+
+  /* ── Elevation ramp (resting → floating) ── */
+  --elev-1: 0 1px 2px oklch(0 0 0 / 0.30);
+  --elev-2: 0 2px 6px -1px oklch(0 0 0 / 0.30), 0 8px 24px -12px oklch(0 0 0 / 0.45);
+  --elev-3: 0 1px 0 0 oklch(1 0 0 / 0.05) inset, 0 4px 12px -2px oklch(0 0 0 / 0.35), 0 20px 48px -16px oklch(0 0 0 / 0.55);
+
+  /* ── Glass (sticky chrome, floating surfaces) ── */
+  --glass-bg: oklch(0.15 0.01 255 / 0.72);
+  --glass-bg-elev: oklch(0.215 0.012 255 / 0.78);
+  --glass-blur: saturate(1.35) blur(14px);
+
+  /* ── Motion ── */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.35, 0.45, 1);
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 320ms;
+  --dur-4: 480ms;
+
+  /* ── Fonts ── */
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-ui: var(--font-sans);
+
+  /* ── Type scale (steps not tied to density) ── */
+  --fs-xs: 11.5px;
+  --fs-xl: 20px;
+  --fs-2xl: 26px;
+  --lh: 1.55;
+  --lh-tight: 1.25;
+
+  /* ── Spacing ramp + touch target ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --tap: 40px;
+
+  /* ── Layout ── */
+  --rail-w: 72px;
+  --inspector-w: 380px;
+  --header-h: 56px;
+  --composer-h: auto;
+  --bottomnav-h: 60px;
+  --density: 1;
+}
+
+/* light theme — complete: surfaces, fg ramp, accent, AND semantic colors */
+.theme-light {
+  --bg: oklch(0.985 0.003 95);
+  --bg-rail: oklch(0.965 0.004 95);
+  --bg-elev: oklch(0.995 0.002 95);
+  --bg-card: oklch(1 0 0);
+  --bg-input: oklch(0.975 0.003 95);
+  --bg-raised: oklch(0.955 0.004 95);
+  --surface-1: var(--bg-elev);
+  --surface-2: var(--bg-card);
+  --overlay: oklch(0.35 0.02 255 / 0.32);
+  --border: oklch(0.86 0.005 95);
+  --border-soft: oklch(0.92 0.004 95);
+  --fg: oklch(0.22 0.01 255);
+  --fg-dim: oklch(0.38 0.01 255);
+  --fg-mute: oklch(0.50 0.01 255);
+  --fg-muted: var(--fg-mute);
+  --fg-faint: oklch(0.62 0.01 255);
+  --fg-talk: oklch(0.18 0.01 255);
+  --fg-action: oklch(0.52 0.13 70);
+  /* darker accent + semantic colors so text/fills meet contrast on light bg */
+  --accent: oklch(0.62 0.14 70);
+  --accent-soft: oklch(0.62 0.14 70 / 0.14);
+  --accent-fg: oklch(0.99 0.01 70);
+  --ok: oklch(0.55 0.14 155);
+  --warn: oklch(0.62 0.14 75);
+  --danger: oklch(0.55 0.19 25);
+  --info: oklch(0.55 0.12 240);
+  --violet: oklch(0.55 0.14 295);
+  --gold: oklch(0.58 0.13 80);
+  --teal: oklch(0.52 0.11 190);
+  --purple: oklch(0.52 0.14 305);
+  --shadow-1: 0 1px 0 0 oklch(1 0 0 / 0.8) inset, 0 1px 2px oklch(0 0 0 / 0.06);
+  --shadow-2: 0 12px 44px -12px oklch(0 0 0 / 0.14);
+  --elev-1: 0 1px 2px oklch(0 0 0 / 0.07);
+  --elev-2: 0 2px 6px -1px oklch(0 0 0 / 0.07), 0 8px 24px -12px oklch(0 0 0 / 0.12);
+  --elev-3: 0 1px 0 0 oklch(1 0 0 / 0.85) inset, 0 4px 12px -2px oklch(0 0 0 / 0.09), 0 20px 48px -16px oklch(0 0 0 / 0.16);
+  --glass-bg: oklch(0.985 0.003 95 / 0.78);
+  --glass-bg-elev: oklch(1 0 0 / 0.82);
+}
+
+/* density — base step + rhythm; readable defaults, not cramped */
+.density-compact { --pad: 12px; --pad-sm: 8px;  --pad-lg: 16px; --gap: 9px;  --gap-lg: 14px; --row-h: 34px; --fs: 13.5px; --fs-sm: 12px;   --fs-lg: 16px; }
+.density-comfy   { --pad: 16px; --pad-sm: 10px; --pad-lg: 22px; --gap: 12px; --gap-lg: 18px; --row-h: 38px; --fs: 14.5px; --fs-sm: 12.5px; --fs-lg: 17px; }
+
