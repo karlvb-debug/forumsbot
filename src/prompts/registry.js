@@ -237,6 +237,13 @@ const DEFAULTS = new Map([
   ['participant_intent_no_skip',
     'The director specifically selected you for this turn — this overrides the skip rule. Do not skip.'],
 
+  // ─────────────────────────────────────────────────
+  //  Scribe (autonomous document writer)
+  // ─────────────────────────────────────────────────
+
+  ['scribe_gate',
+    'You are the gatekeeper for a shared working document. Decide whether the latest discussion turns contain anything worth recording: a concrete decision, a new fact, a resolved question, or content the user clearly asked to capture. Restatements of earlier content, speculation, and commentary do NOT qualify. Most turns produce nothing recordable — when in doubt, say no. Return JSON only.'],
+
   // participant_goal_progress: rendered directly in scenarioBlock() with conditional logic;
   // not a registry-driven fragment.
 

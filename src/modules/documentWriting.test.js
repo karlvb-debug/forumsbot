@@ -166,25 +166,52 @@ describe('scribe autonomy modes', () => {
     chatStructured.mockReset();
   });
 
-  it('skips the judge until 2 new messages arrive since the last pass', async () => {
-    chatStructured.mockResolvedValueOnce({ thought: '', summary: '', documentEdits: [] });
-    await runScribePass(null); // judges m1+m2, advances the gate marker
-    expect(chatStructured).toHaveBeenCalledTimes(1);
+  // Stage-1 gate approval — autonomous passes call this before drafting.
+  const gateYes = () => chatStructured.mockResolvedValueOnce({ record: true });
+  const gateNo = () => chatStructured.mockResolvedValueOnce({ record: false });
 
-    // Nothing new since the last judgment — no second model call.
+  it('skips the judge until 2 new messages arrive since the last pass', async () => {
+    gateYes();
+    chatStructured.mockResolvedValueOnce({ thought: '', summary: '', documentEdits: [] });
+    await runScribePass(null); // judges m1+m2 (gate + draft), advances the marker
+    expect(chatStructured).toHaveBeenCalledTimes(2);
+
+    // Nothing new since the last judgment — no further model calls.
     expect(await runScribePass(null)).toBeNull();
-    expect(chatStructured).toHaveBeenCalledTimes(1);
+    expect(chatStructured).toHaveBeenCalledTimes(2);
 
     // One new message is still below the threshold.
     mockState.messages.push({ id: 'm3', type: 'actor', speaker: 'A', content: 'New point.' });
     expect(await runScribePass(null)).toBeNull();
-    expect(chatStructured).toHaveBeenCalledTimes(1);
+    expect(chatStructured).toHaveBeenCalledTimes(2);
 
     // A second new message re-arms the gate.
     mockState.messages.push({ id: 'm4', type: 'user', speaker: 'You', content: 'Capture that.' });
+    gateYes();
     chatStructured.mockResolvedValueOnce({ thought: '', summary: '', documentEdits: [] });
     await runScribePass(null);
-    expect(chatStructured).toHaveBeenCalledTimes(2);
+    expect(chatStructured).toHaveBeenCalledTimes(4);
+  });
+
+  it('a negative stage-1 gate skips the draft call entirely and consumes the transcript', async () => {
+    gateNo();
+    expect(await runScribePass(null)).toBeNull();
+    expect(chatStructured).toHaveBeenCalledTimes(1); // gate only, no draft
+    expect(mockState.documentWriting.lastScribeMsgId).toBe('m2');
+    // Marker advanced — the next pass without new messages makes no calls.
+    expect(await runScribePass(null)).toBeNull();
+    expect(chatStructured).toHaveBeenCalledTimes(1);
+  });
+
+  it('a gate failure fails open to the full judge', async () => {
+    chatStructured.mockRejectedValueOnce(new Error('fast tier down'));
+    chatStructured.mockResolvedValueOnce({
+      thought: '', summary: 'Recorded.',
+      documentEdits: [{ documentId: 'd1', op: 'append', content: 'three' }]
+    });
+    const result = await runScribePass(null);
+    expect(result?.applied).toBe(true);
+    expect(mockState.documents[0].content).toBe('one\ntwo\n\nthree');
   });
 
   it('manual mode skips the pass entirely (no model call)', async () => {
@@ -195,6 +222,7 @@ describe('scribe autonomy modes', () => {
   });
 
   it('returns null when the model judges nothing worth recording (empty edits)', async () => {
+    gateYes();
     chatStructured.mockResolvedValueOnce({ thought: '', summary: '', documentEdits: [] });
     const result = await runScribePass(null);
     expect(result).toBeNull();
@@ -204,6 +232,7 @@ describe('scribe autonomy modes', () => {
   });
 
   it('auto_apply commits the edit directly to the document', async () => {
+    gateYes();
     chatStructured.mockResolvedValueOnce({
       thought: '',
       summary: 'Recorded the decision.',
@@ -218,6 +247,7 @@ describe('scribe autonomy modes', () => {
 
   it('auto_review files a pending proposal without touching the document', async () => {
     mockState.documentWriting.scribeMode = 'auto_review';
+    gateYes();
     chatStructured.mockResolvedValueOnce({
       thought: '',
       summary: 'Drafted update.',
@@ -231,6 +261,7 @@ describe('scribe autonomy modes', () => {
 
   it('ask mode queues a suggestion; accepting it applies the edit', async () => {
     mockState.documentWriting.scribeMode = 'ask';
+    gateYes();
     chatStructured.mockResolvedValueOnce({
       thought: '',
       summary: 'Capture the decision.',
@@ -248,6 +279,7 @@ describe('scribe autonomy modes', () => {
 
   it('ask mode suggestions can be dismissed without applying', async () => {
     mockState.documentWriting.scribeMode = 'ask';
+    gateYes();
     chatStructured.mockResolvedValueOnce({
       thought: '',
       summary: 'Capture the decision.',
