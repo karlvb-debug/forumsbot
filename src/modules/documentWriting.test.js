@@ -71,6 +71,31 @@ describe('documentWriting', () => {
     expect(applyEditsToContent('one', [{ documentId: 'd1', op: 'full', content: 'all new' }], 'd1')).toBe('all new');
   });
 
+  it('keeps later replace targets correct when an earlier edit changes the line count', () => {
+    // Both edits use line numbers from the ORIGINAL document. The first edit
+    // collapses lines 1-2 into one line; naive sequential application would
+    // shift the second edit's target up by one line and replace "four".
+    const original = 'one\ntwo\nthree\nfour\nfive';
+    const edits = [
+      { documentId: 'd1', op: 'replace', startLine: 1, endLine: 2, content: 'ONE+TWO' },
+      { documentId: 'd1', op: 'replace', startLine: 5, endLine: 5, content: 'FIVE' },
+    ];
+    expect(applyEditsToContent(original, edits, 'd1')).toBe('ONE+TWO\nthree\nfour\nFIVE');
+  });
+
+  it('applies replace before append so original line numbers stay valid', () => {
+    const original = 'one\ntwo';
+    const edits = [
+      { documentId: 'd1', op: 'append', content: 'tail' },
+      { documentId: 'd1', op: 'replace', startLine: 2, endLine: 2, content: 'TWO' },
+    ];
+    expect(applyEditsToContent(original, edits, 'd1')).toBe('one\nTWO\n\ntail');
+  });
+
+  it('ignores edits addressed to other documents', () => {
+    expect(applyEditsToContent('one', [{ documentId: 'other', op: 'full', content: 'x' }], 'd1')).toBe('one');
+  });
+
   it('creates manual writer tasks for writable documents', () => {
     const task = createDocumentTask({ documentId: 'd1', instruction: 'Summarize decisions.' });
     expect(task.actorId).toBe('w1');

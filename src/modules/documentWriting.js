@@ -85,8 +85,16 @@ export function ensureWriterForDocuments() {
 
 export function applyEditsToContent(content, edits, documentId) {
   let next = String(content || "");
-  for (const edit of Array.isArray(edits) ? edits : []) {
-    if (edit.documentId !== documentId) continue;
+  const relevant = (Array.isArray(edits) ? edits : []).filter(e => e.documentId === documentId);
+  // The writer's startLine/endLine refer to the line-numbered document it was
+  // shown — i.e. the ORIGINAL content. Apply replace edits bottom-up so an
+  // earlier edit changing the line count can't shift the targets of later
+  // ones. full/append edits are position-independent and keep their order.
+  const replaces = relevant
+    .filter(e => e.op === "replace")
+    .sort((a, b) => (Number(b.startLine) || 1) - (Number(a.startLine) || 1));
+  const others = relevant.filter(e => e.op !== "replace");
+  for (const edit of [...replaces, ...others]) {
     if (edit.op === "full") {
       next = String(edit.content || "");
     } else if (edit.op === "append") {
