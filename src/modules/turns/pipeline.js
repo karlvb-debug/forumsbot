@@ -887,7 +887,7 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
     plan.system, user,
     actor.temperature ?? state.settings.temperature,
     signal, onStream, dynamicMaxTokens, plan.schema,
-    { toolsAllowed: plan.toolsAllowed, tier: thinkingTier, purpose: actor.name }
+    { toolsAllowed: plan.toolsAllowed, allowedTools: plan.grantedTools, tier: thinkingTier, purpose: actor.name }
   );
   result._promptParts = {
     ...getLastPromptParts(),

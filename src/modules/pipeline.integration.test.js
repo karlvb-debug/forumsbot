@@ -5,9 +5,10 @@
  * for prompt-assembly and orchestration refactors: it asserts turn order,
  * call counts, schema usage, and prompt-prefix stability across rounds.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { state, setState, normalizeState } from './state.js';
 import { runRound, runSingleResponse, askActor } from './turns.js';
+import { _setMcpToolsForTest } from './tools.js';
 
 // ── Mock LM Studio ────────────────────────────────────────────────────────────
 
@@ -26,8 +27,13 @@ function jsonResponse(payload, status = 200) {
  */
 function installMockLmStudio({ envelopeFor = null } = {}) {
   const chatCalls = [];
+  const toolCalls = [];
   vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
     const body = init.body ? JSON.parse(init.body) : {};
+    if (url === '/api/tool-execute') {
+      toolCalls.push(body);
+      return jsonResponse({ text: 'tool result: hello from mock' });
+    }
     if (url === '/api/chat') {
       const req = body.request;
       chatCalls.push(req);
@@ -47,7 +53,7 @@ function installMockLmStudio({ envelopeFor = null } = {}) {
     if (url === '/api/model-info') return jsonResponse({ data: [] });
     return jsonResponse({ error: `unmocked: ${url}` }, 404);
   }));
-  return { chatCalls };
+  return { chatCalls, toolCalls };
 }
 
 // ── Scenario setup ────────────────────────────────────────────────────────────
@@ -357,5 +363,98 @@ describe('role system-prompt snapshots', () => {
       expect(sys.startsWith('BACKGROUND MODE: Your response will NOT appear in the transcript.')).toBe(true);
       expect(sys).toContain('No next actor determined yet.');
     }
+  });
+});
+
+describe('MCP tool grants (per-actor)', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+    _setMcpToolsForTest([
+      { name: 'mcp:echo.echo', description: 'Echo a message back.', inputSchema: {}, server: 'echo' },
+      { name: 'mcp:notes.search', description: 'Search stored notes.', inputSchema: {}, server: 'notes' },
+    ]);
+  });
+
+  afterEach(() => {
+    _setMcpToolsForTest([]);
+  });
+
+  it('advertises granted tools in the system prompt — and only to the granted actor', async () => {
+    const { chatCalls } = installMockLmStudio();
+    seedState({
+      actors: [actor('Alice', { toolGrants: ['mcp:echo.echo'] }), actor('Bob')],
+      messages: [userMessage('@Alice please start.')],
+      settings: { toolsEnabled: true },
+    });
+
+    await runRound();
+
+    const aliceSys = systemOf(chatCalls[0]);
+    const bobSys = systemOf(chatCalls[1]);
+    expect(aliceSys).toContain('[TOOL: mcp:echo.echo');
+    expect(aliceSys).not.toContain('mcp:notes.search'); // available but ungranted
+    expect(bobSys).not.toContain('ADDITIONAL TOOLS');
+    expect(bobSys).not.toContain('mcp:echo.echo');
+  });
+
+  it('toolGrants survive state normalization (save/load round-trip)', () => {
+    seedState({
+      actors: [actor('Alice', { toolGrants: ['mcp:echo.echo', 42, null] }), actor('Bob')],
+    });
+    expect(state.actors[0].toolGrants).toEqual(['mcp:echo.echo']); // non-strings dropped
+    expect(state.actors[1].toolGrants).toEqual([]);
+  });
+
+  it('executes a granted [TOOL:] tag during the turn and folds the result in', async () => {
+    const tagEnvelope = JSON.stringify({
+      thought: 'Let me check. [TOOL: mcp:echo.echo {"message": "hi"}]',
+      action: 'speak',
+      message: '',
+    });
+    const { chatCalls, toolCalls } = installMockLmStudio({
+      envelopeFor: (_req, n) => (n === 1
+        ? tagEnvelope
+        : JSON.stringify({ thought: 'done', action: 'speak', message: 'Grounded answer.' })),
+    });
+    seedState({
+      actors: [actor('Alice', { toolGrants: ['mcp:echo.echo'] }), actor('Bob')],
+      messages: [userMessage('@Alice please check.')],
+      settings: { toolsEnabled: true },
+    });
+
+    const ok = await runSingleResponse();
+
+    expect(ok).toBe(true);
+    expect(toolCalls).toEqual([{ tool: 'mcp:echo.echo', args: { message: 'hi' } }]);
+    // Follow-up round received the tool result (appended as a second user
+    // message after the assistant's tool request).
+    expect(chatCalls.length).toBe(2);
+    const lastUser = chatCalls[1].messages.filter(m => m.role === 'user').at(-1);
+    expect(lastUser.content).toContain('tool result: hello from mock');
+    expect(visibleMessages().at(-1).content).toBe('Grounded answer.');
+  });
+
+  it('blocks the same tag from an actor without the grant', async () => {
+    const tagEnvelope = JSON.stringify({
+      thought: 'Let me check. [TOOL: mcp:echo.echo {"message": "hi"}]',
+      action: 'speak',
+      message: 'I will try a tool anyway.',
+    });
+    const { chatCalls, toolCalls } = installMockLmStudio({
+      envelopeFor: () => tagEnvelope,
+    });
+    seedState({
+      actors: [actor('Alice'), actor('Bob')],
+      messages: [userMessage('@Alice please check.')],
+      settings: { toolsEnabled: true },
+    });
+
+    const ok = await runSingleResponse();
+
+    expect(ok).toBe(true);
+    expect(toolCalls).toEqual([]); // never executed
+    expect(chatCalls.length).toBe(1); // no tool follow-up round
+    expect(visibleMessages().at(-1).content).toBe('I will try a tool anyway.');
   });
 });

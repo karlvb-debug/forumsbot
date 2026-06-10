@@ -22,7 +22,7 @@ import { isQueueActor } from '../utils.js';
 import { buildActorSchema, buildSchemaPromptLine } from '../schemas.js';
 import { buildNarrativeDmInstruction, buildRoleplayContextLine, buildRoleplayStyleBlock } from '../storyMode.js';
 import { frag } from '../../prompts/index.js';
-import { getMcpTools } from '../tools.js';
+import { getMcpTools, BUILT_IN_TOOL_NAMES } from '../tools.js';
 import { globalStyleInstruction } from './config.js';
 import { relationshipBlock } from './prompt.js';
 
@@ -130,7 +130,7 @@ function directorSections(actor, ctx) {
             : '{"thought":"[SEARCH: latest local LLM benchmarks 2026]","action":"speak","message":""}'
         })
       : "",
-    ...(researcherToolsEnabled ? mcpToolsSections() : [])
+    ...mcpToolsSections(ctx)
   ];
 }
 
@@ -156,6 +156,7 @@ function managerSections(actor, ctx) {
     // Composition: a manager who can research previously lost all research
     // instructions to role shadowing. Append the tool fragments additively.
     ...(actor.canResearch ? managerResearchSections(ctx) : []),
+    ...mcpToolsSections(ctx),
     frag('security_transcript')
   ];
 }
@@ -168,25 +169,26 @@ function managerResearchSections(ctx) {
     showThoughts
       ? frag('researcher_tool_instruction_thoughts')
       : frag('researcher_tool_instruction_no_thoughts'),
-    ...mcpToolsSections(),
   ];
 }
 
-// MCP tools discovered at connect time, rendered as additive instructions for
-// any actor whose web tools are enabled. Sorted, single-line descriptions —
-// the section must stay byte-stable across turns (the list only changes on
-// reconnect), per the prefix-stability contract above.
-function mcpToolsSections() {
-  const tools = getMcpTools();
+// The actor's GRANTED MCP tools (computed in buildTurnPlan), rendered as
+// additive instructions for any role — participants included. Sorted,
+// single-line descriptions — the section must stay byte-stable across turns
+// (grants and the available list only change between sessions/reconnects),
+// per the prefix-stability contract above.
+function mcpToolsSections(ctx) {
+  const tools = (ctx.mcpTools || []).slice().sort((a, b) => a.name.localeCompare(b.name));
   if (!tools.length) return [];
-  const lines = tools
-    .slice()
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map((t) => {
-      const desc = String(t.description || '').replace(/\s+/g, ' ').trim().slice(0, 200);
-      return `- \`[TOOL: ${t.name} {...}]\`${desc ? ` — ${desc}` : ''}`;
-    });
-  return [frag('mcp_tools_available'), ...lines];
+  const lines = tools.map((t) => {
+    const desc = String(t.description || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    return `- \`[TOOL: ${t.name} {...}]\`${desc ? ` — ${desc}` : ''}`;
+  });
+  return [
+    frag('mcp_tools_available'),
+    ...lines,
+    frag('mcp_tools_example', { toolName: tools[0].name }),
+  ];
 }
 
 function researcherSections(actor, ctx) {
@@ -222,7 +224,7 @@ function researcherSections(actor, ctx) {
           ? frag('researcher_example_thoughts')
           : frag('researcher_example_no_thoughts'))
       : "",
-    ...(researcherToolsEnabled ? mcpToolsSections() : []),
+    ...mcpToolsSections(ctx),
     researcherToolsEnabled
       ? frag('researcher_ground_truth_tools')
       : frag('researcher_ground_truth_no_tools'),
@@ -313,7 +315,8 @@ function participantSections(actor, ctx) {
         ? "major decisions or conflicts only"
         : "decisions, conflicts, questions, clarifications, or needed information";
       return frag('participant_pause', { allowedDesc });
-    })()
+    })(),
+    ...mcpToolsSections(ctx)
   ];
 }
 
@@ -332,7 +335,18 @@ const ROLE_BUILDERS = {
 export function buildTurnPlan(actor, { sysCfg, showThoughts, forceSpeak, skipAllowed, tierModel, nextActor = null } = {}) {
   const role = primaryRole(actor);
   const stageDir = sysCfg.stageDirectionsEnabled;
+  // Built-in web tools are governed by canResearch (legacy boolean, drives the
+  // researcher fragments); MCP tools come solely from the actor's grant list,
+  // intersected with what the proxy actually has connected right now.
   const toolsAllowed = !!actor.canResearch && state.settings.toolsEnabled && !stageDir;
+  const grantSet = new Set(Array.isArray(actor.toolGrants) ? actor.toolGrants : []);
+  const grantedMcpTools = (grantSet.size && state.settings.toolsEnabled && !stageDir)
+    ? getMcpTools().filter((t) => grantSet.has(t.name))
+    : [];
+  const grantedTools = [
+    ...(toolsAllowed ? BUILT_IN_TOOL_NAMES : []),
+    ...grantedMcpTools.map((t) => t.name),
+  ];
   const validSpeakerNames = state.actors
     .filter(a => a.enabled && a.id !== actor.id && isQueueActor(a))
     .map(a => a.name);
@@ -353,6 +367,7 @@ export function buildTurnPlan(actor, { sysCfg, showThoughts, forceSpeak, skipAll
     skipAllowed,
     schemaLine,
     researcherToolsEnabled: toolsAllowed,
+    mcpTools: grantedMcpTools,
   };
   const system = backgroundPrefix(actor, nextActor)
     + ROLE_BUILDERS[role](actor, ctx).filter(Boolean).join("\n");
@@ -362,6 +377,10 @@ export function buildTurnPlan(actor, { sysCfg, showThoughts, forceSpeak, skipAll
     system,
     schema: buildActorSchema(actor, schemaOptions),
     toolsAllowed,
+    // Full executable-tool allowlist for this actor's turn — built-ins (via
+    // canResearch) plus granted MCP tools. askActor passes this to chatJson
+    // so execution matches what the prompt advertised.
+    grantedTools,
     rosterSection: rosterSection(role, sysCfg),
     includePrivateThoughts: role === 'director' && !!actor.canSeeThoughts,
     baseMaxTokens: (role === 'director' || role === 'manager')

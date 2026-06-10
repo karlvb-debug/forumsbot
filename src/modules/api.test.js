@@ -161,6 +161,43 @@ describe('chatJson — text tool gating', () => {
     _setMcpToolsForTest([]);
   });
 
+  it('treats an empty allowedTools list as "no tools for this caller"', async () => {
+    mockState.settings.toolsEnabled = true;
+    _setMcpToolsForTest([{ name: 'mcp:echo.echo', description: 'Echo', inputSchema: {}, server: 'echo' }]);
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(
+      chatResponse('{"thought":"[SEARCH: x] [TOOL: mcp:echo.echo {\\"message\\": \\"hi\\"}]","action":"speak","message":"plain"}')
+    );
+
+    const parsed = await chatJson('sys', 'usr', 0.2, null, null, null, null, { allowedTools: [] });
+
+    expect(parsed.message).toBe('plain');
+    expect(fetchSpy).toHaveBeenCalledTimes(1); // no tool execution, no follow-up
+    _setMcpToolsForTest([]);
+  });
+
+  it('scopes execution to the allowedTools list: MCP grant without web tools', async () => {
+    mockState.settings.toolsEnabled = true;
+    _setMcpToolsForTest([{ name: 'mcp:echo.echo', description: 'Echo', inputSchema: {}, server: 'echo' }]);
+    const calls = [];
+    vi.spyOn(global, 'fetch').mockImplementation(async (url, opts) => {
+      calls.push({ url, body: JSON.parse(opts.body) });
+      if (url === '/api/tool-execute') return jsonResponse({ text: 'echoed' });
+      const chatCallNo = calls.filter((c) => c.url === '/api/chat').length;
+      return chatResponse(chatCallNo === 1
+        ? '{"thought":"[SEARCH: web query] [TOOL: mcp:echo.echo {\\"message\\": \\"hi\\"}]","action":"speak","message":""}'
+        : '{"thought":"done","action":"speak","message":"final"}');
+    });
+
+    const parsed = await chatJson('sys', 'usr', 0.2, null, null, null, null, { allowedTools: ['mcp:echo.echo'] });
+
+    expect(parsed.message).toBe('final');
+    const toolCalls = calls.filter((c) => c.url === '/api/tool-execute');
+    // Only the granted MCP tool ran — the [SEARCH:] tag was filtered out.
+    expect(toolCalls).toHaveLength(1);
+    expect(toolCalls[0].body.tool).toBe('mcp:echo.echo');
+    _setMcpToolsForTest([]);
+  });
+
   it('does not execute ungranted [TOOL:] names even when tools are enabled', async () => {
     mockState.settings.toolsEnabled = true;
     _setMcpToolsForTest([]); // registry empty — name below is unknown

@@ -31,6 +31,22 @@ export interface Actor {
   canPinFacts?: boolean;
   canSuggestSpeaker?: boolean;
   canUpdateStyle?: boolean;
+  /** Namespaced MCP tool names ("mcp:server.tool") granted to this actor.
+   *  Built-in web tools are granted via canResearch, not this list. */
+  toolGrants?: string[];
+}
+
+/** An MCP tool discovered from the proxy's GET /api/mcp/tools. */
+export interface McpToolInfo {
+  name: string;          // namespaced: "mcp:server.tool"
+  description: string;
+  inputSchema: unknown;
+  server: string;
+  annotations?: {
+    title?: string;
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+  };
 }
 
 export type MessageType = 'actor' | 'system' | 'user' | 'director' | 'researcher';

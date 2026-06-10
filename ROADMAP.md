@@ -91,6 +91,28 @@ Fourth batch — MCP tools, Phase 1 (same day, suite now 417):
 - Phase 2 (per-actor `toolGrants`, editor UI, migration) and Phase 3
   (intent-routing boost, tool-call telemetry) remain open.
 
+Fifth batch — MCP tools, Phase 2 (same day, suite now 424):
+
+- **Per-actor `toolGrants`**: MCP tools are now granted individually
+  (`Actor.toolGrants`, namespaced names) instead of flowing to every
+  research-capable actor. Built-in web tools remain governed by
+  `canResearch`. Grants are preserved through state normalization — a
+  normalize-layer default replaced the planned schema-v2 migration since
+  nothing is renamed or moved.
+- **Grant-scoped execution**: `buildTurnPlan` computes the actor's full
+  executable allowlist (`grantedTools`) and askActor passes it to the chat
+  layer as `allowedTools`; the parser filters EVERY tag — legacy
+  [SEARCH:]/[READ:] included — against it, so prompt advertisement and
+  execution can never diverge. An empty list means no tools for that caller.
+- **Prompt generation from grants**: the tools section now renders only the
+  actor's granted tools (any role, participants included) with a few-shot
+  example fragment (`mcp_tools_example`); KV-prefix-stable.
+- **UI**: Tool Access grant checkboxes per actor in the Actors panel with
+  read-only/side-effect badges from MCP `annotations`; read-only MCP server
+  status (per-server tool lists + connection errors) in the Connection
+  panel; `useMcpTools` hook bridges the registry to React.
+- Phase 3 (intent-routing boost, tool-call telemetry) remains open.
+
 Two corrections to this report from implementation:
 
 - §1.2-1: a top-level error boundary **already existed** in `main.jsx` (missed

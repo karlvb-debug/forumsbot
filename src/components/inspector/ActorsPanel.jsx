@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import * as Ic from '../Icons';
 import { Field, Toggle, Range } from '../shared/FormControls';
 import { useForumState, mutateState } from '../../hooks/useForumState';
+import { useMcpTools } from '../../hooks/useMcpTools';
 import { putActorMemory } from '../../modules/db.js';
 import { ACTOR_LIBRARY } from '../../modules/blueprints.js';
 
@@ -50,6 +51,7 @@ function RelationshipAdd({ actors, currentId, onAdd }) {
 export function ActorsPanel() {
   const actors = useForumState(s => s.actors);
   const messages = useForumState(s => s.messages || []);
+  const mcpTools = useMcpTools();
   const [expanded, setExpanded] = useState(null);
   const [aiDesc, setAiDesc] = useState('');
   const [aiDescGenerating, setAiDescGenerating] = useState(false);
@@ -93,6 +95,17 @@ export function ActorsPanel() {
           s.documentWriting.designatedWriterId = nextWriter?.id || "";
         }
       }
+    });
+  }, []);
+
+  const toggleToolGrant = useCallback((id, toolName, granted) => {
+    mutateState(s => {
+      const a = s.actors.find(x => x.id === id);
+      if (!a) return;
+      const current = Array.isArray(a.toolGrants) ? a.toolGrants : [];
+      a.toolGrants = granted
+        ? [...new Set([...current, toolName])]
+        : current.filter(n => n !== toolName);
     });
   }, []);
 
@@ -364,6 +377,39 @@ export function ActorsPanel() {
                       ))}
                     </div>
                   </div>
+                  {mcpTools.length > 0 && (
+                    <div>
+                      <div className="actor-section-label" style={{ marginBottom: 6 }}>
+                        Tool Access (MCP)
+                      </div>
+                      <div className="perm-desc-text" style={{ marginBottom: 6 }}>
+                        Grant individual MCP tools to this actor. Servers are configured in mcp.config.json — they cannot be added from here.
+                      </div>
+                      <div className="permissions-grid">
+                        {mcpTools.map(t => {
+                          const readOnly = t.annotations?.readOnlyHint === true;
+                          return (
+                            <label key={t.name} className="perm-checkbox-label" title={t.description}>
+                              <input
+                                type="checkbox"
+                                checked={(a.toolGrants || []).includes(t.name)}
+                                onChange={(e) => toggleToolGrant(a.id, t.name, e.target.checked)}
+                              />
+                              <div>
+                                <span className="perm-label-text">
+                                  {readOnly ? '🔒' : '⚠️'} {t.name.replace(/^mcp:/, '')}
+                                </span>
+                                <div className="perm-desc-text">
+                                  {readOnly ? 'Read-only. ' : 'May modify external data. '}
+                                  {t.description || `Tool from MCP server "${t.server}".`}
+                                </div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* ── Director Behavior (only for canDirect actors) ── */}

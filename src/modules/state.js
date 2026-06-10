@@ -319,6 +319,9 @@ function normalizeState(value = {}) {
     // Event triggers (genuine events only — periodic firing is the cadence's job,
     // so 'on_every_turn' is filtered out here as part of the Phase 6 unification).
     triggerOn: Array.isArray(actor.triggerOn) ? actor.triggerOn.filter(t => t !== 'on_every_turn') : [],
+    // Per-actor MCP tool grants ("mcp:server.tool"). Built-in web tools are
+    // governed by canResearch, not this list.
+    toolGrants: Array.isArray(actor.toolGrants) ? actor.toolGrants.filter(g => typeof g === 'string') : [],
   }));
   const writerId = merged.documentWriting?.designatedWriterId;
   const writerActive = writerId && merged.actors.some(a => a.id === writerId && a.enabled && a.canWriteDocuments);

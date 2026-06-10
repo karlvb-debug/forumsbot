@@ -192,12 +192,15 @@ function logApiError(status, model, startTime, message, endpoint = "/v1/chat/com
 
 // Internal (unscheduled) implementation — used by chatJson retry/correction
 // calls to avoid deadlocking the scheduler.
-async function _chatCompletionDirect(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, jsonSchema = null, toolsAllowed = false, model = state.settings.model, tier = null, purpose = null } = {}) {
+async function _chatCompletionDirect(system, user, { temperature = state.settings.temperature, maxTokens = state.settings.maxTokens, signal, jsonSchema = null, toolsAllowed = false, allowedTools = null, model = state.settings.model, tier = null, purpose = null } = {}) {
   _lastToolCalls = []; // reset per-call log
   _lastNativeReasoning = "";
   const stageDir = state.scenario?.systems?.stageDirections?.enabled === true;
-  // Tools are text-tags only ([SEARCH:]/[READ:]), which are grammar-compatible.
-  const allowTextTools = !!toolsAllowed && state.settings.toolsEnabled && !stageDir;
+  // Tools are text-tags only ([SEARCH:]/[READ:]/[TOOL:]), which are
+  // grammar-compatible. `allowedTools` (per-actor grant list) takes precedence
+  // over the legacy boolean: an empty list means this caller gets no tools.
+  const grantedNames = Array.isArray(allowedTools) ? allowedTools : (toolsAllowed ? getKnownToolNames() : null);
+  const allowTextTools = !!(grantedNames && grantedNames.length) && state.settings.toolsEnabled && !stageDir;
   let useSchema = !!jsonSchema && _schemaSupportByModel[model] !== false;
   const messages = [
     { role: "system", content: system },
@@ -311,7 +314,7 @@ async function _chatCompletionDirect(system, user, { temperature = state.setting
 
     // Text-tag tools: parse [SEARCH:]/[READ:]/[TOOL:] requests embedded in the response.
     if (allowTextTools && round < MAX_TOOL_ROUNDS) {
-      const textCalls = parseTextToolCalls(content, getKnownToolNames());
+      const textCalls = parseTextToolCalls(content, grantedNames);
       if (textCalls.length) {
         const callTypes = textCalls.map((tc) => tc.tool).join(", ");
         console.debug(`[tools] Round ${round + 1}: text-based calls [${callTypes}] (${textCalls.length} total)`);
@@ -574,7 +577,10 @@ export function chatJson(system, user, temperature, signal, onStream = null, max
   // schema is applied inside chatStream/_chatCompletionDirect; text-tag tool
   // calls are detected post-response (the vast majority of turns have none).
   const stageDir2 = state.scenario?.systems?.stageDirections?.enabled === true;
-  const callAllowsTools = options.toolsAllowed !== false;
+  // Per-actor grant list takes precedence over the legacy boolean (see
+  // _chatCompletionDirect): an empty array means no tools for this caller.
+  const grantedNames = Array.isArray(options.allowedTools) ? options.allowedTools : null;
+  const callAllowsTools = grantedNames ? grantedNames.length > 0 : options.toolsAllowed !== false;
   const toolsAllowed = callAllowsTools && state.settings.toolsEnabled && !stageDir2;
   const canStream = onStream && state.settings.streamingEnabled !== false;
   const resolvedMaxTokens = maxTokens || state.settings.maxTokens;
@@ -600,7 +606,7 @@ export function chatJson(system, user, temperature, signal, onStream = null, max
     // in the completed response and run a single follow-up round to fold in the
     // results.
     if (toolsAllowed && !signal?.aborted) {
-      const textCalls = parseTextToolCalls(content, getKnownToolNames());
+      const textCalls = parseTextToolCalls(content, grantedNames ?? getKnownToolNames());
       if (textCalls.length) {
         let toolResults = "";
         for (const tc of textCalls) {
@@ -625,6 +631,7 @@ ${result}
           signal,
           jsonSchema,
           toolsAllowed: callAllowsTools,
+          allowedTools: grantedNames ?? undefined,
           model: tierModel,
         });
         _lastToolCalls = toolCallsSnapshot; // restore: follow-up is synthesis, not a new search
@@ -637,6 +644,7 @@ ${result}
       signal,
       jsonSchema,
       toolsAllowed: callAllowsTools,
+      allowedTools: grantedNames ?? undefined,
       model: tierModel,
       tier: options.tier || null,
       purpose: options.purpose || null,

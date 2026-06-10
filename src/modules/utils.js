@@ -623,25 +623,30 @@ function scanGenericToolTags(content) {
 }
 
 /**
- * Extract tool requests from model output. Legacy [SEARCH:]/[READ:] tags
- * always parse; generic [TOOL: name {json}] tags only parse when the name is
- * in `knownTools` (the granted-tool registry) — an unvalidated name must
- * never reach execution.
+ * Extract tool requests from model output. When `knownTools` (the caller's
+ * granted-tool list) is provided, EVERY tag — legacy [SEARCH:]/[READ:]
+ * included — is filtered against it: an ungranted name must never reach
+ * execution. With no list (legacy callers/tests), only the legacy tags parse.
  */
 export function parseTextToolCalls(content, knownTools = null) {
   const calls = [];
+  const restricted = Array.isArray(knownTools);
+  // Small local models drift on case — recover the canonical name.
+  const canonical = restricted
+    ? new Map(knownTools.map((name) => [String(name).toLowerCase(), name]))
+    : null;
+  const granted = (name) => !restricted || canonical.has(name);
+
   const searchPattern = /\[SEARCH:\s*(.+?)\]/gi;
   const readPattern = /\[READ:\s*(.+?)\]/gi;
   let match;
   while ((match = searchPattern.exec(content)) !== null) {
-    calls.push({ tool: "web_search", args: { query: match[1].trim() } });
+    if (granted("web_search")) calls.push({ tool: "web_search", args: { query: match[1].trim() } });
   }
   while ((match = readPattern.exec(content)) !== null) {
-    calls.push({ tool: "web_read", args: { url: match[1].trim() } });
+    if (granted("web_read")) calls.push({ tool: "web_read", args: { url: match[1].trim() } });
   }
-  if (Array.isArray(knownTools) && knownTools.length) {
-    // Small local models drift on case — recover the canonical name.
-    const canonical = new Map(knownTools.map((name) => [String(name).toLowerCase(), name]));
+  if (restricted && knownTools.length) {
     for (const tag of scanGenericToolTags(content)) {
       const name = canonical.get(tag.name.toLowerCase());
       if (!name) continue;

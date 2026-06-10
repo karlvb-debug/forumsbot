@@ -147,6 +147,8 @@ export async function listMcpTools() {
         description: String(t.description || ""),
         inputSchema: t.inputSchema || { type: "object" },
         server,
+        // readOnlyHint/destructiveHint drive the grant UI's risk badges.
+        annotations: t.annotations && typeof t.annotations === "object" ? t.annotations : undefined,
       });
     }
   }

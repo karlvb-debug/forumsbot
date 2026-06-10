@@ -4,6 +4,7 @@ import { Field, Toggle, Range } from '../shared/FormControls';
 import { useForumState, mutateState } from '../../hooks/useForumState';
 import { isEmbeddingModel } from '../../modules/api.js';
 import { useActions, getConnectionStatus, getConnectionStatusVersion, subscribeConnectionStatus } from '../../hooks/useActions';
+import { useMcpTools, useMcpErrors } from '../../hooks/useMcpTools';
 import { useSyncExternalStore } from 'react';
 
 const PROVIDERS = {
@@ -110,6 +111,8 @@ export function ConnectionPanel() {
   const tokenSpeed = useForumState(s => s.ui?.tokenSpeed || null);
   const modelIsEmbedding = isEmbeddingModel(model);
   const embeddingProbe = useForumState(s => s.ui?.embeddingProbeResult || null);
+  const mcpTools = useMcpTools();
+  const mcpErrors = useMcpErrors();
 
   const pendingStyleUpdate = useForumState(s => s.pendingStyleUpdate || null);
 
@@ -308,6 +311,28 @@ export function ConnectionPanel() {
           )}
         </Field>
       </div>
+
+      {(mcpTools.length > 0 || mcpErrors.length > 0) && (
+        <div className="card">
+          <div className="card-title"><h3>MCP servers</h3></div>
+          <div className="field-hint" style={{ marginBottom: 8 }}>
+            Read-only status. Servers are configured in mcp.config.json next to server.js; grant tools to individual actors in the Actors panel.
+          </div>
+          {Object.entries(mcpTools.reduce((acc, t) => {
+            (acc[t.server] = acc[t.server] || []).push(t);
+            return acc;
+          }, {})).map(([server, tools]) => (
+            <div key={server} style={{ fontSize: 12, marginBottom: 4 }}>
+              <strong>{server}</strong> — {tools.length} tool{tools.length === 1 ? '' : 's'}: {tools.map(t => t.name.replace(/^mcp:[^.]+\./, '')).join(', ')}
+            </div>
+          ))}
+          {mcpErrors.map(e => (
+            <div key={e.server} style={{ fontSize: 12, color: 'var(--danger, #b84738)', marginBottom: 4 }}>
+              <strong>{e.server}</strong> — failed to connect: {e.error}
+            </div>
+          ))}
+        </div>
+      )}
 
       <details className="card card-disclosure">
         <summary className="card-title">

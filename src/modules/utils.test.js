@@ -381,6 +381,14 @@ describe('parseTextToolCalls — generic [TOOL:] tags', () => {
     expect(parseTextToolCalls('[TOOL: mcp:echo.echo {"message": "hi"}]')).toEqual([]);
   });
 
+  it('filters legacy [SEARCH:]/[READ:] tags against the grant list too', () => {
+    // An MCP-only grant list must not let web tools through.
+    const mcpOnly = ['mcp:echo.echo'];
+    expect(parseTextToolCalls('[SEARCH: secrets] [READ: https://a.io]', mcpOnly)).toEqual([]);
+    // …while an ungated call (no list) still parses them, for legacy callers.
+    expect(parseTextToolCalls('[SEARCH: ok]')).toHaveLength(1);
+  });
+
   it('recovers canonical casing for case-drifted names', () => {
     const calls = parseTextToolCalls('[TOOL: MCP:Echo.ECHO {"message": "hi"}]', KNOWN);
     expect(calls).toEqual([{ tool: 'mcp:echo.echo', args: { message: 'hi' } }]);
