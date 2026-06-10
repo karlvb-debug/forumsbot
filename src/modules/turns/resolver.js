@@ -1,5 +1,6 @@
 import { state } from '../state.js';
 import { chatStructured } from '../api.js';
+import { getMcpTools } from '../tools.js';
 import { showBackgroundActivity, updateBackgroundActivity, hideBackgroundActivity } from '../streamingStore.js';
 import { trimWords } from '../utils.js';
 import { frag } from '../../prompts/index.js';
@@ -37,6 +38,22 @@ function detectAddressedActor(text, candidates, speakerName) {
   return null;
 }
 
+// Lookup-shaped requests: the last message is asking for verification or
+// fresh data that only a tool-holding actor can actually provide.
+const TOOL_NEED_PATTERN = /\b(look(?:ing)?\s+(?:it\s+)?up|search(?:es)?|verif(?:y|ied|ication)|fact[-\s]?check|double[-\s]?check|research|find\s+out|fetch|cite|citations?|sources?\s+for|latest|up[-\s]to[-\s]date|current\s+(?:data|numbers|figures|prices|state|version))\b/i;
+
+// Mirrors buildTurnPlan's tool gating: web tools via canResearch, MCP tools
+// via grants intersected with what the proxy actually has connected.
+function actorHasToolAccess(actor) {
+  if (!state.settings?.toolsEnabled) return false;
+  if (state.scenario?.systems?.stageDirections?.enabled === true) return false;
+  if (actor.canResearch) return true;
+  const grants = Array.isArray(actor.toolGrants) ? actor.toolGrants : [];
+  if (!grants.length) return false;
+  const available = new Set(getMcpTools().map(t => t.name));
+  return grants.some(g => available.has(g));
+}
+
 function scoreCandidates(candidates, alreadySpokeThisRound) {
   const recent = state.messages
     .filter(m => m.type !== 'skip' && m.type !== 'management')
@@ -44,6 +61,7 @@ function scoreCandidates(candidates, alreadySpokeThisRound) {
   const lastSpeaker = recent[recent.length - 1]?.speaker;
   const recentSpeakers = recent.slice(-3).map(m => m.speaker);
   const lastContent = (recent[recent.length - 1]?.content || '').toLowerCase();
+  const needsTools = TOOL_NEED_PATTERN.test(lastContent);
 
   // Dominance window: turns per speaker over the last 12 visible messages,
   // so a chatty actor pays a growing penalty instead of re-entering as soon
@@ -66,6 +84,9 @@ function scoreCandidates(candidates, alreadySpokeThisRound) {
       if (recentSpeakers.includes(actor.name)) score -= 2;
       if (actor.name === lastSpeaker) score -= 3;
       score -= Math.min(3, Math.floor((turnShare.get(actor.name) || 0) / 2));
+      // Capability-aware routing: a lookup-shaped request prefers an actor
+      // who can actually run a tool over one who can only speculate.
+      if (needsTools && actorHasToolAccess(actor)) score += 2;
       return { actor, score };
     })
     .sort((a, b) => b.score - a.score);

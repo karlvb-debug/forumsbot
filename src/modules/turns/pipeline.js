@@ -1,5 +1,5 @@
 import { state, saveState } from '../state.js';
-import { chatJson, chatStructured, setStatus, setCurrentSpeaker, getLastToolCalls, isJsonSchemaSupported, resolveModelTier } from '../api.js';
+import { chatJson, chatStructured, setStatus, setCurrentSpeaker, getLastToolCalls, getToolCallTotal, isJsonSchemaSupported, resolveModelTier } from '../api.js';
 import { mutateState } from '../stateStore.js';
 import { setBusy, getBusy as getIsGenerating, showToast } from '../uiStore.js';
 import { showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble, showBackgroundActivity, updateBackgroundActivity, hideBackgroundActivity, clearBackgroundActivities } from '../streamingStore.js';
@@ -440,7 +440,7 @@ export async function runRound(options = {}) {
 // The boundary is the log entry that was last at round start (object
 // identity) — timestamps only have millisecond resolution, so back-to-back
 // rounds can share them.
-function recordRoundCallStats(lastLogAtStart) {
+function recordRoundCallStats(lastLogAtStart, toolCallsAtStart = 0) {
   const all = state.diagnostics?.apiCallLogs || [];
   const logs = all.slice(all.indexOf(lastLogAtStart) + 1);
   if (!state.diagnostics) state.diagnostics = {};
@@ -452,6 +452,7 @@ function recordRoundCallStats(lastLogAtStart) {
     promptTokens: logs.reduce((sum, l) => sum + (l.promptTokens || 0), 0),
     completionTokens: logs.reduce((sum, l) => sum + (l.completionTokens || 0), 0),
     errors: logs.filter(l => l.status !== 'ok').length,
+    toolCalls: Math.max(0, getToolCallTotal() - toolCallsAtStart),
   });
   if (state.diagnostics.roundCallStats.length > 20) state.diagnostics.roundCallStats.shift();
 }
@@ -463,6 +464,7 @@ async function _runRound(options = {}) {
   ensureSessionController();
   const logsAtStart = state.diagnostics?.apiCallLogs || [];
   const lastLogAtStart = logsAtStart.length ? logsAtStart[logsAtStart.length - 1] : null;
+  const toolCallsAtStart = getToolCallTotal();
 
   const candidates = resolverCandidates();
   if (!candidates.length) {
@@ -531,7 +533,7 @@ async function _runRound(options = {}) {
   const shouldStop = roundMessages.length
     ? await evaluateAutoStopAfterRound(roundMessages, options)
     : false;
-  recordRoundCallStats(lastLogAtStart);
+  recordRoundCallStats(lastLogAtStart, toolCallsAtStart);
   if (shouldStop) return false;
   return completedTurns > 0 && completedTurns === maxTurns;
 }

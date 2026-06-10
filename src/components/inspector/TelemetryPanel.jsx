@@ -270,6 +270,10 @@ export function TelemetryPanel() {
                 <span className="metric-val">{fmtTok}</span>
                 <span className="metric-lbl">Tokens</span>
               </div>
+              <div className="metric-tile" title="Web and MCP tool executions during the last round">
+                <span className="metric-val">{last.toolCalls || 0}</span>
+                <span className="metric-lbl">Tool Calls</span>
+              </div>
               <div className="metric-tile" title="Calls that returned an error during the last round">
                 <span className="metric-val" style={{ color: last.errors > 0 ? 'var(--danger)' : 'var(--ok)' }}>
                   {last.errors}

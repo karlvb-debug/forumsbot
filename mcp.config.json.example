@@ -1,9 +1,14 @@
 {
-  "//": "Copy to mcp.config.json (gitignored) to connect MCP servers. This file is the ONLY way servers get added — there is no UI or API write path. Tools appear to research-capable actors as [TOOL: mcp:<server>.<tool> {...}] tags. Server names must not contain '.' or ':'. Set MCP_CONFIG env var to use a different path.",
+  "//": "Copy to mcp.config.json (gitignored) to connect MCP servers. This file is the ONLY way servers get added — there is no UI or API write path. Grant tools to individual actors in the Actors panel; they call them as [TOOL: mcp:<server>.<tool> {...}] tags. Server names must not contain '.' or ':'. Set MCP_CONFIG env var to use a different path. Optional limits on any server entry: timeoutMs (50–120000, default 30000) and resultCharCap (100–20000, default 3000), overridable per tool via a 'tools' map.",
   "servers": {
     "memory": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-memory"]
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "timeoutMs": 15000,
+      "resultCharCap": 3000,
+      "tools": {
+        "read_graph": { "resultCharCap": 6000 }
+      }
     },
     "someRemote": {
       "url": "http://127.0.0.1:8808/mcp",

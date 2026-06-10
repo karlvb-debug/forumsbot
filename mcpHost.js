@@ -101,7 +101,24 @@ async function connectServer(name, cfg) {
   await withTimeout(client.connect(transport), CONNECT_TIMEOUT_MS, `Connect to "${name}" timed out.`);
   const listed = await withTimeout(client.listTools(), CONNECT_TIMEOUT_MS, `tools/list for "${name}" timed out.`);
   const tools = Array.isArray(listed?.tools) ? listed.tools : [];
-  return { client, tools };
+  return { client, tools, cfg };
+}
+
+function clampNumber(value, min, max, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+// Effective limit for a call: per-tool override → per-server default → global
+// default. Config: { "timeoutMs": …, "resultCharCap": …, "tools": { "name":
+// { "timeoutMs": …, "resultCharCap": … } } } on any server entry.
+function resolveLimits(cfg, toolName) {
+  const toolCfg = cfg?.tools && typeof cfg.tools === "object" ? cfg.tools[toolName] : null;
+  return {
+    timeoutMs: clampNumber(toolCfg?.timeoutMs ?? cfg?.timeoutMs, 50, 120_000, CALL_TIMEOUT_MS),
+    resultCharCap: clampNumber(toolCfg?.resultCharCap ?? cfg?.resultCharCap, 100, 20_000, RESULT_CHAR_CAP),
+  };
 }
 
 function ensureInit() {
@@ -157,12 +174,12 @@ export async function listMcpTools() {
 }
 
 /**
- * Call a namespaced tool ("mcp:server.tool"). Returns plain text, capped at
- * RESULT_CHAR_CAP. Tool-level failures (isError results) come back as
- * "Tool error: …" text so the model gets feedback; protocol/config failures
- * throw.
+ * Call a namespaced tool ("mcp:server.tool"). Returns plain text, capped and
+ * timeout-bounded per resolveLimits (config-overridable per server or per
+ * tool). Tool-level failures (isError results) come back as "Tool error: …"
+ * text so the model gets feedback; protocol/config failures throw.
  */
-export async function callMcpTool(fullName, args = {}, { timeoutMs = CALL_TIMEOUT_MS } = {}) {
+export async function callMcpTool(fullName, args = {}, { timeoutMs = null } = {}) {
   await ensureInit();
   const match = /^mcp:([^.:]+)\.(.+)$/.exec(String(fullName || ""));
   if (!match) throw new Error(`Invalid MCP tool name: ${fullName}`);
@@ -174,10 +191,12 @@ export async function callMcpTool(fullName, args = {}, { timeoutMs = CALL_TIMEOU
     throw new Error(`Unknown tool "${toolName}" on MCP server "${server}".`);
   }
 
+  const limits = resolveLimits(entry.cfg, toolName);
+  const effectiveTimeout = timeoutMs != null ? clampNumber(timeoutMs, 50, 120_000, limits.timeoutMs) : limits.timeoutMs;
   const result = await withTimeout(
     entry.client.callTool({ name: toolName, arguments: args && typeof args === "object" ? args : {} }),
-    timeoutMs,
-    `MCP tool "${fullName}" timed out after ${timeoutMs}ms.`
+    effectiveTimeout,
+    `MCP tool "${fullName}" timed out after ${effectiveTimeout}ms.`
   );
 
   const text = (Array.isArray(result?.content) ? result.content : [])
@@ -185,7 +204,7 @@ export async function callMcpTool(fullName, args = {}, { timeoutMs = CALL_TIMEOU
     .join("\n")
     .trim();
 
-  const capped = text.length > RESULT_CHAR_CAP ? `${text.slice(0, RESULT_CHAR_CAP)}…[truncated]` : text;
+  const capped = text.length > limits.resultCharCap ? `${text.slice(0, limits.resultCharCap)}…[truncated]` : text;
   if (result?.isError) return `Tool error: ${capped || "MCP tool reported an error."}`;
   return capped || "No content returned.";
 }

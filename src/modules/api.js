@@ -136,6 +136,15 @@ export function scheduleEmbed(fn) {
 // Track which actor/director is currently generating so tool status messages
 // can say "Architect is searching..." rather than a generic message.
 let _currentSpeaker = "";
+
+// Monotonic count of tool executions since load. The pipeline diffs this
+// across round boundaries to report tool calls per round (same boundary
+// pattern as roundCallStats' apiCallLogs diff).
+let _toolCallTotal = 0;
+export function getToolCallTotal() {
+  return _toolCallTotal;
+}
+
 export function setCurrentSpeaker(name) {
   _currentSpeaker = name || "";
   mutateState(s => { s.ui.currentSpeaker = _currentSpeaker; });
@@ -802,6 +811,7 @@ export async function executeToolCall(toolName, argsString, signal) {
   } catch {
     toolArgs = {};
   }
+  _toolCallTotal += 1;
 
   console.debug(`[tools] Executing: ${toolName}(${JSON.stringify(toolArgs)})`);
 

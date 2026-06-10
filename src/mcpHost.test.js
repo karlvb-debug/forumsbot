@@ -32,7 +32,7 @@ afterAll(async () => {
 describe('listMcpTools', () => {
   it('returns namespaced tools from connected servers, sorted by name', async () => {
     const { tools } = await listMcpTools();
-    expect(tools.map((t) => t.name)).toEqual(['mcp:echo.big', 'mcp:echo.boom', 'mcp:echo.echo']);
+    expect(tools.map((t) => t.name)).toEqual(['mcp:echo.big', 'mcp:echo.boom', 'mcp:echo.echo', 'mcp:echo.slow']);
     expect(tools.every((t) => t.server === 'echo')).toBe(true);
     expect(tools[2].description).toBe('Echo a message back.');
     expect(tools[2].inputSchema?.properties?.message?.type).toBe('string');
@@ -82,6 +82,41 @@ describe('callMcpTool', () => {
   it('tolerates non-object args', async () => {
     const text = await callMcpTool('mcp:echo.echo', null);
     expect(text).toBe('echo:'); // result text is trimmed
+  });
+});
+
+describe('per-server and per-tool limits', () => {
+  beforeAll(async () => {
+    const configPath = join(tmpDir, 'mcp.limits.json');
+    await writeFile(configPath, JSON.stringify({
+      servers: {
+        echo: {
+          command: process.execPath,
+          args: [fixturePath],
+          resultCharCap: 500,
+          timeoutMs: 5000,
+          tools: {
+            big: { resultCharCap: 1000 },
+            slow: { timeoutMs: 60 },
+          },
+        },
+      },
+    }));
+    await resetMcp(configPath);
+  });
+
+  it('applies the server-level result cap', async () => {
+    const text = await callMcpTool('mcp:echo.echo', { message: 'y'.repeat(600) });
+    expect(text).toBe(`echo: ${'y'.repeat(494)}…[truncated]`); // 500 chars + marker
+  });
+
+  it('lets a per-tool cap override the server default', async () => {
+    const text = await callMcpTool('mcp:echo.big', {});
+    expect(text).toBe('x'.repeat(1000) + '…[truncated]');
+  });
+
+  it('enforces a per-tool timeout', async () => {
+    await expect(callMcpTool('mcp:echo.slow', {})).rejects.toThrow(/timed out after 60ms/);
   });
 });
 

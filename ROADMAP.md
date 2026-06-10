@@ -113,6 +113,22 @@ Fifth batch — MCP tools, Phase 2 (same day, suite now 424):
   panel; `useMcpTools` hook bridges the registry to React.
 - Phase 3 (intent-routing boost, tool-call telemetry) remains open.
 
+Sixth batch — MCP tools, Phase 3 (same day, suite now 430). The MCP roadmap
+from the agent-architecture report is now complete:
+
+- **Capability-aware speaker routing**: lookup-shaped requests ("verify",
+  "look up", "fact-check", "latest", …) add a +2 heuristic boost for actors
+  who can actually run a tool (canResearch or live MCP grants) in
+  `scoreCandidates` — pure regex + set lookup, no extra LLM call, and the
+  widened score margin means such turns route directly instead of falling
+  through to the tiny-router/intent pass.
+- **Tool-call telemetry**: tool executions are counted per round
+  (`roundCallStats.toolCalls`, same object-boundary diff pattern as the call
+  stats) and shown as a Tool Calls tile in the Round Cost card.
+- **Per-server / per-tool limits**: `timeoutMs` and `resultCharCap` are
+  configurable on any server entry in mcp.config.json, overridable per tool
+  via a `tools` map; values are clamped to sane bounds.
+
 Two corrections to this report from implementation:
 
 - §1.2-1: a top-level error boundary **already existed** in `main.jsx` (missed

@@ -458,3 +458,72 @@ describe('MCP tool grants (per-actor)', () => {
     expect(visibleMessages().at(-1).content).toBe('I will try a tool anyway.');
   });
 });
+
+describe('MCP tools — phase 3 (routing + telemetry)', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+    _setMcpToolsForTest([
+      { name: 'mcp:echo.echo', description: 'Echo a message back.', inputSchema: {}, server: 'echo' },
+    ]);
+  });
+
+  afterEach(() => {
+    _setMcpToolsForTest([]);
+  });
+
+  it('routes a lookup-shaped request to the tool-holding actor without an LLM routing call', async () => {
+    const { chatCalls } = installMockLmStudio();
+    seedState({
+      actors: [actor('Alice'), actor('Bob'), actor('Casey', { toolGrants: ['mcp:echo.echo'] })],
+      messages: [userMessage('Can someone verify the latest figures before we commit?')],
+      settings: { toolsEnabled: true },
+    });
+
+    await runRound();
+
+    const spoken = visibleMessages();
+    expect(spoken[0].speaker).toBe('Casey');
+    expect(spoken[0].routeInfo?.reason).toBe('score'); // heuristic boost, no router call
+    // Three actor turns, zero routing calls.
+    expect(chatCalls).toHaveLength(3);
+  });
+
+  it('counts tool executions in roundCallStats.toolCalls', async () => {
+    const tagEnvelope = JSON.stringify({
+      thought: 'Check. [TOOL: mcp:echo.echo {"message": "hi"}]',
+      action: 'speak',
+      message: '',
+    });
+    const { toolCalls } = installMockLmStudio({
+      envelopeFor: (req, n) => (n === 1 && systemOf(req).includes('You are Alice.')
+        ? tagEnvelope
+        : JSON.stringify({ thought: 'ok', action: 'speak', message: `m${n}` })),
+    });
+    seedState({
+      actors: [actor('Alice', { toolGrants: ['mcp:echo.echo'] }), actor('Bob')],
+      messages: [userMessage('@Alice please check.')],
+      settings: { toolsEnabled: true },
+    });
+
+    await runRound();
+
+    expect(toolCalls).toHaveLength(1);
+    const stats = state.diagnostics.roundCallStats;
+    expect(stats.at(-1).toolCalls).toBe(1);
+    // LLM calls: Alice turn + tool follow-up + Bob turn.
+    expect(stats.at(-1).calls).toBe(3);
+  });
+
+  it('records zero toolCalls for a round with no tool use', async () => {
+    installMockLmStudio();
+    seedState({
+      actors: [actor('Alice'), actor('Bob')],
+      messages: [userMessage('@Alice please open.')],
+    });
+
+    await runRound();
+
+    expect(state.diagnostics.roundCallStats.at(-1).toolCalls).toBe(0);
+  });
+});

@@ -60,6 +60,7 @@ vi.mock('./api.js', () => ({
   chatCompletion: vi.fn(),
   setCurrentSpeaker: vi.fn(),
   getLastToolCalls: vi.fn(() => []),
+  getToolCallTotal: vi.fn(() => 0),
   isJsonSchemaSupported: vi.fn(() => false),
   resolveModelTier: vi.fn(() => 'test-model'),
 }));

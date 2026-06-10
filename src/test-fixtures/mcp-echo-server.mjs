@@ -23,6 +23,11 @@ const TOOLS = [
     description: "Always fails with a tool-level error.",
     inputSchema: { type: "object", properties: {} },
   },
+  {
+    name: "slow",
+    description: "Responds after 300ms (exercises per-tool timeouts).",
+    inputSchema: { type: "object", properties: {} },
+  },
 ];
 
 function send(message) {
@@ -57,6 +62,10 @@ rl.on("line", (line) => {
       send({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: "x".repeat(10_000) }] } });
     } else if (name === "boom") {
       send({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: "kaboom" }], isError: true } });
+    } else if (name === "slow") {
+      setTimeout(() => {
+        send({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: "finally done" }] } });
+      }, 300);
     } else {
       send({ jsonrpc: "2.0", id, error: { code: -32602, message: `Unknown tool: ${name}` } });
     }

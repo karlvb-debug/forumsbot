@@ -286,6 +286,8 @@ export interface ForumState {
       promptTokens: number;
       completionTokens: number;
       errors: number;
+      /** Tool executions (web + MCP) during the round. */
+      toolCalls?: number;
     }>;
   };
   outcomes: Outcomes;
