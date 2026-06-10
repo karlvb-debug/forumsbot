@@ -114,6 +114,7 @@ vi.mock('./knowledge.js', () => ({
   splitDocuments: vi.fn(() => ({ editable: [], reference: [] })),
   buildDocumentManifestSection: vi.fn(() => ''),
   buildReferenceSection: vi.fn(() => ''),
+  buildReferenceSectionSemantic: vi.fn(async () => ''),
   buildKbSection: vi.fn(() => ''),
 }));
 

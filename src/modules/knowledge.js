@@ -2,6 +2,8 @@ import { state } from './state.js';
 import { db, storageAvailable, idbRequest, idbDone } from './db.js';
 import { KB_STORE } from './constants.js';
 import { normalizeDocumentEntry } from './state.js';
+import { getEmbedding, getEmbeddingsBatch } from './api.js';
+import { cosineSimilarity } from './utils.js';
 
 // ── CRUD ────────────────────────────────────────────────────────────────────
 
@@ -166,6 +168,142 @@ function trimWordsLocal(text, limit) {
   const words = String(text || "").trim().split(/\s+/).filter(Boolean);
   if (words.length <= limit) return words.join(" ");
   return `${words.slice(0, limit).join(" ")}...`;
+}
+
+// ── Semantic document retrieval ──────────────────────────────────────────────
+// When reference documents exceed the prompt budget, rank their paragraphs by
+// embedding similarity to the session's current focus and include the most
+// relevant excerpts, instead of blindly truncating every document from the
+// top (which made the bottom half of long documents invisible to actors).
+
+/** Split text into ~paragraph chunks of at most maxWords, merging small ones. */
+export function splitIntoParagraphs(text, maxWords = 120) {
+  const wc = (t) => t.split(/\s+/).filter(Boolean).length;
+  const rawParas = String(text || '').split(/\n\s*\n+/).map(p => p.trim()).filter(Boolean);
+  const out = [];
+  let buf = '';
+  for (const p of rawParas) {
+    if (wc(p) > maxWords) {
+      if (buf) { out.push(buf); buf = ''; }
+      const words = p.split(/\s+/).filter(Boolean);
+      for (let i = 0; i < words.length; i += maxWords) {
+        out.push(words.slice(i, i + maxWords).join(' '));
+      }
+      continue;
+    }
+    const candidate = buf ? `${buf}\n\n${p}` : p;
+    if (wc(candidate) <= maxWords) { buf = candidate; continue; }
+    out.push(buf);
+    buf = p;
+  }
+  if (buf) out.push(buf);
+  return out;
+}
+
+function contentHash(text) {
+  const t = String(text || "");
+  let hash = 2166136261;
+  for (let i = 0; i < t.length; i++) {
+    hash ^= t.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16);
+}
+
+// Paragraph vectors per doc, invalidated by content hash / model change —
+// a document embeds once and stays cached until it is edited.
+const _docVectorCache = new Map();
+const DOC_VECTOR_CACHE_MAX = 12;
+
+async function getDocParagraphVectors(doc, model) {
+  const hash = contentHash(doc.content || '');
+  const cached = _docVectorCache.get(doc.id);
+  if (cached && cached.hash === hash && cached.model === model) return cached;
+  const paragraphs = splitIntoParagraphs(doc.content || '');
+  const vectors = await getEmbeddingsBatch(paragraphs);
+  if (!Array.isArray(vectors) || vectors.length !== paragraphs.length) {
+    throw new Error('Embedding count mismatch for document paragraphs.');
+  }
+  const entry = { hash, model, paragraphs, vectors };
+  _docVectorCache.set(doc.id, entry);
+  if (_docVectorCache.size > DOC_VECTOR_CACHE_MAX) {
+    _docVectorCache.delete(_docVectorCache.keys().next().value);
+  }
+  return entry;
+}
+
+// Rendered-section cache, keyed per ROUND rather than per turn: within a
+// round every actor sees the same byte-identical section (KV-cache prefix
+// stability), and the selection re-adapts when the round advances.
+let _sectionCache = null;
+
+/**
+ * Reference section with embedding-ranked excerpts. Falls back to the even
+ * per-doc split whenever everything fits the budget, no embedding model is
+ * usable, or any embedding call fails.
+ */
+export async function buildReferenceSectionSemantic(docs, { maxSection = KB_SECTION_MAX_DEFAULT } = {}) {
+  if (!docs || !docs.length) return "";
+  const totalChars = docs.reduce((s, d) => s + (d.content || '').length, 0);
+  if (totalChars <= maxSection) return buildReferenceSection(docs, { maxSection });
+
+  const model = state.settings?.embeddingModel || state.settings?.model || '';
+  if (!model || state.ui?.embeddingProbeResult?.ok === false) {
+    return buildReferenceSection(docs, { maxSection });
+  }
+
+  const cacheKey = [
+    model, state.currentRound || 0, maxSection,
+    docs.map(d => `${d.id}:${contentHash(d.content || '')}`).join('|')
+  ].join('§');
+  if (_sectionCache?.key === cacheKey) return _sectionCache.value;
+
+  try {
+    const queryText = [
+      state.scenario?.task,
+      state.scenario?.premise,
+      ...(state.messages || []).slice(-3).map(m => String(m.content || '').slice(0, 300))
+    ].filter(Boolean).join('\n') || 'general session context';
+    const queryVec = await getEmbedding(queryText);
+
+    const scored = [];
+    for (const doc of docs) {
+      const { paragraphs, vectors } = await getDocParagraphVectors(doc, model);
+      paragraphs.forEach((text, idx) => {
+        if (Array.isArray(vectors[idx])) {
+          scored.push({ doc, idx, text, score: cosineSimilarity(queryVec, vectors[idx]) });
+        }
+      });
+    }
+    scored.sort((a, b) => b.score - a.score);
+
+    let used = 0;
+    const picked = [];
+    for (const s of scored) {
+      if (used + s.text.length > maxSection) continue;
+      picked.push(s);
+      used += s.text.length;
+      if (used >= maxSection * 0.95) break;
+    }
+    if (!picked.length) return buildReferenceSection(docs, { maxSection });
+
+    // Group selections by document; keep document order, then paragraph order.
+    const byDoc = new Map();
+    for (const doc of docs) byDoc.set(doc.id, { doc, parts: [] });
+    for (const s of picked) byDoc.get(s.doc.id).parts.push(s);
+    const sections = [...byDoc.values()]
+      .filter(({ parts }) => parts.length)
+      .map(({ doc, parts }) => {
+        parts.sort((a, b) => a.idx - b.idx);
+        return `### ${doc.title || "Untitled"} [read-only] (most relevant excerpts)\n${parts.map(p => p.text).join('\n\n')}`;
+      });
+    const value = "## Reference Documents\n" + sections.join("\n\n---\n\n");
+    _sectionCache = { key: cacheKey, value };
+    return value;
+  } catch (err) {
+    console.warn('[knowledge] semantic doc retrieval failed — using even split:', err?.message || err);
+    return buildReferenceSection(docs, { maxSection });
+  }
 }
 
 // Builds a read-only reference section (25% budget, water-fill allocation).

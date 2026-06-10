@@ -4,7 +4,7 @@ import { chatCompletion } from '../api.js';
 import { recallRelevantChunks } from '../memory.js';
 import { trimWords, isQueueActor, estimateTokens, formatTranscript } from '../utils.js';
 import { getActorMemory } from '../db.js';
-import { getKbEntriesForDirector, splitDocuments, buildDocumentManifestSection, buildReferenceSection, buildKbSection } from '../knowledge.js';
+import { getKbEntriesForDirector, splitDocuments, buildDocumentManifestSection, buildReferenceSectionSemantic, buildKbSection } from '../knowledge.js';
 import { resolveSystemSettings } from './config.js';
 
 let _lastPromptParts = null;
@@ -68,7 +68,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   if (kind === "actor") {
     const { editable, reference } = splitDocuments(actor.id);
     editableDocsSection = buildDocumentManifestSection(editable);
-    kbSection = buildReferenceSection(reference, { maxSection: kbMaxChars });
+    kbSection = await buildReferenceSectionSemantic(reference, { maxSection: kbMaxChars });
   } else {
     const directorEntries = await getKbEntriesForDirector();
     kbSection = buildKbSection(directorEntries, { maxSection: kbMaxChars });
