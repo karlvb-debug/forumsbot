@@ -437,8 +437,12 @@ export async function runRound(options = {}) {
 // Aggregate every LLM call logged since the round started into a per-round
 // stats entry. This is what makes the round's hidden cost (routing passes,
 // scribe judges, memory summaries, goal checks) visible in Telemetry.
-function recordRoundCallStats(sinceIso) {
-  const logs = (state.diagnostics?.apiCallLogs || []).filter(l => l.timestamp >= sinceIso);
+// The boundary is the log entry that was last at round start (object
+// identity) — timestamps only have millisecond resolution, so back-to-back
+// rounds can share them.
+function recordRoundCallStats(lastLogAtStart) {
+  const all = state.diagnostics?.apiCallLogs || [];
+  const logs = all.slice(all.indexOf(lastLogAtStart) + 1);
   if (!state.diagnostics) state.diagnostics = {};
   if (!Array.isArray(state.diagnostics.roundCallStats)) state.diagnostics.roundCallStats = [];
   state.diagnostics.roundCallStats.push({
@@ -457,7 +461,8 @@ async function _runRound(options = {}) {
   _sessionController = null;
   _stopFlag = false;
   ensureSessionController();
-  const roundStartedAt = new Date().toISOString();
+  const logsAtStart = state.diagnostics?.apiCallLogs || [];
+  const lastLogAtStart = logsAtStart.length ? logsAtStart[logsAtStart.length - 1] : null;
 
   const candidates = resolverCandidates();
   if (!candidates.length) {
@@ -526,7 +531,7 @@ async function _runRound(options = {}) {
   const shouldStop = roundMessages.length
     ? await evaluateAutoStopAfterRound(roundMessages, options)
     : false;
-  recordRoundCallStats(roundStartedAt);
+  recordRoundCallStats(lastLogAtStart);
   if (shouldStop) return false;
   return completedTurns > 0 && completedTurns === maxTurns;
 }

@@ -112,6 +112,7 @@ const INTENT_SCHEMA = {
     read: { type: 'string' },
     need: { type: 'string', enum: INTENT_NEEDS },
     speaker: { type: 'string' },
+    nextSpeakers: { type: 'array', items: { type: 'string' } },
     rationale: { type: 'string' },
     confidence: { type: 'number' },
     stuck: { type: 'boolean' },
@@ -121,7 +122,7 @@ const INTENT_SCHEMA = {
   additionalProperties: false
 };
 
-const INTENT_SHAPE = 'Return JSON only: {"read":"<one sentence on the current state>","need":"<one need>","speaker":"<participant name or NONE>","rationale":"<one clause: why them>","confidence":<0..1>,"expectedOutput":"<optional turn directive>"}';
+const INTENT_SHAPE = 'Return JSON only: {"read":"<one sentence on the current state>","need":"<one need>","speaker":"<participant name or NONE>","nextSpeakers":["<optional: up to two participants to follow, in order>"],"rationale":"<one clause: why them>","confidence":<0..1>,"expectedOutput":"<optional turn directive>"}';
 function getIntentSystem() { return frag('intent_system') + '\n' + INTENT_SHAPE; }
 
 async function resolveIntent(eligible, alreadySpokeThisRound, signal, allCandidates = null) {
@@ -255,9 +256,24 @@ async function resolveIntent(eligible, alreadySpokeThisRound, signal, allCandida
     // For 'deepen', allow re-selecting an actor who already spoke this round
     const lookupPool = need === 'deepen' ? rosterActors : available;
     const matched = lookupPool.find(a => a.name.toLowerCase() === speakerName.toLowerCase());
+    // Mini-plan: queue valid follow-up speakers at the front of the turn
+    // queue so the next resolveNextSpeaker calls take the free 'handoff'
+    // path instead of re-running this (LLM) pass for every turn.
+    const followUps = Array.isArray(data?.nextSpeakers)
+      ? data.nextSpeakers
+          .map(n => available.find(a => a.name.toLowerCase() === String(n).trim().toLowerCase()))
+          .filter((a, i, arr) => a && a.id !== matched?.id && arr.findIndex(x => x?.id === a.id) === i)
+          .slice(0, 2)
+      : [];
+    if (matched && followUps.length) {
+      const ids = followUps.map(a => a.id);
+      state.turnQueue = [...ids, ...state.turnQueue.filter(id => !ids.includes(id))];
+      state.lastIntent.plannedNext = followUps.map(a => a.name);
+    }
+
     updateBackgroundActivity(activityId, {
       detail: matched
-        ? `Needs to ${need || 'continue'} → ${matched.name}`
+        ? `Needs to ${need || 'continue'} → ${matched.name}${followUps.length ? ` (then ${followUps.map(a => a.name).join(', ')})` : ''}`
         : `Suggested ${speakerName} (not in roster).`
     });
     return { actor: matched || null, conclude: false, data: state.lastIntent };
