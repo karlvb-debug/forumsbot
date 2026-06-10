@@ -142,15 +142,18 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   })();
 
   const buildSections = (chunks, msgs, memOverride = null) => {
+    // Split facilitator messages by how addressed they are: zero actor replies
+    // gets the full-strength directive; exactly one reply gets a soft
+    // continuity note. Previously every actor within 3 turns of a user message
+    // received the shouted PRIORITY block even after it had been answered.
     const unansweredUserMsgs = [];
+    const partlyAnsweredUserMsgs = [];
     for (let i = 0; i < msgs.length; i++) {
       const m = msgs[i];
       if (m.type === "user" || (m.type === "system" && m.speaker === "Moderator")) {
-        const hasActorReply = msgs.slice(i + 1).some(r => r.type === "actor" || r.type === "dm");
         const actorTurnsAfter = msgs.slice(i + 1).filter(r => r.type === "actor" || r.type === "dm").length;
-        if (!hasActorReply || actorTurnsAfter <= 2) {
-          unansweredUserMsgs.push(m);
-        }
+        if (actorTurnsAfter === 0) unansweredUserMsgs.push(m);
+        else if (actorTurnsAfter === 1) partlyAnsweredUserMsgs.push(m);
       }
     }
 
@@ -165,6 +168,9 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
       facilitatorDirective = sysCfg.stageDirectionsEnabled
         ? `⚠ PRIORITY — FACILITATOR DIRECTIVE: The human facilitator has sent a message that has NOT been addressed yet: ${preview}. You MUST incorporate their instruction into your character's actions and speech on THIS turn. This overrides the skip rule — do NOT skip when the facilitator has spoken.${docReminder}`
         : `⚠ PRIORITY — FACILITATOR DIRECTIVE: The human facilitator has sent a message that has NOT been adequately addressed yet: ${preview}. You MUST respond to the facilitator's input directly and substantively in your public message on THIS turn. Acknowledge what they said and address it. This overrides the skip rule — do NOT skip when the facilitator has spoken.${docReminder}`;
+    } else if (partlyAnsweredUserMsgs.length > 0) {
+      const preview = partlyAnsweredUserMsgs.map(m => `"${(m.content || m.text || "").slice(0, 120)}"`).join("; ");
+      facilitatorDirective = `[The facilitator's recent message ${preview} has had one response so far — if anything in it remains unaddressed, cover it before moving on.]`;
     }
 
     const docActionNudge = "";

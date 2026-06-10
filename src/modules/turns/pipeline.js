@@ -3,7 +3,7 @@ import { chatJson, chatStructured, setStatus, setCurrentSpeaker, getLastToolCall
 import { mutateState } from '../stateStore.js';
 import { setBusy, getBusy as getIsGenerating, showToast } from '../uiStore.js';
 import { showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble, showBackgroundActivity, updateBackgroundActivity, hideBackgroundActivity, clearBackgroundActivities } from '../streamingStore.js';
-import { summarizeMemory } from '../memory.js';
+import { summarizeMemory, extractOutcomes } from '../memory.js';
 import { normalizeCadence, isQueueActor, normalizeSpeakingOrderStrategy, shouldFireCadence, appendMemory, trimWords, stringifyList, formatTranscript } from '../utils.js';
 import { buildActorSchema, buildSchemaPromptLine } from '../schemas.js';
 import { buildNarrativeDmInstruction, buildRoleplayContextLine, buildRoleplayStyleBlock } from '../storyMode.js';
@@ -617,6 +617,10 @@ export async function evaluateAutoStopAfterRound(roundMessages, options = {}) {
         showToast(`Task complete: ${verdict.reason}`, 'ok');
         await addMessage({ type: 'system', speaker: 'System', content: `✓ Task complete: ${verdict.reason}`, color: 'var(--accent)' });
         saveState();
+        // Completion is the payoff moment — mine the structured outcomes now
+        // instead of waiting for a manual Extract click. Fire-and-forget; the
+        // chat scheduler serializes it behind any in-flight calls.
+        extractOutcomes().catch(err => console.warn('[outcomes] auto-extract on completion failed:', err?.message || err));
         return true;
       }
       if (nowBlocked) {

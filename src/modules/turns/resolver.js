@@ -21,13 +21,17 @@ function detectAddressedActor(text, candidates, speakerName) {
   for (const actor of candidates) {
     if (actor.name === speakerName) continue;
     const name = actor.name.toLowerCase();
-    if (lower.includes(`@${name}`)) return actor;
     try {
       const esc = escapeRegex(name);
+      // Word boundary after the name so "@Al" can't match "@Alex".
+      if (new RegExp(`@${esc}\\b`).test(lower)) return actor;
+      // Bare-name patterns false-positive on short or common-word names
+      // ("Al", "So"), so require at least 3 characters for these.
+      if (name.length < 3) continue;
       // Name at message start or after sentence-end punctuation, followed by comma/colon/question
       if (new RegExp(`(?:^|[.!?]\\s+)${esc}[,?!:]`).test(lower)) return actor;
       // Explicit second-person cues: "you think, Name", "right, Name?", "thoughts, Name"
-      if (new RegExp(`(?:you think|thoughts|right|agree)[,?\\s]+${esc}`).test(lower)) return actor;
+      if (new RegExp(`(?:you think|thoughts|right|agree)[,?\\s]+${esc}\\b`).test(lower)) return actor;
     } catch { /* regex safety */ }
   }
   return null;
@@ -41,6 +45,17 @@ function scoreCandidates(candidates, alreadySpokeThisRound) {
   const recentSpeakers = recent.slice(-3).map(m => m.speaker);
   const lastContent = (recent[recent.length - 1]?.content || '').toLowerCase();
 
+  // Dominance window: turns per speaker over the last 12 visible messages,
+  // so a chatty actor pays a growing penalty instead of re-entering as soon
+  // as it drops out of the 3-message recency window.
+  const dominanceWindow = state.messages
+    .filter(m => m.type === 'actor' || m.type === 'dm')
+    .slice(-12);
+  const turnShare = new Map();
+  for (const m of dominanceWindow) {
+    turnShare.set(m.speaker, (turnShare.get(m.speaker) || 0) + 1);
+  }
+
   return candidates
     .filter(a => !alreadySpokeThisRound.has(a.id))
     .map(actor => {
@@ -50,6 +65,7 @@ function scoreCandidates(candidates, alreadySpokeThisRound) {
       if (!alreadySpokeThisRound.has(actor.id)) score += 1;
       if (recentSpeakers.includes(actor.name)) score -= 2;
       if (actor.name === lastSpeaker) score -= 3;
+      score -= Math.min(3, Math.floor((turnShare.get(actor.name) || 0) / 2));
       return { actor, score };
     })
     .sort((a, b) => b.score - a.score);
@@ -196,8 +212,12 @@ async function resolveIntent(eligible, alreadySpokeThisRound, signal, allCandida
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const userMsg = correction ? `${user}\n\n${correction}` : user;
+        // 'think' tier (main chat model), not 'reason': routing a speaker is a
+        // small classification task, and the reason tier can route to a heavy
+        // dedicated reasoning model — measured at ~9s per pass on ~41% of
+        // turns. The enum schema + corrective retry keep small models reliable.
         data = await chatStructured(getIntentSystem(), userMsg, INTENT_SCHEMA, {
-          temperature: 0.2, maxTokens: 160, signal, tier: 'reason', purpose: 'intentPass'
+          temperature: 0.2, maxTokens: 160, signal, tier: 'think', purpose: 'intentPass'
         });
       } catch (err) {
         console.warn('[resolver] intent pass failed, using fallback:', err.message);

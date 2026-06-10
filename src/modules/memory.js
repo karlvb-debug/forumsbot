@@ -193,6 +193,31 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
     : "";
   const relObjNote = storyMode ? " and actorRelationshipUpdates" : "";
 
+  // Grammar-constrain the summary envelope when the model supports
+  // response_format (the api layer probes and falls back automatically).
+  // This is the call that historically truncated mid-JSON on small models;
+  // parseMemoryJson below still handles the unconstrained fallback. Story
+  // mode keeps prompt-only output: its nested per-pair relationship object
+  // doesn't express cleanly as a strict schema.
+  const summarySchema = storyMode ? null : {
+    type: "object",
+    properties: {
+      sharedSummary: { type: "string" },
+      openQuestions: { type: "string" },
+      dmState: { type: "string" },
+      chunkSummary: { type: "string" },
+      actorMemoryUpdates: {
+        type: "object",
+        properties: Object.fromEntries(activeActorNames.map(n => [n, { type: "string" }])),
+        additionalProperties: false
+      },
+      pinnedFactSuggestions: { type: "array", items: { type: "string" } },
+      keywords: { type: "array", items: { type: "string" } }
+    },
+    required: ["sharedSummary", "openQuestions", "chunkSummary", "actorMemoryUpdates", "pinnedFactSuggestions", "keywords"],
+    additionalProperties: false
+  };
+
   // ── Single incremental-summary path ──────────────────────────────────────────
   // Every pass (manual or background cycle) folds the new turns into the durable
   // shared summary, anchored by pinned facts. This replaced a two-path scheme — a
@@ -225,7 +250,7 @@ export async function summarizeMemory(reason = "manual", sourceMessages = null, 
       `Source turns:\n${formatTranscript(usableMessages, 1600)}`
     ].filter(Boolean).join("\n\n");
 
-    const content = await chatCompletion(system, user, { temperature: 0.2, maxTokens: 2800, signal, tier: 'reason' });
+    const content = await chatCompletion(system, user, { temperature: 0.2, maxTokens: 2800, signal, tier: 'reason', jsonSchema: summarySchema });
     const parsed = parseMemoryJson(content);
     if (!parsed) {
       console.warn('[memory] Summary parse failed — preserving existing memory');

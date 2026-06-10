@@ -158,7 +158,33 @@ describe('scribe autonomy modes', () => {
     mockState.documentWriting = { designatedWriterId: 'w1', scribeMode: 'auto_apply' };
     mockState.pendingDocumentEdits = [];
     mockState.pendingScribeSuggestions = [];
+    // Two substantive messages so the autonomous activity gate is open.
+    mockState.messages = [
+      { id: 'm1', type: 'actor', speaker: 'A', content: 'We decided X.' },
+      { id: 'm2', type: 'actor', speaker: 'B', content: 'Agreed — X it is.' },
+    ];
     chatStructured.mockReset();
+  });
+
+  it('skips the judge until 2 new messages arrive since the last pass', async () => {
+    chatStructured.mockResolvedValueOnce({ thought: '', summary: '', documentEdits: [] });
+    await runScribePass(null); // judges m1+m2, advances the gate marker
+    expect(chatStructured).toHaveBeenCalledTimes(1);
+
+    // Nothing new since the last judgment — no second model call.
+    expect(await runScribePass(null)).toBeNull();
+    expect(chatStructured).toHaveBeenCalledTimes(1);
+
+    // One new message is still below the threshold.
+    mockState.messages.push({ id: 'm3', type: 'actor', speaker: 'A', content: 'New point.' });
+    expect(await runScribePass(null)).toBeNull();
+    expect(chatStructured).toHaveBeenCalledTimes(1);
+
+    // A second new message re-arms the gate.
+    mockState.messages.push({ id: 'm4', type: 'user', speaker: 'You', content: 'Capture that.' });
+    chatStructured.mockResolvedValueOnce({ thought: '', summary: '', documentEdits: [] });
+    await runScribePass(null);
+    expect(chatStructured).toHaveBeenCalledTimes(2);
   });
 
   it('manual mode skips the pass entirely (no model call)', async () => {

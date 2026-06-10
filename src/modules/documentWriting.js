@@ -344,6 +344,19 @@ export async function runScribePass(signal = null, { instruction = null } = {}) 
   const mode = state.documentWriting?.scribeMode || "manual";
   if (mode === "manual" && !instruction) return null;
 
+  // Activity gate: each autonomous pass is a full reason-tier judge call
+  // carrying the whole document plus recent transcript, and it used to fire
+  // after every single turn. Skip unless at least two substantive messages
+  // have arrived since the last judgment. Explicit user instructions bypass
+  // the gate. The marker lives in state so it survives reloads.
+  const visible = (state.messages || []).filter(m => ['user', 'actor', 'dm'].includes(m.type));
+  if (!instruction) {
+    const lastId = state.documentWriting?.lastScribeMsgId;
+    const lastIdx = lastId ? visible.findIndex(m => m.id === lastId) : -1;
+    const freshCount = lastIdx >= 0 ? visible.length - 1 - lastIdx : visible.length;
+    if (freshCount < 2) return null;
+  }
+
   const writer = resolveDesignatedWriter();
   if (!writer) return null;
   const doc = pickScribeTargetDoc(writer);
@@ -356,6 +369,12 @@ export async function runScribePass(signal = null, { instruction = null } = {}) 
     if (err?.name === "AbortError") return null;
     console.warn('[scribe] judgeAndDraft failed:', err?.message || err);
     return null;
+  }
+  // The judgment consumed the current transcript — advance the gate marker
+  // whether or not it produced edits (an error path leaves it for a retry).
+  if (!instruction && visible.length) {
+    if (!state.documentWriting) state.documentWriting = {};
+    state.documentWriting.lastScribeMsgId = visible[visible.length - 1].id;
   }
   if (!draft.edits.length) return null;
 
