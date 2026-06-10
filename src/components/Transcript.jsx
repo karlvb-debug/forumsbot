@@ -3,6 +3,7 @@ import * as Ic from './Icons';
 import { useForumState, mutateState } from '../hooks/useForumState';
 import { useBackgroundActivities, useStreaming } from '../hooks/useStreaming';
 import { renderMarkdown } from '../modules/markdown.js';
+import { navigateToPanel } from '../hooks/navigation.js';
 import { PauseCard } from './PauseCard';
 
 const MSG_COLLAPSE_WORDS = 250;
@@ -58,7 +59,7 @@ const MessageCard = React.memo(function MessageCard({ msg, actor, showThoughts, 
     const skipThought = msg.thought || null;
     return (
       <article className="msg">
-        <span className="swatch" style={{ background: actor.color }}>{(actor.name || '?')[0]}</span>
+        <span className="swatch" style={{ '--actor-color': actor.color }}>{(actor.name || '?')[0]}</span>
         <div className="msg-body">
           <div className="msg-head">
             <span className="msg-name">{actor.name}</span>
@@ -95,7 +96,7 @@ const MessageCard = React.memo(function MessageCard({ msg, actor, showThoughts, 
 
   return (
     <article className={'msg' + typeClass}>
-      <span className="swatch" style={{ background: actor.color }}>{(actor.name || '?')[0]}</span>
+      <span className="swatch" style={{ '--actor-color': actor.color }}>{(actor.name || '?')[0]}</span>
       <div className="msg-body">
         <div className="msg-head">
           <span className="msg-name">{actor.name}</span>
@@ -174,7 +175,7 @@ function StreamingBubble({ streaming, showThoughts }) {
 
   return (
     <article className="msg streaming">
-      <span className="swatch" style={{ background: streaming.color || 'var(--fg-mute)' }}>
+      <span className="swatch" style={{ '--actor-color': streaming.color || 'var(--fg-mute)' }}>
         {(streaming.speaker || '?')[0]}
       </span>
       <div className="msg-body">
@@ -217,7 +218,7 @@ function BackgroundActivityBubble({ activity }) {
   if (!activity) return null;
   return (
     <article className="msg streaming background-activity">
-      <span className="swatch background-activity-swatch" style={{ background: activity.color || 'var(--accent)' }}>
+      <span className="swatch background-activity-swatch" style={{ '--actor-color': activity.color || 'var(--accent)' }}>
         <span className="background-activity-spinner" />
       </span>
       <div className="msg-body">
@@ -480,9 +481,20 @@ export function Transcript({ showThoughts }) {
 
       {!messages.length && !streaming && !backgroundActivities.length && (
         <div className="empty-transcript">
-          <div className="empty-transcript-icon"><Ic.Forum width={40} height={40} /></div>
-          <div className="empty-transcript-text">No messages yet</div>
-          <div className="empty-transcript-hint">Send a message or press Next to start</div>
+          <div className="empty-transcript-icon"><Ic.Forum width={36} height={36} /></div>
+          <div className="empty-transcript-text">The floor is open</div>
+          <div className="empty-transcript-hint">Send a message below, press Next — or set the stage first.</div>
+          <div className="empty-cta-row">
+            <button className="empty-cta" onClick={() => navigateToPanel('scenario')}>
+              <Ic.Target width={14} height={14} /> Set the scene
+            </button>
+            <button className="empty-cta" onClick={() => navigateToPanel('actors')}>
+              <Ic.Actors width={14} height={14} /> Cast actors
+            </button>
+            <button className="empty-cta" onClick={() => navigateToPanel('connection')}>
+              <Ic.Plug width={14} height={14} /> Connect a model
+            </button>
+          </div>
         </div>
       )}
     </div>

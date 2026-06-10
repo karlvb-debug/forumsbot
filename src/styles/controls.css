@@ -1,20 +1,26 @@
 /* ───── Composer ───── */
 .composer {
-  border-top: 1px solid var(--border-soft);
-  background: var(--bg);
-  padding: 14px clamp(20px, 5vw, 64px);
+  /* Floating island: no divider — the gradient lets the transcript appear
+     to slide underneath the card. */
+  border-top: 0;
+  background: linear-gradient(to top, var(--bg) 60%, transparent);
+  padding: 6px clamp(20px, 5vw, 64px) 16px;
   min-width: 0;
   overflow: hidden;
 }
 .composer-inner {
   max-width: 920px; width: 100%; margin: 0 auto;
   background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 6px 10px 6px 14px;
-  transition: border-color .15s;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-xl);
+  padding: 8px 12px 8px 16px;
+  box-shadow: var(--elev-3);
+  transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
 }
-.composer-inner:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.composer-inner:focus-within {
+  border-color: oklch(from var(--accent) l c h / 0.65);
+  box-shadow: var(--elev-3), 0 0 0 3px var(--accent-soft);
+}
 .composer textarea {
   width: 100%;
   min-width: 0;

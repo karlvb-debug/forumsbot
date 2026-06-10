@@ -83,19 +83,52 @@
 
 /* ── New message fade-in — runs once when the element is first inserted ── */
 @keyframes msgFadeIn {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0);   }
 }
-.msg:not(.streaming) { animation: msgFadeIn 0.14s ease forwards; }
+.msg:not(.streaming) { animation: msgFadeIn var(--dur-3) var(--ease-out) forwards; }
 
 /* ───── Empty transcript ───── */
 .empty-transcript {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  min-height: 300px; gap: 8px;
+  min-height: 340px; gap: 8px;
+  animation: msgFadeIn var(--dur-4) var(--ease-out) forwards;
 }
-.empty-transcript-icon { opacity: 0.3; color: var(--fg-mute); display: flex; }
-.empty-transcript-text { font-size: var(--fs-lg); color: var(--fg-mute); font-weight: 600; }
+.empty-transcript-icon {
+  color: var(--accent);
+  display: flex;
+  padding: 14px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  margin-bottom: 4px;
+}
+.empty-transcript-text { font-size: var(--fs-xl); color: var(--fg); font-weight: 600; letter-spacing: -0.01em; }
 .empty-transcript-hint { font-size: var(--fs-sm); color: var(--fg-faint); }
+.empty-cta-row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; justify-content: center; }
+.empty-cta {
+  appearance: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 16px;
+  background: var(--bg-card);
+  color: var(--fg-dim);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  box-shadow: var(--elev-1);
+  transition: border-color var(--dur-2) var(--ease-out),
+              color var(--dur-2) var(--ease-out),
+              transform var(--dur-2) var(--ease-spring),
+              box-shadow var(--dur-2) var(--ease-out);
+}
+.empty-cta:hover {
+  color: var(--fg);
+  border-color: oklch(from var(--accent) l c h / 0.45);
+  transform: translateY(-1px);
+  box-shadow: var(--elev-2);
+}
+.empty-cta svg { color: var(--accent); }
 
 /* ───── Disabled states ───── */
 .composer .send-btn:disabled,

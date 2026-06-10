@@ -277,12 +277,13 @@
 .topbar-menu button:hover { background: var(--bg-elev); color: var(--fg); }
 .topbar-menu button.checked { color: var(--warn); }
 
-/* Readiness strip */
+/* Readiness strip — floats with the composer island: no full-width band,
+   chips align to the same 920px column. */
 .readiness-strip {
   display: flex; flex-wrap: wrap; gap: 6px;
-  padding: 4px 12px;
-  border-top: 1px solid var(--border);
-  background: var(--bg-raised);
+  width: min(920px, calc(100% - 2 * clamp(20px, 5vw, 64px)));
+  margin: 0 auto;
+  padding: 4px 0 0;
   font-size: 11px;
 }
 .readiness-chip {

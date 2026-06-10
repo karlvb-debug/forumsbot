@@ -129,6 +129,27 @@ from the agent-architecture report is now complete:
   configurable on any server entry in mcp.config.json, overridable per tool
   via a `tools` map; values are clamped to sane bounds.
 
+Seventh batch — UI overhaul, phases 0–1 (same day, suite unchanged at 430):
+
+- **Stylesheet split** (phase 0): the 2,954-line index.css is now a plain
+  @import manifest over nine section files — import order preserves the
+  cascade byte-for-byte (deliberately NOT @layer). New token primitives:
+  elevation ramp (--elev-1..3), glass surfaces (--glass-bg/-blur), motion
+  ramp (--ease-out/-spring, --dur-1..4), each with light-theme variants,
+  plus a prefers-reduced-motion kill-switch (a11y.css, imported last).
+- **Stage redesign** (phase 1): glass sticky transcript header; floating
+  island composer (no divider, elevated card, accent focus glow); duotone
+  actor avatars derived from actor color via relative-color syntax with a
+  solid fallback; thought blocks as soft violet cards; glass pill message
+  actions; richer empty state with panel-jump CTA chips; readiness strip
+  floats in the composer column instead of an edge-to-edge band; message
+  entrance eased through the motion tokens.
+- One plan correction: consecutive-message grouping was dropped — speakers
+  alternate by design in a round-based forum, so it would never trigger.
+- Verified by driving the built app headless (Playwright) and inspecting
+  dark/light screenshots of the empty and seeded transcript states.
+- Phases 2–4 (chrome, motion choreography, theme finish) remain open.
+
 Two corrections to this report from implementation:
 
 - §1.2-1: a top-level error boundary **already existed** in `main.jsx` (missed

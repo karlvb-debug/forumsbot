@@ -19,7 +19,11 @@
   position: sticky;
   top: 0;
   z-index: 5;
-  background: var(--bg);
+  /* Glass: the transcript visibly scrolls underneath. Falls back to the
+     translucent bg alone where backdrop-filter is unsupported. */
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
   margin-bottom: 18px;
 }
 .transcript-meta {
@@ -51,6 +55,17 @@
   display: flex; align-items: center; justify-content: center;
   color: white; font-weight: 600; font-size: 12px;
   flex-shrink: 0;
+  /* Duotone disc from the actor's color (set as --actor-color inline).
+     The gradient declaration drops out where relative color syntax is
+     unsupported, leaving the solid fallback. */
+  background: var(--actor-color, var(--fg-mute));
+  background-image: linear-gradient(
+    140deg,
+    oklch(from var(--actor-color, var(--fg-mute)) calc(l + 0.10) c h),
+    oklch(from var(--actor-color, var(--fg-mute)) calc(l - 0.08) c h) 85%
+  );
+  box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.18), 0 1px 3px oklch(0 0 0 / 0.28);
+  text-shadow: 0 1px 1px oklch(0 0 0 / 0.25);
 }
 .msg { width: 100%; min-width: 0; overflow: hidden; }
 .msg-body { min-width: 0; overflow: hidden; overflow-wrap: break-word; word-break: break-word; }
@@ -172,15 +187,20 @@
 .msg-actions {
   position: absolute; top: 8px; right: 10px;
   display: flex; gap: 2px; opacity: 0;
-  transition: opacity .15s;
-  background: var(--bg-card);
+  transform: translateY(2px);
+  transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out);
+  background: var(--glass-bg-elev);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
   border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  padding: 2px;
+  border-radius: 999px;
+  padding: 2px 3px;
+  box-shadow: var(--elev-2);
 }
+.msg:hover .msg-actions { transform: translateY(0); }
 .msg-actions button {
   appearance: none; background: transparent; border: 0; color: var(--fg-mute);
-  width: 24px; height: 24px; border-radius: 4px; cursor: pointer;
+  width: 24px; height: 24px; border-radius: 999px; cursor: pointer;
   font-size: 12px;
   display: inline-flex; align-items: center; justify-content: center;
 }
@@ -190,9 +210,9 @@
 .thought {
   margin-top: 8px;
   padding: 8px 12px;
-  background: oklch(from var(--bg-input) calc(l - 0.01) c h);
-  border-left: 2px solid var(--violet);
-  border-radius: 0 6px 6px 0;
+  background: oklch(from var(--violet) l c h / 0.05);
+  border: 1px solid oklch(from var(--violet) l c h / 0.16);
+  border-radius: var(--r-sm);
   font-size: var(--fs-sm);
   color: var(--fg-mute);
 }
