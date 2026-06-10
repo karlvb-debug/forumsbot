@@ -7,7 +7,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { state, setState, normalizeState } from './state.js';
-import { runRound, runSingleResponse } from './turns.js';
+import { runRound, runSingleResponse, askActor } from './turns.js';
 
 // ── Mock LM Studio ────────────────────────────────────────────────────────────
 
@@ -276,5 +276,65 @@ describe('pipeline integration (mock LM Studio)', () => {
     const headOf = (u) => u.slice(0, u.indexOf('Your private actor memory'));
     expect(headOf(aliceUsers[0]).length).toBeGreaterThan(50);
     expect(headOf(aliceUsers[0])).toBe(headOf(aliceUsers[1]));
+  });
+});
+
+// ── Role prompt snapshots ─────────────────────────────────────────────────────
+// Byte-exact pins of each role's system prompt. These exist so prompt-assembly
+// refactors can prove behavioral equivalence: any diff here is a deliberate
+// prompt change and must be reviewed as one, not refactor fallout.
+
+describe('role system-prompt snapshots', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  async function captureSystem(target) {
+    const { chatCalls } = installMockLmStudio();
+    seedState({
+      actors: [
+        target,
+        actor('Alice'),
+        actor('Bob'),
+      ],
+      messages: [userMessage('Please proceed.')],
+    });
+    await askActor(state.actors.find(a => a.id === target.id), null, null, false, {});
+    expect(chatCalls).toHaveLength(1);
+    return systemOf(chatCalls[0]);
+  }
+
+  it('participant system prompt', async () => {
+    expect(await captureSystem(actor('Pat', { role: 'Analyst', goal: 'Find risks.' }))).toMatchSnapshot();
+  });
+
+  it('director system prompt', async () => {
+    expect(await captureSystem(actor('Dirk', {
+      role: 'Facilitator', canDirect: true, canManageCast: true, canSeeThoughts: true,
+      canInject: true, canSuggestSpeaker: true, canAnchor: true, canPause: true,
+      canPinFacts: true, canUpdateStyle: true, directorMode: 'facilitator',
+    }))).toMatchSnapshot();
+  });
+
+  it('manager system prompt', async () => {
+    expect(await captureSystem(actor('Mona', { role: 'Casting', canManageCast: true }))).toMatchSnapshot();
+  });
+
+  it('researcher system prompt (tools disabled)', async () => {
+    expect(await captureSystem(actor('Rae', { role: 'Researcher', canResearch: true }))).toMatchSnapshot();
+  });
+
+  it('background mode prefixes the system prompt identically for every role', async () => {
+    for (const target of [
+      actor('Dirk', { canDirect: true }),
+      actor('Mona', { canManageCast: true }),
+      actor('Rae', { canResearch: true }),
+      actor('Pat'),
+    ]) {
+      const sys = await captureSystem({ ...target, actorMode: 'background' });
+      expect(sys.startsWith('BACKGROUND MODE: Your response will NOT appear in the transcript.')).toBe(true);
+      expect(sys).toContain('No next actor determined yet.');
+    }
   });
 });

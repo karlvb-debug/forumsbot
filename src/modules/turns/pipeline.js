@@ -4,14 +4,14 @@ import { mutateState } from '../stateStore.js';
 import { setBusy, getBusy as getIsGenerating, showToast } from '../uiStore.js';
 import { showStreamingBubble, updateStreamingBubble, removeStreamingBubble, forceRemoveStreamingBubble, showBackgroundActivity, updateBackgroundActivity, hideBackgroundActivity, clearBackgroundActivities } from '../streamingStore.js';
 import { summarizeMemory, extractOutcomes } from '../memory.js';
-import { normalizeCadence, isQueueActor, normalizeSpeakingOrderStrategy, shouldFireCadence, appendMemory, trimWords, stringifyList, formatTranscript } from '../utils.js';
+import { normalizeCadence, normalizeSpeakingOrderStrategy, shouldFireCadence, appendMemory, trimWords, stringifyList, formatTranscript } from '../utils.js';
 import { buildActorSchema, buildSchemaPromptLine } from '../schemas.js';
-import { buildNarrativeDmInstruction, buildRoleplayContextLine, buildRoleplayStyleBlock } from '../storyMode.js';
 import { frag } from '../../prompts/index.js';
-import { addMessage, wait, participantCycleCount, resolveSystemSettings, validateActorOutput, resolveActorThinkingTier, globalStyleInstruction, nextParticipant, generateDiscussionPlan, advancePlanStep } from './config.js';
+import { addMessage, wait, participantCycleCount, resolveSystemSettings, validateActorOutput, resolveActorThinkingTier, nextParticipant, generateDiscussionPlan, advancePlanStep } from './config.js';
 import { resolverCandidates, resolveNextSpeaker } from './resolver.js';
-import { buildPromptContext, privateThoughtDigest, relationshipBlock, getLastPromptParts, setLastPromptParts, getAndConsumeInjectionMaxTokens } from './prompt.js';
+import { buildPromptContext, privateThoughtDigest, getLastPromptParts, setLastPromptParts, getAndConsumeInjectionMaxTokens } from './prompt.js';
 import { applyAiResult, finalizeDeferredQuestions, getAndClearResumeAfterPause, cancelPendingPause, distillAllActorsMemory } from './result.js';
+import { buildTurnPlan } from './actorPrompt.js';
 
 let _sessionController = null;
 export let abortController = null;
@@ -803,364 +803,72 @@ export async function askActor(actor, signal, onStream = null, twoPhase = false,
   const showThoughts = thinkingTier !== 'fast' && !state.settings.turboMode;
   const forceSpeak = !!options.forceSpeak;
   const skipAllowed = !forceSpeak && (!twoPhase || !!actor.canResearch || !!actor.canManageCast);
-  const docsContext = { hasEditable: false };
   const sysCfg = resolveSystemSettings();
-  const validSpeakerNames = state.actors
-    .filter(a => a.enabled && a.id !== actor.id && isQueueActor(a))
-    .map(a => a.name);
+
+  // System prompt, schema, tool access, and roster come from the
+  // capability-composed builder. The system prompt is byte-stable across
+  // turns for a given actor + settings (KV-cache prefix reuse); everything
+  // per-turn below goes into the user message.
+  const plan = buildTurnPlan(actor, {
+    sysCfg, showThoughts, forceSpeak, skipAllowed, tierModel,
+    nextActor: options.nextActor || null,
+  });
+  const isParticipant = plan.role === 'participant';
 
   const triggerBlock = options.triggerEvent
     ? buildEventContextBlock(options.triggerEvent, options.triggerData || {})
     : '';
 
-  if (actor.canDirect) {
-    const privateThoughts = actor.canSeeThoughts ? privateThoughtDigest() : "";
-    const modeInstruction = sysCfg.dmNarrates
-      ? buildNarrativeDmInstruction()
-      : frag('director_mode_facilitator');
-
-    const dmRoleModifier = sysCfg.dmRole === 'observer'
-      ? frag('director_mode_observer')
-      : sysCfg.dmRole === 'arbiter'
-      ? frag('director_mode_arbiter')
-      : "";
-
-    const castManagementBlock = (sysCfg.stageDirectionsEnabled || actor.canManageCast)
-      ? [
-          sysCfg.stageDirectionsEnabled
-            ? frag('director_cast_mgmt_narrative')
-            : frag('director_cast_mgmt_analytical'),
-          frag('director_cast_mgmt_instructions')
-        ].join("\n")
-      : "";
-
-    const system = [
-      frag('director_identity', { name: actor.name }),
-      actor.persona ? frag('director_persona', { persona: actor.persona }) : "",
-      globalStyleInstruction(),
-      modeInstruction,
-      dmRoleModifier,
-      castManagementBlock,
-      sysCfg.stageDirectionsEnabled
-        ? frag('director_user_msg_stageDirections')
-        : frag('director_user_msg_analytical'),
-      forceSpeak
-        ? (sysCfg.dmRole === 'narrator'
-            ? frag('director_speak_narrator_forced')
-            : frag('director_speak_forced'))
-        : (sysCfg.dmRole === 'narrator'
-            ? frag('director_speak_narrator_optional')
-            : frag('director_speak_facilitator_optional')),
-      forceSpeak
-        ? ""
-        : sysCfg.dmRole === 'observer'
-        ? frag('director_skip_observer')
-        : sysCfg.dmRole === 'arbiter'
-        ? frag('director_skip_arbiter')
-        : sysCfg.dmRole === 'narrator'
-        ? frag('director_skip_narrator')
-        : frag('director_skip_facilitator'),
-      frag('director_conciseness'),
-      frag('director_physical_actions'),
-      sysCfg.allowDirectAddress
-        ? frag('director_flow_control_enabled')
-        : frag('director_flow_control_disabled'),
-      frag('director_anchors'),
-      frag('director_injections'),
-      frag('director_private_msg'),
-      frag('director_style_control'),
-      (!showThoughts)
-        ? frag('thoughts_disabled')
-        : frag('thoughts_enabled'),
-      buildSchemaPromptLine(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, schemaActive: isJsonSchemaSupported(tierModel), forceSpeak }),
-      'The JSON is transport only. Put natural public dialogue only inside message; do not make message itself JSON.',
-      "",
-      (!sysCfg.stageDirectionsEnabled && state.settings.toolsEnabled && actor.canResearch)
-        ? frag('director_web_tools', {
-            thoughtField: showThoughts ? 'thought field' : 'JSON thought field',
-            researchSuffix: showThoughts ? ', so you can synthesize and resolve discrepancies with fresh ground truth' : '',
-            searchExample: showThoughts
-              ? '{"thought":"I should look up the latest specs. [SEARCH: latest local LLM benchmarks 2026]","action":"speak","message":""}'
-              : '{"thought":"[SEARCH: latest local LLM benchmarks 2026]","action":"speak","message":""}'
-          })
-        : ""
-    ].filter(Boolean).join("\n");
-
-    const baseUser = await buildPromptContext({ kind: "actor", actor, privateThoughts });
-    const rosterLabel = sysCfg.stageDirectionsEnabled ? "Current cast" : "Current actor roster";
-    const rosterLines = state.actors.map(a => `- ${a.name} (${a.role || (sysCfg.stageDirectionsEnabled ? "Character" : "Participant")})${a.enabled ? "" : (sysCfg.stageDirectionsEnabled ? " [offstage]" : " [disabled]")}`).join("\n");
-    const user = `${baseUser}\n\n### ${rosterLabel}\n${rosterLines}`;
-    const promptParts = {
-      ...getLastPromptParts(),
-      system,
-      persona: `Name: ${actor.name}\nPersona: ${actor.persona || ""}`
-    };
-
-    const isBackground = (actor.actorMode || 'participant') === 'background';
-    let directorSystem = system;
-    if (isBackground) {
-      const nextAct = options.nextActor;
-      const nextLabel = nextAct
-        ? `The next scheduled actor is: **${nextAct.name}** (${nextAct.role || 'participant'}).`
-        : 'No next actor determined yet.';
-      directorSystem = `BACKGROUND MODE: Your response will NOT appear in the transcript. Only your promptInjections, manageActors, nextSpeaker, and privateMessages fields take effect. Omit or leave "message" blank.\n${nextLabel}\n\n` + system;
-    }
-
-    const directorUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
-    const schema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak, validSpeakerNames });
-    const result = await chatJson(directorSystem, directorUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || 1200, schema, { toolsAllowed: !!actor.canResearch, tier: thinkingTier, purpose: actor.name });
-    result._promptParts = promptParts;
-    return result;
-  }
-
-  if (actor.canManageCast) {
-    const rosterLines = state.actors
-      .map(a => `- ${a.name} (${a.role || "Participant"})${a.enabled ? "" : " [disabled]"}`)
-      .join("\n");
-
-    const system = [
-      frag('manager_identity', { name: actor.name }),
-      actor.persona ? `Persona: ${actor.persona}` : "",
-      actor.goal ? `Responsibility: ${actor.goal}` : "",
-      actor.voice ? `Voice: ${actor.voice}` : "",
-      actor.voice ? "" : globalStyleInstruction(),
-      frag('manager_job'),
-      frag('manager_observe'),
-      frag('manager_creation_rules'),
-      forceSpeak
-        ? frag('manager_speak_forced')
-        : frag('manager_skip_rules'),
-      frag('manager_public_msg'),
-      frag('manager_user_msg'),
-      buildSchemaPromptLine(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, schemaActive: isJsonSchemaSupported(tierModel), forceSpeak }),
-      'All manageActors sub-arrays are optional — omit any you don\'t need. The JSON is transport only; put natural dialogue only inside message.',
-      (!showThoughts) ? frag('thoughts_disabled') : "",
-      frag('security_transcript')
-    ].filter(Boolean).join("\n");
-
-    const baseContext = await buildPromptContext({ kind: "actor", actor });
-    const user = `${baseContext}\n\n### Current actor roster\n${rosterLines}`;
-
-    const isBackgroundMgr = (actor.actorMode || 'participant') === 'background';
-    let managerSystem = system;
-    if (isBackgroundMgr) {
-      const nextAct = options.nextActor;
-      const nextLabel = nextAct
-        ? `The next scheduled actor is: **${nextAct.name}** (${nextAct.role || 'participant'}).`
-        : 'No next actor determined yet.';
-      managerSystem = `BACKGROUND MODE: Your response will NOT appear in the transcript. Only your promptInjections, manageActors, nextSpeaker, and privateMessages fields take effect. Omit or leave "message" blank.\n${nextLabel}\n\n` + system;
-    }
-    const managerUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
-    const managerSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak, validSpeakerNames });
-    return chatJson(managerSystem, managerUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || 1200, managerSchema, { toolsAllowed: false, tier: thinkingTier, purpose: actor.name });
-  }
-
-  if (actor.canResearch) {
-    const researcherToolsEnabled = state.settings.toolsEnabled && !sysCfg.stageDirectionsEnabled;
-    const system = [
-      frag('researcher_identity', { name: actor.name }),
-      `Role: ${actor.role || "Research Specialist"}`,
-      `Responsibility: ${actor.goal || "Provide up-to-date objective research and answer open questions to ground the discussion."}`,
-      `Voice: ${actor.voice || "Objective, fact-driven, structured with clear source citations."}`,
-      actor.persona ? `Persona: ${actor.persona}` : "",
-      actor.voice ? "" : globalStyleInstruction(),
-      actor.exampleDialogue ? `How ${actor.name} speaks:\n${actor.exampleDialogue}` : "",
-      frag('researcher_specialization'),
-      researcherToolsEnabled
-        ? frag('researcher_purpose_tools')
-        : frag('researcher_purpose_no_tools'),
-      frag('researcher_objectivity'),
-      researcherToolsEnabled
-        ? frag('researcher_mandatory_tools')
-        : frag('researcher_tools_disabled'),
-      forceSpeak
-        ? frag('researcher_speak_forced')
-        : frag('researcher_inspect'),
-      researcherToolsEnabled
-        ? (showThoughts
-            ? frag('researcher_tool_instruction_thoughts')
-            : frag('researcher_tool_instruction_no_thoughts'))
-        : forceSpeak
-        ? frag('researcher_no_tools_forced')
-        : frag('researcher_no_tools_optional'),
-      researcherToolsEnabled
-        ? (showThoughts
-            ? frag('researcher_example_thoughts')
-            : frag('researcher_example_no_thoughts'))
-        : "",
-      researcherToolsEnabled
-        ? frag('researcher_ground_truth_tools')
-        : frag('researcher_ground_truth_no_tools'),
-      forceSpeak
-        ? ""
-        : frag('researcher_skip_rules'),
-      researcherToolsEnabled
-        ? frag('researcher_citations_tools')
-        : frag('researcher_citations_no_tools'),
-      (!showThoughts)
-        ? frag('thoughts_disabled_researcher')
-        : frag('thoughts_enabled_participant'),
-      buildSchemaPromptLine(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, schemaActive: isJsonSchemaSupported(tierModel), forceSpeak }),
-      'The JSON is transport only. Put natural public dialogue/briefs only inside message; do not make message itself JSON.',
-      frag('researcher_user_msg'),
-      frag('security_directive')
-    ].filter(Boolean).join("\n");
-
-    const user = await buildPromptContext({ kind: "actor", actor });
-
-    const isBackgroundRes = (actor.actorMode || 'participant') === 'background';
-    let researchSystem = system;
-    if (isBackgroundRes) {
-      const nextAct = options.nextActor;
-      const nextLabel = nextAct
-        ? `The next scheduled actor is: **${nextAct.name}** (${nextAct.role || 'participant'}).`
-        : 'No next actor determined yet.';
-      researchSystem = `BACKGROUND MODE: Your response will NOT appear in the transcript. Only your promptInjections, manageActors, nextSpeaker, and privateMessages fields take effect. Omit or leave "message" blank.\n${nextLabel}\n\n` + system;
-    }
-    const researchUser = triggerBlock ? `${user}\n\n${triggerBlock}` : user;
-    const researchSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak, validSpeakerNames });
-    return chatJson(researchSystem, researchUser, actor.temperature ?? state.settings.temperature, signal, onStream, actor.maxTokens || null, researchSchema, { toolsAllowed: researcherToolsEnabled, tier: thinkingTier, purpose: actor.name });
-  }
-
-  const contextLine = sysCfg.stageDirectionsEnabled
-    ? buildRoleplayContextLine(showThoughts, state.actors.some(a => a.canDirect && a.enabled))
-    : frag('participant_context_analytical');
-
-  const intentHint = (() => {
+  // Intent-pass steering (participant turns only, matching resolver targets).
+  const liveIntent = (() => {
     const li = state.lastIntent;
-    if (!li?.need || !li?.speaker) return '';
-    if (li.speaker.toLowerCase() !== actor.name.toLowerCase()) return '';
-    if (Date.now() - new Date(li.at).getTime() > 60_000) return '';
-    const suffix = li.rationale ? ` (${li.rationale})` : '';
-    let hint = frag('participant_intent_hint', { need: li.need, rationale: suffix });
-    if (li.expectedOutput) {
-      hint += `\nTHIS TURN, produce: ${li.expectedOutput}`;
+    if (!isParticipant || !li?.need || !li?.speaker) return null;
+    if (li.speaker.toLowerCase() !== actor.name.toLowerCase()) return null;
+    if (Date.now() - new Date(li.at).getTime() > 60_000) return null;
+    return li;
+  })();
+  const intentHint = (() => {
+    if (!liveIntent) return '';
+    const suffix = liveIntent.rationale ? ` (${liveIntent.rationale})` : '';
+    let hint = frag('participant_intent_hint', { need: liveIntent.need, rationale: suffix });
+    if (liveIntent.expectedOutput) {
+      hint += `\nTHIS TURN, produce: ${liveIntent.expectedOutput}`;
     }
     return hint;
   })();
-
-  const intentBudget = (() => {
-    const li = state.lastIntent;
-    if (!li?.need || !li?.speaker) return null;
-    if (li.speaker.toLowerCase() !== actor.name.toLowerCase()) return null;
-    if (Date.now() - new Date(li.at).getTime() > 60_000) return null;
-    return NEED_TOKEN_BUDGET[li.need] || null;
-  })();
-
-  // Suppress skip when the intent pass deliberately chose this actor with
-  // high confidence. Delivered as a user-tail directive (like the facilitator
-  // override) rather than by swapping system fragments — the system prompt
-  // must stay byte-stable across turns for KV-cache prefix reuse.
-  const intentChoseThis = (() => {
-    const li = state.lastIntent;
-    if (!li?.need || !li?.speaker) return false;
-    if (li.speaker.toLowerCase() !== actor.name.toLowerCase()) return false;
-    if (Date.now() - new Date(li.at).getTime() > 60_000) return false;
-    return typeof li.confidence === 'number' && li.confidence >= 0.8;
-  })();
-  const intentNoSkipDirective = (skipAllowed && intentChoseThis) ? frag('participant_intent_no_skip') : '';
-
+  const intentBudget = liveIntent ? (NEED_TOKEN_BUDGET[liveIntent.need] || null) : null;
   const intentBudgetHint = intentBudget
     ? `TOKEN BUDGET: Keep your response to roughly ${Math.round(intentBudget * 0.75)} words or fewer this turn.`
     : '';
+  // High-confidence intent selection suppresses skip via a user-tail
+  // directive (same override pattern as the facilitator directive) so the
+  // system prompt stays stable.
+  const intentChoseThis = !!liveIntent && typeof liveIntent.confidence === 'number' && liveIntent.confidence >= 0.8;
+  const intentNoSkipDirective = (skipAllowed && intentChoseThis) ? frag('participant_intent_no_skip') : '';
 
-  const relationships = relationshipBlock(actor);
-  // NOTE: intentHint/intentBudgetHint are per-turn and therefore appended to
-  // the USER message tail, not the system prompt — a byte-stable system
-  // prompt is what lets the local server reuse its KV cache across turns.
-  const system = [
-    `You are ${actor.name}.`,
-    actor.role ? `Role: ${actor.role}` : "",
-    actor.persona ? `Persona: ${actor.persona}` : "",
-    actor.goal ? `Responsibility: ${actor.goal}` : "",
-    actor.voice ? `Voice: ${actor.voice}` : "",
-    actor.voice ? "" : globalStyleInstruction(),
-    actor.exampleDialogue ? `How ${actor.name} speaks:\n${actor.exampleDialogue}` : "",
-    "LENGTH: Match response length to the turn. Reactions, questions, and redirects: 2–3 sentences. Proposals, analysis, and synthesis: as long as needed, no padding.",
-    relationships,
-    contextLine,
-    sysCfg.stageDirectionsEnabled
-      ? frag('participant_user_msg_stageDirections')
-      : frag('participant_user_msg_analytical'),
-    skipAllowed
-      ? (showThoughts
-          ? frag('participant_think_speak_thoughts')
-          : frag('participant_think_speak_no_thoughts'))
-      : (showThoughts
-          ? frag('participant_forced_thoughts')
-          : frag('participant_forced_no_thoughts')),
-    skipAllowed
-      ? (showThoughts
-          ? frag('participant_skip_rules_thoughts')
-          : frag('participant_skip_rules_no_thoughts'))
-      : "",
-    sysCfg.stageDirectionsEnabled
-      ? buildRoleplayStyleBlock(sysCfg.stageDirectionsMaxShare, sysCfg.stageDirectionsIntensity)
-      : frag('participant_conciseness_analytical'),
-    (!showThoughts)
-      ? frag('thoughts_disabled')
-      : "",
-    buildSchemaPromptLine(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, schemaActive: isJsonSchemaSupported(tierModel), forceSpeak }),
-    sysCfg.stageDirectionsEnabled
-      ? 'The JSON is transport only. ' + frag('participant_markdown_stageDirections')
-      : 'The JSON is transport only. ' + frag('participant_markdown_analytical'),
-    (state.userContext?.interactionMode !== "observer")
-      ? 'All of the above fields are part of a single JSON object. You may also add optional fields like "pauseRequest", "pinFact", "anchor", etc. alongside the required fields in that same object. ' + frag('participant_handoff')
-      : "",
-    frag('security_directive'),
-    "",
-    (!sysCfg.stageDirectionsEnabled && state.settings.toolsEnabled && actor.canResearch)
-      ? frag('participant_web_tools', {
-          researchSuffix: showThoughts ? 'to fetch ground truth' : 'using your thought field',
-          searchExample: showThoughts
-            ? '{"thought":"I need current data. [SEARCH: best quantization methods for local LLMs 2026]","action":"speak","message":""}'
-            : '{"thought":"[SEARCH: best quantization methods for local LLMs 2026]","action":"speak","message":""}',
-          readInstructions: showThoughts
-            ? 'Use [SEARCH: your query] to search the web, or [READ: https://example.com] to read a specific page. Search early in the discussion to ground your inputs in actual facts.'
-            : 'Use [SEARCH: your query] in your JSON thought field to search the web, or [READ: https://example.com] to read a specific page.'
-        })
-      : "",
-    !sysCfg.stageDirectionsEnabled
-      ? frag('participant_fact_pin')
-      : "",
-    !sysCfg.stageDirectionsEnabled
-      ? frag('participant_style_control')
-      : "",
-    (() => {
-      const mode = state.userContext?.interactionMode || "collaborator";
-      if (mode === "observer") return "";
-      const allowedDesc = mode === "sponsor"
-        ? "major decisions or conflicts only"
-        : "decisions, conflicts, questions, clarifications, or needed information";
-      return frag('participant_pause', { allowedDesc });
-    })()
-  ].filter(Boolean).join("\n");
+  const privateThoughts = plan.includePrivateThoughts ? privateThoughtDigest() : "";
+  const baseUser = await buildPromptContext({ kind: "actor", actor, privateThoughts });
 
-  const user = await buildPromptContext({ kind: "actor", actor });
+  let user = plan.rosterSection ? `${baseUser}\n\n${plan.rosterSection}` : baseUser;
+  user = [user, triggerBlock, intentHint, intentNoSkipDirective, intentBudgetHint]
+    .filter(Boolean).join("\n\n");
+  if (options.correction) user += `\n\n[CORRECTION: ${options.correction}]`;
 
-  const isBackgroundActor = (actor.actorMode || 'participant') === 'background';
-  let actorSystem = system;
-  if (isBackgroundActor) {
-    const nextAct = options.nextActor;
-    const nextLabel = nextAct
-      ? `The next scheduled actor is: **${nextAct.name}** (${nextAct.role || 'participant'}).`
-      : 'No next actor determined yet.';
-    actorSystem = `BACKGROUND MODE: Your response will NOT appear in the transcript. Only your promptInjections, manageActors, nextSpeaker, and privateMessages fields take effect. Omit or leave "message" blank.\n${nextLabel}\n\n` + system;
-  }
+  const dynamicMaxTokens = isParticipant
+    ? (getAndConsumeInjectionMaxTokens() || options.maxTokensOverride || actor.maxTokens || intentBudget || null)
+    : plan.baseMaxTokens;
 
-  const promptParts = {
+  const result = await chatJson(
+    plan.system, user,
+    actor.temperature ?? state.settings.temperature,
+    signal, onStream, dynamicMaxTokens, plan.schema,
+    { toolsAllowed: plan.toolsAllowed, tier: thinkingTier, purpose: actor.name }
+  );
+  result._promptParts = {
     ...getLastPromptParts(),
-    system: actorSystem,
+    system: plan.system,
     persona: `Name: ${actor.name}\nRole: ${actor.role || ""}\nPersona: ${actor.persona || ""}\nVoice: ${actor.voice || ""}`
   };
-
-  let actorUser = [user, triggerBlock, intentHint, intentNoSkipDirective, intentBudgetHint]
-    .filter(Boolean).join("\n\n");
-  if (options.correction) actorUser += `\n\n[CORRECTION: ${options.correction}]`;
-  const actorSchema = buildActorSchema(actor, { showThoughts, hasEditable: docsContext.hasEditable, stageDirections: sysCfg.stageDirectionsEnabled, allowNextSpeaker: sysCfg.allowDirectAddress, forceSpeak, validSpeakerNames });
-  const dynamicMaxTokens = getAndConsumeInjectionMaxTokens() || options.maxTokensOverride || actor.maxTokens || intentBudget || null;
-  const result = await chatJson(actorSystem, actorUser, actor.temperature ?? state.settings.temperature, signal, onStream, dynamicMaxTokens, actorSchema, { toolsAllowed: !!actor.canResearch, tier: thinkingTier, purpose: actor.name });
-  result._promptParts = promptParts;
   return result;
 }
 

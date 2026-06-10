@@ -255,7 +255,7 @@ export default function App() {
       mutateState(s => { s.ui.inspectorCollapsed = !s.ui.inspectorCollapsed; });
       saveState();
     }
-  }, [setContinueMode, stopGeneration]);
+  }, [setContinueMode, stopGeneration, setAccent, setDensity, setTheme]);
 
   // Theme class on <html>
   useEffect(() => {
