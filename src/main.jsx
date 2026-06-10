@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import { STORAGE_KEY } from './modules/constants.js';
 import './styles/index.css';
 
 // Error boundary for graceful crash recovery
@@ -36,6 +37,22 @@ class ErrorBoundary extends React.Component {
             }}
           >
             Try again
+          </button>
+          {/* Escape hatch for crash loops: if the error comes from rehydrated
+              state, "Try again" re-renders into the same crash forever. */}
+          <button
+            onClick={() => {
+              if (window.confirm('Clear saved app state and reload? Your transcript history (IndexedDB) is kept, but scenario, actors, and settings reset to defaults.')) {
+                try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+                window.location.reload();
+              }
+            }}
+            style={{
+              padding: '6px 16px', borderRadius: 8, background: 'transparent',
+              color: '#9aa0a6', border: '1px solid #44403a', cursor: 'pointer', fontSize: 13,
+            }}
+          >
+            Clear saved state &amp; reload
           </button>
         </div>
       );

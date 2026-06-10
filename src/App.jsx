@@ -78,10 +78,25 @@ const NAV_TITLES = {
   help:          { title: 'Help' },
 };
 
+// Appearance preferences persist outside the main state blob so they survive
+// a "clear saved state" reset and apply before modules load.
+function usePersistedPref(key, fallback, valid) {
+  const [value, setValue] = useState(() => {
+    try {
+      const stored = localStorage.getItem(key);
+      return stored && valid.includes(stored) ? stored : fallback;
+    } catch { return fallback; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(key, value); } catch { /* quota/private mode */ }
+  }, [key, value]);
+  return [value, setValue];
+}
+
 export default function App() {
-  const [theme, setTheme] = useState('dark');
-  const [density, setDensity] = useState('comfy');
-  const [accent, setAccent] = useState('amber');
+  const [theme, setTheme] = usePersistedPref('forum-theme', 'dark', ['dark', 'light']);
+  const [density, setDensity] = usePersistedPref('forum-density', 'comfy', ['comfy', 'compact']);
+  const [accent, setAccent] = usePersistedPref('forum-accent', 'amber', ['amber', 'violet', 'teal', 'coral']);
   const [activePanel, setActivePanel] = useState('actors');
   const [inspectorPos, _setInspectorPos] = useState('left');
   const [_ready, setReady] = useState(false);
