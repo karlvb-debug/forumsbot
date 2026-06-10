@@ -125,9 +125,10 @@
   font-family: var(--font-sans); font-size: var(--fs-sm);
   flex: 1;
   text-align: center;
+  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
 }
 .subnav button:hover { color: var(--fg); }
-.subnav button.active { background: var(--bg-elev); color: var(--fg); box-shadow: var(--shadow-1); }
+.subnav button.active { background: var(--bg-elev); color: var(--fg); box-shadow: var(--elev-1); }
 
 /* ───── Form controls ───── */
 .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
@@ -305,15 +306,20 @@ input[type="range"]::-webkit-slider-thumb {
   border: 1px solid var(--border-soft);
   border-radius: var(--r);
   padding: var(--pad);
+  box-shadow: var(--elev-1);
 }
 .card + .card { margin-top: var(--gap-lg); }
 .card-title {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   margin: -2px 0 10px;
 }
+/* Eyebrow section label — same grammar as .actor-section-label so every
+   panel section reads the same way. */
 .card-title h3 {
-  margin: 0; font-size: var(--fs); font-weight: 600;
-  color: var(--fg);
+  margin: 0; font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-mute);
   display: flex; align-items: center; gap: 8px;
 }
 .card-title .badge {
@@ -330,7 +336,7 @@ input[type="range"]::-webkit-slider-thumb {
 .card-row {
   display: flex; align-items: center; justify-content: space-between;
   padding: 8px 0;
-  border-top: 1px dashed var(--border-soft);
+  border-top: 1px solid var(--border-soft);
   font-size: var(--fs-sm);
 }
 .card-row:first-child { border-top: 0; padding-top: 0; }

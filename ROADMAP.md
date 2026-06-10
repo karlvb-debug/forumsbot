@@ -148,7 +148,15 @@ Seventh batch — UI overhaul, phases 0–1 (same day, suite unchanged at 430):
   alternate by design in a round-based forum, so it would never trigger.
 - Verified by driving the built app headless (Playwright) and inspecting
   dark/light screenshots of the empty and seeded transcript states.
-- Phases 2–4 (chrome, motion choreography, theme finish) remain open.
+- **Chrome refresh** (phase 2): topbar status signals live in one joined
+  segmented pill group with hairline separators; RunControl reads as the
+  primary CTA (accent glow, press state); rail active item is an
+  accent-tinted pill with a spring indicator bar and hover-intent
+  tooltips; inspector cards get resting elevation, eyebrow section labels
+  (one grammar with .actor-section-label), hairline card rows, and a
+  motion-token subnav. Enum-select → segmented-control conversion was
+  deferred: component-wide churn for marginal gain.
+- Phases 3–4 (motion choreography, theme finish) remain open.
 
 Two corrections to this report from implementation:
 
