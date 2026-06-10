@@ -27,6 +27,31 @@ Landed on this branch (each with tests where applicable; suite now 364):
   de-escalation; scribe activity gate; grammar-constrained memory summarizer;
   auto-`extractOutcomes` on goal completion.
 
+Second batch (same day, suite now 377):
+
+- **Pipeline integration harness** (§1.5 item 19, adapted): the real turn
+  loop — state, api, resolver, prompt assembly, result application — runs
+  against a mock LM Studio with only `fetch` stubbed. Covers turn order,
+  routing reasons, call counts, envelope schemas, result application,
+  prompt-prefix stability, and byte-exact system-prompt snapshots per role.
+  (A browser-level Playwright e2e remains open; module-level loop coverage
+  is what the refactors below required.)
+- **KV-cache prompt restructure** (agent report rec. #1): prompt sections
+  stability-sorted; goal progress + plan step moved out of the prompt head
+  into a post-transcript block; per-turn intent hints moved from the system
+  prompt to the user tail; high-confidence intent selection no longer swaps
+  skip-rule fragments. Each actor's system prompt is now byte-stable across
+  turns — verified by harness tests.
+- **Capability-composed askActor** (agent report rec. #3): new
+  `turns/actorPrompt.js` owns system-prompt assembly; the four-way fork and
+  4× duplicated background block are gone; a Manager who `canResearch` now
+  actually receives research instructions and tool access. Byte-exact role
+  snapshots prove single-capability prompts are unchanged.
+- **Round Cost telemetry** (agent report rec. #2, first half): per-round
+  LLM call/token/error aggregates in `diagnostics.roundCallStats` plus a
+  Telemetry card with a calls-per-round sparkline. The "then cut" half —
+  per-round intent mini-plans, two-stage scribe judge — remains open.
+
 Two corrections to this report from implementation:
 
 - §1.2-1: a top-level error boundary **already existed** in `main.jsx` (missed
