@@ -185,6 +185,27 @@ describe('pipeline integration (mock LM Studio)', () => {
     expect(state.actors.find(a => a.name === 'Bob').skipCount).toBe(1);
   });
 
+  it('aggregates per-round LLM call and token stats into diagnostics.roundCallStats', async () => {
+    installMockLmStudio();
+    seedState({
+      actors: [actor('Alice'), actor('Bob')],
+      messages: [userMessage('@Alice round one.')],
+    });
+
+    await runRound();
+    state.messages.push(userMessage('@Alice round two.'));
+    await runRound();
+
+    const stats = state.diagnostics.roundCallStats;
+    expect(stats).toHaveLength(2);
+    // Two actors, no hidden routing/judge/scribe calls in this configuration.
+    expect(stats[0]).toMatchObject({ round: 1, calls: 2, errors: 0 });
+    expect(stats[1]).toMatchObject({ round: 2, calls: 2, errors: 0 });
+    // Mock reports 100 prompt + 20 completion tokens per call.
+    expect(stats[0].promptTokens).toBe(200);
+    expect(stats[0].completionTokens).toBe(40);
+  });
+
   it('runSingleResponse answers an @mention with exactly one turn', async () => {
     const { chatCalls } = installMockLmStudio();
     seedState({

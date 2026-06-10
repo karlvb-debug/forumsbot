@@ -434,11 +434,30 @@ export async function runRound(options = {}) {
   }
 }
 
+// Aggregate every LLM call logged since the round started into a per-round
+// stats entry. This is what makes the round's hidden cost (routing passes,
+// scribe judges, memory summaries, goal checks) visible in Telemetry.
+function recordRoundCallStats(sinceIso) {
+  const logs = (state.diagnostics?.apiCallLogs || []).filter(l => l.timestamp >= sinceIso);
+  if (!state.diagnostics) state.diagnostics = {};
+  if (!Array.isArray(state.diagnostics.roundCallStats)) state.diagnostics.roundCallStats = [];
+  state.diagnostics.roundCallStats.push({
+    round: state.currentRound || 0,
+    at: new Date().toISOString(),
+    calls: logs.length,
+    promptTokens: logs.reduce((sum, l) => sum + (l.promptTokens || 0), 0),
+    completionTokens: logs.reduce((sum, l) => sum + (l.completionTokens || 0), 0),
+    errors: logs.filter(l => l.status !== 'ok').length,
+  });
+  if (state.diagnostics.roundCallStats.length > 20) state.diagnostics.roundCallStats.shift();
+}
+
 async function _runRound(options = {}) {
   abortController = null;
   _sessionController = null;
   _stopFlag = false;
   ensureSessionController();
+  const roundStartedAt = new Date().toISOString();
 
   const candidates = resolverCandidates();
   if (!candidates.length) {
@@ -504,10 +523,11 @@ async function _runRound(options = {}) {
     state.memory.turnsSinceSummary = 0;
     await summarizeMemory("round", roundMessages, { signal: _sessionController?.signal });
   }
-  if (roundMessages.length) {
-    const shouldStop = await evaluateAutoStopAfterRound(roundMessages, options);
-    if (shouldStop) return false;
-  }
+  const shouldStop = roundMessages.length
+    ? await evaluateAutoStopAfterRound(roundMessages, options)
+    : false;
+  recordRoundCallStats(roundStartedAt);
+  if (shouldStop) return false;
   return completedTurns > 0 && completedTurns === maxTurns;
 }
 

@@ -262,6 +262,15 @@ export interface ForumState {
     apiCallLogs: unknown[];
     parseFailures: unknown[];
     outcomeExtractionLog: unknown[];
+    /** Per-round LLM call/token aggregates (capped at 20 rounds). */
+    roundCallStats?: Array<{
+      round: number;
+      at: string;
+      calls: number;
+      promptTokens: number;
+      completionTokens: number;
+      errors: number;
+    }>;
   };
   outcomes: Outcomes;
   autoStop: AutoStop;
