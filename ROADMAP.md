@@ -10,6 +10,34 @@ works — but `npm ci` **fails on a clean checkout** and the last five CI runs o
 `main` and the dev branch are **red**. `npx tsc --noEmit` also fails. Details in
 Part 1.
 
+## Status update (2026-06-10)
+
+Landed on this branch (each with tests where applicable; suite now 364):
+
+- **P0 complete:** `npm ci` fixed (eslint-plugin-react removed, lockfile
+  regenerated), `tsc --noEmit` green and added to CI, doc rot fixed
+  (§1.1 items 1–3).
+- **P1:** SSRF redirect/DNS-rebinding guard + upstream stream cancellation in
+  `server.js` with its first test suite (§1.2 items 2–3, §1.5 item 17.2 in
+  part); multi-edit replace corruption fixed in the document writer;
+  crash-loop escape hatch added to the error boundary; theme/density/accent
+  persisted (§1.4 item 13).
+- **P2 (agent report):** intent pass demoted to the `think` tier; @mention
+  word-boundary + dominance penalty in speaker scoring; facilitator-directive
+  de-escalation; scribe activity gate; grammar-constrained memory summarizer;
+  auto-`extractOutcomes` on goal completion.
+
+Two corrections to this report from implementation:
+
+- §1.2-1: a top-level error boundary **already existed** in `main.jsx` (missed
+  in review). What was missing — and is now added — is the crash-loop escape
+  hatch (clear saved state & reload).
+- §1.3-6: the selector-equality fix is **unsafe as written**: state is mutated
+  in place, so a selector returning `s.messages` can see an unchanged array
+  reference after an in-place edit and skip a needed re-render. It must wait
+  for (or be coupled with) immutable-update discipline in `mutateState`
+  callers. Re-classified to Phase 3.
+
 ---
 
 ## Part 1 — Key improvements
