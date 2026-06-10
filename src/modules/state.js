@@ -89,6 +89,9 @@ function normalizeState(value = {}) {
     diagnostics: { ...defaultState.diagnostics, ...value.diagnostics },
     outcomes: { ...defaultState.outcomes, ...value.outcomes },
     autoStop: { ...defaultState.autoStop, ...value.autoStop },
+    discussion: {
+      goal: { ...defaultState.discussion.goal, ...(value.discussion?.goal || {}) }
+    },
     documentWriting: { ...defaultState.documentWriting, ...(value.documentWriting || {}) },
     promptOverrides: { ...defaultState.promptOverrides, ...(value.promptOverrides || {}) },
     scenario: {

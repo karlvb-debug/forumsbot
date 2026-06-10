@@ -130,6 +130,16 @@ export const defaultState = {
     roundsRun: 0,
     status: "Auto-stop ready."
   },
+  discussion: {
+    goal: {
+      progressPct: 0,        // 0-100 estimate from last judgeGoal call
+      verdict: null,         // 'continue' | 'complete' | 'blocked' | null
+      verdictReason: '',     // trimmed reason text
+      verdictAt: null,       // ISO timestamp of last judge call
+      unmetCriteria: [],     // specific gaps extracted by judge
+      blockedSince: null,    // ISO timestamp when verdict first became 'blocked'
+    }
+  },
   documentWriting: {
     designatedWriterId: "",
     scribeMode: "manual"

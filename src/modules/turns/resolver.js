@@ -153,14 +153,33 @@ async function resolveIntent(eligible, alreadySpokeThisRound, signal, allCandida
       .map(q => (typeof q === 'string' ? q : q?.text || q?.question || ''))
       .filter(Boolean);
 
+    const g = state.discussion?.goal;
+    const progressLine = g?.progressPct > 0
+      ? `Progress: ~${g.progressPct}% — ${
+          g.verdict === 'blocked' ? `BLOCKED: ${g.verdictReason}` : g.verdictReason
+        }`
+      : '';
+
     const goalBlock = [
       sc.task ? `Task: ${sc.task}` : '',
       sc.doneWhen ? `Done when: ${sc.doneWhen}` : '',
+      progressLine,
       mem.sharedSummary ? `Where things stand: ${trimWords(String(mem.sharedSummary), 60)}` : '',
       openQ.length ? `Open questions: ${openQ.join('; ')}` : ''
     ].filter(Boolean).join('\n');
 
+    const routingBias = (() => {
+      if (!g) return '';
+      if (g.progressPct >= 80) return "[Close to completion — favour 'decide' or 'conclude' unless a genuine unmet criterion remains]";
+      if (g.verdict === 'blocked' && g.blockedSince) {
+        const blockedMs = Date.now() - new Date(g.blockedSince).getTime();
+        if (blockedMs > 60_000) return "[Discussion is stuck — favour 'redirect' or 'challenge' to break the deadlock]";
+      }
+      return '';
+    })();
+
     const user = [
+      routingBias,
       goalBlock,
       goalBlock ? '' : null,
       `Participants:\n${roster}`,
@@ -168,7 +187,7 @@ async function resolveIntent(eligible, alreadySpokeThisRound, signal, allCandida
       `Recent discussion:\n${recent || '(nothing said yet)'}`,
       '',
       'What does the discussion need next, and who is best placed to provide it?'
-    ].filter(v => v !== null).join('\n');
+    ].filter(v => v !== null && v !== '').join('\n');
 
     const validNames = rosterActors.map(a => a.name);
     let data;

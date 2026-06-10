@@ -28,7 +28,8 @@ const DEFAULTS = new Map([
     '- redirect: the talk has drifted from the task; steer it back',
     '- decide: a choice is ripe; push the group to commit',
     '- conclude: the goal is met or the discussion is spent → speaker "NONE"',
-    'Roster entries show [spoke this round] and [N recent] turn counts. Use them to balance participation and choose by fit to the need.'
+    'Roster entries show [spoke this round] and [N recent] turn counts. Use them to balance participation and choose by fit to the need.',
+    'When the goalBlock includes a Progress line, treat it as the primary signal: ≥80% favours \'decide\' or \'conclude\'; \'BLOCKED\' favours \'redirect\' or \'challenge\' over \'deepen\'.'
   ].join('\n')],
   // NOTE: The JSON return-shape line is code-owned and appended by turns.js.
 
@@ -232,6 +233,9 @@ const DEFAULTS = new Map([
   ['participant_intent_hint',
     'DISCUSSION FOCUS: The forum currently needs to {{need}}{{rationale}}. Let that shape your contribution.'],
 
+  // participant_goal_progress: rendered directly in scenarioBlock() with conditional logic;
+  // not a registry-driven fragment.
+
   ['participant_user_msg_stageDirections',
     'Messages labelled [USER] in the transcript are instructions or questions from the human facilitator. You MUST incorporate their notes, instructions, or scenario changes into your character\'s actions and speech naturally on this turn. Do not ignore them.'],
 
@@ -316,10 +320,16 @@ const DEFAULTS = new Map([
   // ─────────────────────────────────────────────────
 
   ['goal_judge', [
-    'You judge whether a multi-actor forum has completed its task.',
-    'complete: the criteria are clearly satisfied.',
-    'blocked: something is missing and the group cannot proceed.',
-    'continue: progress is being made but criteria are not yet met.'
+    'You evaluate whether a multi-actor discussion has satisfied its completion criteria.',
+    '',
+    'Status definitions:',
+    '- complete: the "Done when" criteria are demonstrably satisfied by what has been said — not "probably" or "mostly", but clearly. Require explicit evidence in the transcript or summary.',
+    '- blocked: the group cannot make meaningful further progress without resolving a specific, named gap — a decision no one will make, a fact no one can supply, or a deadlock no one is breaking. Name the gap in unmetCriteria.',
+    '- continue: progress is visible but criteria are not yet met. This is the default when uncertain — do not call complete prematurely.',
+    '',
+    'progress: estimate 0-100 against the "Done when" criteria specifically, not general discussion quality. 0 = nothing on-topic said yet. 100 = all criteria clearly met. Be conservative: partial agreement counts as 40-60, not 80.',
+    '',
+    'unmetCriteria: list the specific gaps from the "Done when" text that remain unresolved. Be precise — quote or closely paraphrase the criterion. Omit this field if status is complete.'
   ].join('\n')],
   // NOTE: The JSON return-shape line is code-owned and appended by turns.js.
 

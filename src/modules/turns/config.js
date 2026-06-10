@@ -90,8 +90,9 @@ export async function generateDiscussionPlan(signal) {
   const task = String(state.scenario?.task || '').trim();
   if (!task) return null;
   const actors = state.actors.filter(a => a.enabled).map(a => `${a.name} (${a.role})`).join(', ');
-  const system = 'You are a discussion planner. Given a task and cast, produce a short ordered plan of 3-5 discussion steps that would efficiently lead to a conclusion. Each step is one sentence describing what should happen in that phase. Return JSON only.';
-  const user = `Task: ${task}\nParticipants: ${actors}\n\nProduce 3-5 discussion steps.`;
+  const doneWhen = String(state.scenario?.doneWhen || '').trim();
+  const system = 'You are a discussion planner. Given a task, completion criteria, and cast, produce a short ordered plan of 3-5 steps that efficiently leads to completion. Each step is one sentence describing what the group should produce or decide — not just "discuss X". The final step must be the concrete action that satisfies the "Done when" criteria. Return JSON only.';
+  const user = `Task: ${task}\nDone when: ${doneWhen || 'not specified'}\nParticipants: ${actors}\n\nProduce 3-5 discussion steps. The final step must describe the concrete action that satisfies the "Done when" criteria.`;
   try {
     const data = await chatStructured(system, user, PLAN_SCHEMA, {
       temperature: 0.3, maxTokens: 300, signal, tier: 'reason', purpose: 'planningPrePass'

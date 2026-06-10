@@ -584,8 +584,37 @@ export async function evaluateAutoStopAfterRound(roundMessages, options = {}) {
 
   const atMaxRounds = state.autoStop.maxRoundsEnabled && state.autoStop.roundsRun >= state.autoStop.maxRounds;
 
-  if (options.fromAuto && state.autoStop.goalCheckEnabled && state.scenario.doneWhen?.trim() && (state.autoStop.roundsRun % 2 === 0 || atMaxRounds)) {
+  if (state.autoStop.goalCheckEnabled && state.scenario.doneWhen?.trim()) {
     const verdict = await judgeGoal(roundMessages);
+
+    // Cache progress for actor prompts and intent routing
+    if (!state.discussion) state.discussion = {};
+    if (!state.discussion.goal) state.discussion.goal = {};
+    const wasBlocked = state.discussion.goal.verdict === 'blocked';
+    const nowBlocked = verdict.status === 'blocked';
+    state.discussion.goal.progressPct = verdict.progress ?? state.discussion.goal.progressPct;
+    state.discussion.goal.verdict = verdict.status;
+    state.discussion.goal.verdictReason = trimWords(verdict.reason, 40);
+    state.discussion.goal.verdictAt = new Date().toISOString();
+    state.discussion.goal.unmetCriteria = verdict.unmetCriteria || [];
+    if (nowBlocked && !wasBlocked) state.discussion.goal.blockedSince = new Date().toISOString();
+    if (!nowBlocked) state.discussion.goal.blockedSince = null;
+
+    // Blocked intervention: inject guidance to director/top-authority actor after 1+ blocked round
+    if (nowBlocked && wasBlocked && verdict.unmetCriteria?.length) {
+      const director = state.actors.find(a => a.canDirect && a.enabled);
+      const target = director || [...state.actors].filter(a => a.enabled)
+        .sort((a, b) => (b.authority || 50) - (a.authority || 50))[0];
+      if (target) {
+        if (!Array.isArray(state.pendingInjections)) state.pendingInjections = [];
+        state.pendingInjections.push({
+          id: crypto.randomUUID(), injectorId: 'system', targetId: target.id,
+          content: `[SYSTEM — the group has been blocked for multiple rounds. Unmet: ${verdict.unmetCriteria.join('; ')}. Name the blockage explicitly and propose a concrete path to resolve it.]`,
+          scope: 'next_turn_only', insertedAt: new Date().toISOString()
+        });
+      }
+    }
+
     if (verdict.status === 'complete') {
       state.autoRunning = false;
       setAutoStopStatus(`Task complete: ${verdict.reason}`);
@@ -595,14 +624,15 @@ export async function evaluateAutoStopAfterRound(roundMessages, options = {}) {
       return true;
     }
     if (verdict.status === 'blocked') {
-      state.autoRunning = false;
       setAutoStopStatus(`Blocked: ${verdict.reason}`);
-      showToast(`Discussion blocked: ${verdict.reason}`, 'warn');
-      await addMessage({ type: 'system', speaker: 'System', content: `⚠ Blocked: ${verdict.reason}`, color: 'var(--warn)' });
-      saveState();
-      return true;
+      if (options.fromAuto) {
+        showToast(`Discussion blocked: ${verdict.reason}`, 'warn');
+        await addMessage({ type: 'system', speaker: 'System', content: `⚠ Blocked: ${verdict.reason}`, color: 'var(--warn)' });
+      }
+    } else {
+      setAutoStopStatus(`Still working: ${verdict.reason || "Needs more discussion."}`);
     }
-    setAutoStopStatus(`Still working: ${verdict.reason || "Needs more discussion."}`);
+    saveState();
   } else if (!atMaxRounds) {
     setAutoStopStatus(`Round ${state.autoStop.roundsRun} complete. Auto-stop is watching for skips and limits.`);
   }
@@ -634,13 +664,15 @@ export async function judgeGoal(roundMessages = [], options = {}) {
   const schema = {
     type: 'object',
     properties: {
-      status: { type: 'string', enum: ['continue', 'complete', 'blocked'] },
-      reason: { type: 'string' }
+      status:        { type: 'string', enum: ['continue', 'complete', 'blocked'] },
+      reason:        { type: 'string' },
+      progress:      { type: 'integer', minimum: 0, maximum: 100 },
+      unmetCriteria: { type: 'array', items: { type: 'string' } }
     },
-    required: ['status', 'reason'],
+    required: ['status', 'reason', 'progress'],
     additionalProperties: false
   };
-  const JUDGE_SHAPE = 'Return only JSON: {"status":"continue|complete|blocked","reason":"short explanation"}';
+  const JUDGE_SHAPE = 'Return only JSON: {"status":"continue|complete|blocked","reason":"one sentence","progress":0-100,"unmetCriteria":["specific gap 1","specific gap 2"]}';
   const system = frag('goal_judge') + '\n' + JUDGE_SHAPE;
   const user = [
     task ? `Task:\n${task}` : '',
@@ -652,11 +684,15 @@ export async function judgeGoal(roundMessages = [], options = {}) {
 
   try {
     const result = await chatStructured(system, user, schema, {
-      temperature: 0.1, maxTokens: 200, tier: 'reason', purpose: 'goalCheck'
+      temperature: 0.1, maxTokens: 400, tier: 'reason', purpose: 'goalCheck'
     });
     const verdict = {
       status: ['complete', 'blocked', 'continue'].includes(result?.status) ? result.status : 'continue',
-      reason: trimWords(String(result?.reason || ''), 80)
+      reason: trimWords(String(result?.reason || ''), 80),
+      progress: typeof result?.progress === 'number' ? Math.max(0, Math.min(100, result.progress)) : 0,
+      unmetCriteria: Array.isArray(result?.unmetCriteria)
+        ? result.unmetCriteria.map(s => String(s).trim()).filter(Boolean).slice(0, 5)
+        : []
     };
     if (options.manual) {
       if (verdict.status === 'complete') {
@@ -664,14 +700,14 @@ export async function judgeGoal(roundMessages = [], options = {}) {
       } else if (verdict.status === 'blocked') {
         setAutoStopStatus(`Blocked: ${verdict.reason}`);
       } else {
-        setAutoStopStatus(`Still working: ${verdict.reason || "Needs more discussion."}`);
+        setAutoStopStatus(`Still working (~${verdict.progress}%): ${verdict.reason || "Needs more discussion."}`);
       }
     }
     return verdict;
   } catch (error) {
     const message = error.message || "Completion check failed.";
     setAutoStopStatus(message);
-    return { status: 'continue', reason: message };
+    return { status: 'continue', reason: message, progress: 0, unmetCriteria: [] };
   } finally {
     if (!alreadyBusy) setBusy(false);
   }

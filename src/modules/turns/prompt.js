@@ -369,6 +369,23 @@ export function scenarioBlock() {
   const taskLine = state.scenario.task?.trim()
     ? `Task: ${state.scenario.task}`
     : "Task: None set — follow the user's lead, stay in character, and contribute when you have something useful to add.";
+  const doneWhenLine = state.scenario.doneWhen?.trim()
+    ? `Done when: ${state.scenario.doneWhen}`
+    : '';
+  const progressHint = (() => {
+    const g = state.discussion?.goal;
+    if (!g?.verdict || !g.verdictReason || !state.scenario.doneWhen?.trim()) return '';
+    const pct = g.progressPct || 0;
+    const unmet = (g.unmetCriteria || []).slice(0, 3);
+    if (g.verdict === 'blocked') {
+      const gaps = unmet.length ? ` Unresolved: ${unmet.join('; ')}.` : '';
+      return `[Progress: ~${pct}% — the discussion is stuck.${gaps} Address this directly this turn.]`;
+    }
+    if (pct >= 85) {
+      return `[Progress: ~${pct}% — the group is close to finishing.${unmet.length ? ` Remaining gap: ${unmet.join('; ')}.` : ''} Push to close it.]`;
+    }
+    return `[Progress: ~${pct}% — ${g.verdictReason}.]`;
+  })();
   const plan = state.scenario.plan;
   const planBlock = plan?.steps?.length
     ? `Discussion plan:\n${plan.steps.map((s, i) => `${i === plan.currentStep ? '►' : ' '} ${i + 1}. ${s}`).join('\n')}`
@@ -377,6 +394,8 @@ export function scenarioBlock() {
     `Title: ${state.scenario.title || "Untitled forum"}`,
     state.scenario.premise ? `Context: ${state.scenario.premise}` : "",
     taskLine,
+    doneWhenLine,
+    progressHint,
     planBlock,
     userLabel ? `The human participant in this session is: ${userLabel}. Messages labelled [USER] in the transcript are from them.` : ""
   ].filter(Boolean).join("\n");
