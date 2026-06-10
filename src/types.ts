@@ -288,6 +288,8 @@ export interface ForumState {
   autoRunning: boolean;
   // Set lazily by session.js on first save — absent in the default state shape.
   _currentSessionId?: string;
+  /** Stamped by modules/migrations.js — absent on pre-versioning saves. */
+  schemaVersion?: number;
 }
 
 // ── Connection status ────────────────────────────────────────────────────────
