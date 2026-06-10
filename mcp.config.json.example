@@ -1,0 +1,19 @@
+{
+  "//": "Copy to mcp.config.json (gitignored) to connect MCP servers. This file is the ONLY way servers get added — there is no UI or API write path. Tools appear to research-capable actors as [TOOL: mcp:<server>.<tool> {...}] tags. Server names must not contain '.' or ':'. Set MCP_CONFIG env var to use a different path.",
+  "servers": {
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"]
+    },
+    "someRemote": {
+      "url": "http://127.0.0.1:8808/mcp",
+      "enabled": false
+    },
+    "withEnv": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "env": { "BRAVE_API_KEY": "your-key-here" },
+      "enabled": false
+    }
+  }
+}

@@ -1,6 +1,7 @@
 import { MAX_TOOL_ROUNDS } from './constants.js';
 import { state, saveState } from './state.js';
 import { parseAiJson, parseTextToolCalls, stripTextToolCalls, stripCodeFence, estimateTokens } from './utils.js';
+import { getKnownToolNames, refreshMcpTools } from './tools.js';
 import { setConnectionStatus } from './uiStore.js';
 import { notifyStateChange, mutateState } from './stateStore.js';
 
@@ -308,9 +309,9 @@ async function _chatCompletionDirect(system, user, { temperature = state.setting
       notifyStateChange();
     }
 
-    // Text-tag tools: parse [SEARCH:]/[READ:] requests embedded in the response.
+    // Text-tag tools: parse [SEARCH:]/[READ:]/[TOOL:] requests embedded in the response.
     if (allowTextTools && round < MAX_TOOL_ROUNDS) {
-      const textCalls = parseTextToolCalls(content);
+      const textCalls = parseTextToolCalls(content, getKnownToolNames());
       if (textCalls.length) {
         const callTypes = textCalls.map((tc) => tc.tool).join(", ");
         console.debug(`[tools] Round ${round + 1}: text-based calls [${callTypes}] (${textCalls.length} total)`);
@@ -595,10 +596,11 @@ export function chatJson(system, user, temperature, signal, onStream = null, max
       onStream(extractStreamingDisplay(accumulated));
     });
 
-    // After streaming, check for text-tag tool calls ([SEARCH:]/[READ:]) in the
-    // completed response and run a single follow-up round to fold in the results.
+    // After streaming, check for text-tag tool calls ([SEARCH:]/[READ:]/[TOOL:])
+    // in the completed response and run a single follow-up round to fold in the
+    // results.
     if (toolsAllowed && !signal?.aborted) {
-      const textCalls = parseTextToolCalls(content);
+      const textCalls = parseTextToolCalls(content, getKnownToolNames());
       if (textCalls.length) {
         let toolResults = "";
         for (const tc of textCalls) {
@@ -915,6 +917,10 @@ export async function pingConnection(silent = false) {
     } else {
       setStatus(`Connected · ${models.length} model${models.length === 1 ? "" : "s"}`, "ok");
     }
+
+    // Discover MCP tools alongside the model list. Fire-and-forget: a missing
+    // or failing MCP setup must never affect connection status.
+    refreshMcpTools();
 
     // Fetch extended model info (context length, capabilities) from /api/v0/models
     // Runs in the background — failure is silent since this is optional enrichment.

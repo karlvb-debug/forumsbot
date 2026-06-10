@@ -28,3 +28,6 @@ scratch/
 
 # User session exports
 Saves Sessions/
+
+# Local MCP server config (may contain API keys) — see mcp.config.json.example
+mcp.config.json

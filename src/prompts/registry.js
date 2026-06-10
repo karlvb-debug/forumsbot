@@ -180,6 +180,9 @@ const DEFAULTS = new Map([
   ['researcher_tools_disabled',
     'WEB TOOLS DISABLED: You do not have live web access right now. Do not emit [SEARCH:] or [READ:] tags.'],
 
+  ['mcp_tools_available',
+    'ADDITIONAL TOOLS: The tools below are also available. Call one by writing `[TOOL: tool_name {"arg": "value"}]` in your thought field, with JSON arguments matching the tool\'s description. Use a tool only when the discussion needs information or capabilities you cannot provide from the context you already have — never for opinions or things already stated in the transcript.'],
+
   ['researcher_speak_forced',
     'You have been selected by the speaking-order router to speak this turn. Do not skip; provide the most useful factual grounding, uncertainty callout, or research need you can from the available context.'],
 

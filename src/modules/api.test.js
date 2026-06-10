@@ -20,6 +20,7 @@ vi.mock('./uiStore.js', () => ({ setConnectionStatus: vi.fn() }));
 vi.mock('./stateStore.js', () => ({ notifyStateChange: vi.fn(), mutateState: vi.fn() }));
 
 import { chatJson, executeToolCall, isJsonSchemaSupported, extractNativeThinking, resolveModelTier } from './api.js';
+import { _setMcpToolsForTest } from './tools.js';
 
 function chatResponse(content) {
   return {
@@ -134,6 +135,43 @@ describe('chatJson — text tool gating', () => {
 
     expect(parsed.message).toContain('No tool call should run');
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('executes a granted MCP [TOOL:] tag and folds the result into a follow-up round', async () => {
+    mockState.settings.toolsEnabled = true;
+    _setMcpToolsForTest([{ name: 'mcp:echo.echo', description: 'Echo', inputSchema: {}, server: 'echo' }]);
+    const calls = [];
+    vi.spyOn(global, 'fetch').mockImplementation(async (url, opts) => {
+      calls.push({ url, body: JSON.parse(opts.body) });
+      if (url === '/api/tool-execute') return jsonResponse({ text: 'echo result: hi' });
+      const chatCallNo = calls.filter((c) => c.url === '/api/chat').length;
+      return chatResponse(chatCallNo === 1
+        // Raw envelope as the model emits it — the tag's args arrive escaped.
+        ? '{"thought":"[TOOL: mcp:echo.echo {\\"message\\": \\"hi\\"}]","action":"speak","message":""}'
+        : '{"thought":"done","action":"speak","message":"final answer"}');
+    });
+
+    const parsed = await chatJson('sys', 'usr', 0.2, null, null, null, null, { toolsAllowed: true });
+
+    expect(parsed.message).toBe('final answer');
+    const toolCall = calls.find((c) => c.url === '/api/tool-execute');
+    expect(toolCall.body).toEqual({ tool: 'mcp:echo.echo', args: { message: 'hi' } });
+    const followUp = calls.filter((c) => c.url === '/api/chat')[1];
+    expect(JSON.stringify(followUp.body.request.messages)).toContain('echo result: hi');
+    _setMcpToolsForTest([]);
+  });
+
+  it('does not execute ungranted [TOOL:] names even when tools are enabled', async () => {
+    mockState.settings.toolsEnabled = true;
+    _setMcpToolsForTest([]); // registry empty — name below is unknown
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(
+      chatResponse('{"thought":"[TOOL: mcp:ghost.run {\\"x\\": 1}]","action":"speak","message":"hello"}')
+    );
+
+    const parsed = await chatJson('sys', 'usr', 0.2, null, null, null, null, { toolsAllowed: true });
+
+    expect(parsed.message).toBe('hello');
+    expect(fetchSpy).toHaveBeenCalledTimes(1); // no /api/tool-execute round-trip
   });
 });
 

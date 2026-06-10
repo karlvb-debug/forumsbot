@@ -22,6 +22,7 @@ import { isQueueActor } from '../utils.js';
 import { buildActorSchema, buildSchemaPromptLine } from '../schemas.js';
 import { buildNarrativeDmInstruction, buildRoleplayContextLine, buildRoleplayStyleBlock } from '../storyMode.js';
 import { frag } from '../../prompts/index.js';
+import { getMcpTools } from '../tools.js';
 import { globalStyleInstruction } from './config.js';
 import { relationshipBlock } from './prompt.js';
 
@@ -128,7 +129,8 @@ function directorSections(actor, ctx) {
             ? '{"thought":"I should look up the latest specs. [SEARCH: latest local LLM benchmarks 2026]","action":"speak","message":""}'
             : '{"thought":"[SEARCH: latest local LLM benchmarks 2026]","action":"speak","message":""}'
         })
-      : ""
+      : "",
+    ...(researcherToolsEnabled ? mcpToolsSections() : [])
   ];
 }
 
@@ -166,7 +168,25 @@ function managerResearchSections(ctx) {
     showThoughts
       ? frag('researcher_tool_instruction_thoughts')
       : frag('researcher_tool_instruction_no_thoughts'),
+    ...mcpToolsSections(),
   ];
+}
+
+// MCP tools discovered at connect time, rendered as additive instructions for
+// any actor whose web tools are enabled. Sorted, single-line descriptions —
+// the section must stay byte-stable across turns (the list only changes on
+// reconnect), per the prefix-stability contract above.
+function mcpToolsSections() {
+  const tools = getMcpTools();
+  if (!tools.length) return [];
+  const lines = tools
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((t) => {
+      const desc = String(t.description || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      return `- \`[TOOL: ${t.name} {...}]\`${desc ? ` — ${desc}` : ''}`;
+    });
+  return [frag('mcp_tools_available'), ...lines];
 }
 
 function researcherSections(actor, ctx) {
@@ -202,6 +222,7 @@ function researcherSections(actor, ctx) {
           ? frag('researcher_example_thoughts')
           : frag('researcher_example_no_thoughts'))
       : "",
+    ...(researcherToolsEnabled ? mcpToolsSections() : []),
     researcherToolsEnabled
       ? frag('researcher_ground_truth_tools')
       : frag('researcher_ground_truth_no_tools'),

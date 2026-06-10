@@ -76,7 +76,11 @@ Every prose string sent to the LLM is a named key in `src/prompts/registry.js`. 
 
 ### Server (`server.js`)
 
-A zero-dependency Node `http.createServer` proxy. No Express. Exports `startServer(port)` for Electron; auto-listens when run directly via `node server.js`. CSRF check allows requests with no `Origin` header (curl, Electron, server-to-server) and rejects cross-origin POSTs from other browser origins.
+A Node `http.createServer` proxy. No Express. Exports `startServer(port)` for Electron; auto-listens when run directly via `node server.js`. CSRF check allows requests with no `Origin` header (curl, Electron, server-to-server) and rejects cross-origin POSTs from other browser origins.
+
+### MCP tools (`mcpHost.js`)
+
+The proxy is an MCP host: servers declared in `mcp.config.json` (optional, gitignored, see `mcp.config.json.example`) are connected lazily and their tools exposed as `mcp:<server>.<tool>`. `GET /api/mcp/tools` lists them; `POST /api/tool-execute` routes `mcp:`-prefixed names to the right server. The client registry (`src/modules/tools.js`) refreshes on connect; actors call tools via `[TOOL: name {json}]` text-tags in the thought field (parsed in `utils.js` — handles both raw and envelope-escaped arg forms). Security invariants: the config file is the only way to add servers (no UI/API write path); all results are wrapped in the untrusted-content header and capped; only registry-known tool names ever execute.
 
 ## Key constraints
 

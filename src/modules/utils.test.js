@@ -11,6 +11,8 @@ import {
   normalizeCadence,
   isQueueActor,
   shouldFireCadence,
+  parseTextToolCalls,
+  stripTextToolCalls,
 } from './utils.js';
 
 describe('normalizeCadence — legacy migration', () => {
@@ -346,5 +348,87 @@ describe('normalizeQuickStartConfig', () => {
     expect(result.scenario.systems.turnRouting.strategy).toBe('agentic');
     expect(result.scenario.systems.dmRole.role).toBe('narrator');
     expect(result.scenario.systems.document).toBeUndefined();
+  });
+});
+
+describe('parseTextToolCalls — generic [TOOL:] tags', () => {
+  const KNOWN = ['web_search', 'web_read', 'mcp:memory.search_nodes', 'mcp:echo.echo'];
+
+  it('parses legacy [SEARCH:] and [READ:] tags without a registry', () => {
+    const calls = parseTextToolCalls('look [SEARCH: llama benchmarks] then [READ: https://a.io/x]');
+    expect(calls).toEqual([
+      { tool: 'web_search', args: { query: 'llama benchmarks' } },
+      { tool: 'web_read', args: { url: 'https://a.io/x' } },
+    ]);
+  });
+
+  it('parses a known [TOOL:] tag with JSON args', () => {
+    const calls = parseTextToolCalls('[TOOL: mcp:echo.echo {"message": "hi"}]', KNOWN);
+    expect(calls).toEqual([{ tool: 'mcp:echo.echo', args: { message: 'hi' } }]);
+  });
+
+  it('handles nested braces and braces inside strings in args', () => {
+    const content = '[TOOL: mcp:memory.search_nodes {"filter": {"depth": 2}, "note": "a } b"}]';
+    const calls = parseTextToolCalls(content, KNOWN);
+    expect(calls).toEqual([
+      { tool: 'mcp:memory.search_nodes', args: { filter: { depth: 2 }, note: 'a } b' } },
+    ]);
+  });
+
+  it('never executes unregistered tool names', () => {
+    expect(parseTextToolCalls('[TOOL: rm_rf {"path": "/"}]', KNOWN)).toEqual([]);
+    // No registry at all → no generic tags parse.
+    expect(parseTextToolCalls('[TOOL: mcp:echo.echo {"message": "hi"}]')).toEqual([]);
+  });
+
+  it('recovers canonical casing for case-drifted names', () => {
+    const calls = parseTextToolCalls('[TOOL: MCP:Echo.ECHO {"message": "hi"}]', KNOWN);
+    expect(calls).toEqual([{ tool: 'mcp:echo.echo', args: { message: 'hi' } }]);
+  });
+
+  it('treats unparseable args as empty and tolerates missing args', () => {
+    expect(parseTextToolCalls('[TOOL: mcp:echo.echo {not json}]', KNOWN)).toEqual([
+      { tool: 'mcp:echo.echo', args: {} },
+    ]);
+    expect(parseTextToolCalls('[TOOL: mcp:echo.echo]', KNOWN)).toEqual([
+      { tool: 'mcp:echo.echo', args: {} },
+    ]);
+  });
+
+  it('ignores malformed tags with no closing bracket', () => {
+    expect(parseTextToolCalls('[TOOL: mcp:echo.echo {"a": 1}', KNOWN)).toEqual([]);
+  });
+
+  it('parses args with escaped quotes (tag embedded in a JSON envelope thought string)', () => {
+    // What the raw model output actually looks like: the tag sits inside the
+    // envelope's thought string, so the args object arrives escaped.
+    const raw = '{"thought":"Let me check. [TOOL: mcp:echo.echo {\\"message\\": \\"hi there\\"}]","action":"speak","message":""}';
+    const calls = parseTextToolCalls(raw, KNOWN);
+    expect(calls).toEqual([{ tool: 'mcp:echo.echo', args: { message: 'hi there' } }]);
+  });
+
+  it('parses nested args in escaped envelope form', () => {
+    const raw = '{"thought":"[TOOL: mcp:memory.search_nodes {\\"filter\\": {\\"depth\\": 2}}]","action":"speak","message":""}';
+    const calls = parseTextToolCalls(raw, KNOWN);
+    expect(calls).toEqual([{ tool: 'mcp:memory.search_nodes', args: { filter: { depth: 2 } } }]);
+  });
+
+  it('parses multiple tags in one response', () => {
+    const calls = parseTextToolCalls(
+      'first [TOOL: mcp:echo.echo {"message": "a"}] then [SEARCH: x]', KNOWN);
+    expect(calls).toHaveLength(2);
+    expect(calls.map((c) => c.tool).sort()).toEqual(['mcp:echo.echo', 'web_search']);
+  });
+});
+
+describe('stripTextToolCalls — generic [TOOL:] tags', () => {
+  it('strips well-formed TOOL tags regardless of registry', () => {
+    const out = stripTextToolCalls('before [TOOL: anything {"a": {"b": 1}}] after');
+    expect(out).toBe('before  after');
+  });
+
+  it('still strips legacy tags and leaves malformed TOOL tags alone', () => {
+    expect(stripTextToolCalls('a [SEARCH: q] b [READ: u] c')).toBe('a  b  c');
+    expect(stripTextToolCalls('keep [TOOL: broken {')).toBe('keep [TOOL: broken {');
   });
 });

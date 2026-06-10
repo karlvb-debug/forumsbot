@@ -562,7 +562,73 @@ export function normalizeQuickStartActor(actor, index, assignFreshIds) {
   };
 }
 
-export function parseTextToolCalls(content) {
+// Generic tool tags: [TOOL: name {"arg": "value"}]. Finding where the args
+// object ends is not a regex job: args may nest braces, contain braces inside
+// strings, and — because the tag usually lives inside the JSON envelope's
+// thought string — arrive with escaped quotes ({\"a\": \"b\"}). So we try each
+// closing "}" in turn and let JSON.parse (on the raw and unescaped forms) be
+// the oracle for where the object really ends.
+const TOOL_ARGS_SCAN_CAP = 2000;
+
+function tryParseArgs(candidate) {
+  try {
+    const parsed = JSON.parse(candidate);
+    if (parsed && typeof parsed === "object") return parsed;
+  } catch { /* fall through */ }
+  try {
+    // Unescape one level of JSON-string escaping (tag embedded in an envelope).
+    const unescaped = candidate.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+    const parsed = JSON.parse(unescaped);
+    if (parsed && typeof parsed === "object") return parsed;
+  } catch { /* not parseable in either form */ }
+  return null;
+}
+
+function scanGenericToolTags(content) {
+  const text = String(content || "");
+  const tags = [];
+  const headPattern = /\[TOOL:\s*([\w.:-]+)/gi;
+  let match;
+  while ((match = headPattern.exec(text)) !== null) {
+    let i = match.index + match[0].length;
+    while (i < text.length && /\s/.test(text[i])) i += 1;
+
+    if (text[i] !== "{") {
+      // No-args tag: [TOOL: name]
+      if (text[i] !== "]") continue; // malformed — leave it alone
+      tags.push({ name: match[1], args: {}, start: match.index, end: i + 1 });
+      headPattern.lastIndex = i + 1;
+      continue;
+    }
+
+    const argsStart = i;
+    const scanEnd = Math.min(text.length, argsStart + TOOL_ARGS_SCAN_CAP);
+    let found = null;
+    for (let j = argsStart; j < scanEnd; j += 1) {
+      if (text[j] !== "}") continue;
+      let k = j + 1;
+      while (k < scanEnd && /\s/.test(text[k])) k += 1;
+      if (text[k] !== "]") continue; // a "]" must follow the candidate object
+      const args = tryParseArgs(text.slice(argsStart, j + 1));
+      if (args) { found = { args, end: k + 1 }; break; }
+      // Unparseable but structurally tag-shaped — remember the first such span
+      // so malformed-JSON tags still strip and execute with empty args.
+      if (!found) found = { args: {}, end: k + 1, weak: true };
+    }
+    if (!found) continue; // never saw "}]" — malformed, leave it alone
+    tags.push({ name: match[1], args: found.args, start: match.index, end: found.end });
+    headPattern.lastIndex = found.end;
+  }
+  return tags;
+}
+
+/**
+ * Extract tool requests from model output. Legacy [SEARCH:]/[READ:] tags
+ * always parse; generic [TOOL: name {json}] tags only parse when the name is
+ * in `knownTools` (the granted-tool registry) — an unvalidated name must
+ * never reach execution.
+ */
+export function parseTextToolCalls(content, knownTools = null) {
   const calls = [];
   const searchPattern = /\[SEARCH:\s*(.+?)\]/gi;
   const readPattern = /\[READ:\s*(.+?)\]/gi;
@@ -573,14 +639,29 @@ export function parseTextToolCalls(content) {
   while ((match = readPattern.exec(content)) !== null) {
     calls.push({ tool: "web_read", args: { url: match[1].trim() } });
   }
+  if (Array.isArray(knownTools) && knownTools.length) {
+    // Small local models drift on case — recover the canonical name.
+    const canonical = new Map(knownTools.map((name) => [String(name).toLowerCase(), name]));
+    for (const tag of scanGenericToolTags(content)) {
+      const name = canonical.get(tag.name.toLowerCase());
+      if (!name) continue;
+      calls.push({ tool: name, args: tag.args });
+    }
+  }
   return calls;
 }
 
 export function stripTextToolCalls(content) {
-  return content
+  let text = String(content || "")
     .replace(/\[SEARCH:\s*.+?\]/gi, "")
-    .replace(/\[READ:\s*.+?\]/gi, "")
-    .trim();
+    .replace(/\[READ:\s*.+?\]/gi, "");
+  // Strip every well-formed [TOOL:] tag, granted or not — either way it is
+  // protocol noise, not dialogue.
+  const tags = scanGenericToolTags(text);
+  for (let i = tags.length - 1; i >= 0; i -= 1) {
+    text = text.slice(0, tags[i].start) + text.slice(tags[i].end);
+  }
+  return text.trim();
 }
 
 export function stringifyBullets(value) {

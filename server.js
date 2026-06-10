@@ -4,6 +4,7 @@ import { lookup } from "node:dns/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as cheerio from "cheerio";
+import { listMcpTools, callMcpTool } from "./mcpHost.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const staticDir = join(__dirname, "dist");
@@ -381,9 +382,26 @@ async function toolExecute(req, res) {
       return sendJson(res, 200, { url, text: UNTRUSTED_HEADER + text });
     }
 
+    if (typeof tool === "string" && tool.startsWith("mcp:")) {
+      // Same hygiene as web_read: results are external data, never instructions.
+      const text = await callMcpTool(tool, args || {});
+      return sendJson(res, 200, { text: UNTRUSTED_HEADER + text });
+    }
+
     return sendJson(res, 400, { error: `Unknown tool: ${tool}` });
   } catch (error) {
     return sendJson(res, 502, { error: error?.message || "Tool execution failed." });
+  }
+}
+
+// Tool discovery for the client-side registry. Always answers 200 — an MCP
+// problem must never look like a server outage to the UI.
+async function mcpToolsRoute(req, res) {
+  try {
+    const { tools, errors } = await listMcpTools();
+    return sendJson(res, 200, { tools, errors });
+  } catch (error) {
+    return sendJson(res, 200, { tools: [], errors: [{ server: "*", error: error?.message || "MCP unavailable." }] });
   }
 }
 
@@ -458,6 +476,7 @@ const server = createServer(async (req, res) => {
   if (req.method === "POST" && req.url === "/api/chat") return proxyChat(req, res);
   if (req.method === "POST" && req.url === "/api/embeddings") return proxyEmbeddings(req, res);
   if (req.method === "POST" && req.url === "/api/tool-execute") return toolExecute(req, res);
+  if (req.method === "GET" && req.url === "/api/mcp/tools") return mcpToolsRoute(req, res);
   if (req.method === "GET" || req.method === "HEAD") return serveStatic(req, res);
   sendJson(res, 405, { error: "Method not allowed." });
 });

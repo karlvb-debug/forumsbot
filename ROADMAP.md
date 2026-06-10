@@ -71,6 +71,26 @@ Third batch (same day, suite now 393):
   autoStop.goal→doneWhen moved as the proving case; remaining inline
   migrations move incrementally as touched.
 
+Fourth batch — MCP tools, Phase 1 (same day, suite now 417):
+
+- **MCP host in the proxy** (`mcpHost.js`): servers declared in an optional
+  `mcp.config.json` (stdio or HTTP transport) are connected lazily; their
+  tools are namespaced `mcp:<server>.<tool>`, listed via `GET /api/mcp/tools`,
+  and executed through the existing `/api/tool-execute` route with the same
+  untrusted-content wrapping and size cap as `web_read`. The config file is
+  the only way to add servers — no UI or API write path.
+- **Generic `[TOOL: name {json}]` text-tag protocol**: extends the
+  grammar-compatible tag approach; only registry-known names ever execute.
+  The parser handles both raw and envelope-escaped arg forms (tags live
+  inside the JSON thought string, so quotes arrive escaped — JSON.parse is
+  used as the boundary oracle).
+- **Client tool registry** (`modules/tools.js`): MCP tools discovered at
+  connect time feed both the parser allowlist and an additive
+  "additional tools" prompt section for research-capable actors (director /
+  manager+research / researcher), KV-prefix-stable.
+- Phase 2 (per-actor `toolGrants`, editor UI, migration) and Phase 3
+  (intent-routing boost, tool-call telemetry) remain open.
+
 Two corrections to this report from implementation:
 
 - §1.2-1: a top-level error boundary **already existed** in `main.jsx` (missed
