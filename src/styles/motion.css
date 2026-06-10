@@ -141,18 +141,18 @@
 /* ───── Polish: animations & transitions ───── */
 
 /* Inspector body panel swaps */
-.inspector-body > div { animation: panelIn .18s ease-out; }
+.inspector-body > div { animation: panelIn var(--dur-3) var(--ease-out); }
 @keyframes panelIn {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 /* Command palette entrance */
 .cmd-overlay {
-  animation: overlayIn .12s ease-out;
+  animation: overlayIn var(--dur-2) var(--ease-out);
 }
 .cmd-box {
-  animation: cmdBoxIn .18s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: cmdBoxIn var(--dur-3) var(--ease-spring);
 }
 @keyframes overlayIn {
   from { opacity: 0; }
@@ -163,15 +163,6 @@
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* Message entry */
-.msg {
-  animation: msgIn .2s ease-out;
-}
-@keyframes msgIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 /* Focus ring for accessibility */
 :focus-visible {
   outline: 2px solid var(--accent);
@@ -180,19 +171,52 @@
 button:focus-visible { border-radius: 8px; }
 
 /* Smooth card hover lift */
-.actor-card { transition: border-color .15s, transform .15s, box-shadow .15s; }
-.actor-card:hover { transform: translateY(-1px); box-shadow: 0 2px 8px oklch(0 0 0 / 0.2); }
+.actor-card { transition: border-color var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-spring), box-shadow var(--dur-2) var(--ease-out); }
+.actor-card:hover { transform: translateY(-1px); box-shadow: var(--elev-2); }
 
 /* Inspector card micro-interactions */
-.card { transition: border-color .15s, box-shadow .15s; }
+.card { transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); }
 .card:hover { border-color: var(--border); }
 
 /* Nicer round divider animation */
 .round-divider {
-  animation: dividerIn .3s ease-out;
+  animation: dividerIn var(--dur-4) var(--ease-out);
 }
 @keyframes dividerIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
+
+/* ───── Phase 3: motion choreography ───── */
+
+/* Modal entrances (Stop/Continue, Confirm) — same grammar as the palette */
+.modal-overlay { animation: overlayIn var(--dur-2) var(--ease-out); }
+.modal-card { animation: cmdBoxIn var(--dur-3) var(--ease-spring); }
+
+/* Disclosure expand — progressive enhancement: engines without
+   ::details-content / interpolate-size simply snap open as before. */
+.card-disclosure { interpolate-size: allow-keywords; }
+.card-disclosure::details-content {
+  opacity: 0;
+  block-size: 0;
+  overflow-y: clip;
+  transition:
+    content-visibility var(--dur-3) allow-discrete,
+    opacity var(--dur-3) var(--ease-out),
+    block-size var(--dur-3) var(--ease-out);
+}
+.card-disclosure[open]::details-content {
+  opacity: 1;
+  block-size: auto;
+}
+
+/* Press feedback — instant down (no transition), so it feels mechanical */
+.btn:active,
+.chip-btn:active,
+.icon-btn:active,
+.empty-cta:active,
+.rail-btn:active,
+.send-btn:active {
+  transform: scale(0.97);
+}

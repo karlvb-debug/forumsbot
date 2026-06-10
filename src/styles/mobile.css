@@ -79,7 +79,7 @@
   background: var(--overlay);
   z-index: 70;
   display: flex; align-items: flex-end;
-  animation: sheet-fade 0.15s ease;
+  animation: sheet-fade var(--dur-2) var(--ease-out);
 }
 .sheet {
   width: 100%;
@@ -90,7 +90,7 @@
   border-top-right-radius: var(--r-xl);
   border-top: 1px solid var(--border);
   box-shadow: var(--shadow-2);
-  animation: sheet-up 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: sheet-up var(--dur-4) var(--ease-out);
 }
 @keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @keyframes sheet-fade { from { opacity: 0; } to { opacity: 1; } }
