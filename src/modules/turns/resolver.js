@@ -153,7 +153,9 @@ async function resolveIntent(eligible, alreadySpokeThisRound, signal, allCandida
       .map(q => (typeof q === 'string' ? q : q?.text || q?.question || ''))
       .filter(Boolean);
 
-    const g = state.discussion?.goal;
+    // Only trust the cached progress while doneWhen is still set — clearing the
+    // criteria mid-session orphans the cache until the next judge pass.
+    const g = sc.doneWhen?.trim() ? state.discussion?.goal : null;
     const progressLine = g?.progressPct > 0
       ? `Progress: ~${g.progressPct}% — ${
           g.verdict === 'blocked' ? `BLOCKED: ${g.verdictReason}` : g.verdictReason
@@ -171,9 +173,8 @@ async function resolveIntent(eligible, alreadySpokeThisRound, signal, allCandida
     const routingBias = (() => {
       if (!g) return '';
       if (g.progressPct >= 80) return "[Close to completion — favour 'decide' or 'conclude' unless a genuine unmet criterion remains]";
-      if (g.verdict === 'blocked' && g.blockedSince) {
-        const blockedMs = Date.now() - new Date(g.blockedSince).getTime();
-        if (blockedMs > 60_000) return "[Discussion is stuck — favour 'redirect' or 'challenge' to break the deadlock]";
+      if (g.verdict === 'blocked' && (g.blockedRounds || 0) >= 1) {
+        return "[Discussion is stuck — favour 'redirect' or 'challenge' to break the deadlock]";
       }
       return '';
     })();

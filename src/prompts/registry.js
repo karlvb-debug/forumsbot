@@ -29,7 +29,7 @@ const DEFAULTS = new Map([
     '- decide: a choice is ripe; push the group to commit',
     '- conclude: the goal is met or the discussion is spent → speaker "NONE"',
     'Roster entries show [spoke this round] and [N recent] turn counts. Use them to balance participation and choose by fit to the need.',
-    'When the goalBlock includes a Progress line, treat it as the primary signal: ≥80% favours \'decide\' or \'conclude\'; \'BLOCKED\' favours \'redirect\' or \'challenge\' over \'deepen\'.'
+    'When the context includes a Progress line, weigh it heavily: high progress means push toward resolution rather than opening new ground; a BLOCKED note means the deadlock itself is what needs addressing.'
   ].join('\n')],
   // NOTE: The JSON return-shape line is code-owned and appended by turns.js.
 

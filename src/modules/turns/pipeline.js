@@ -587,50 +587,70 @@ export async function evaluateAutoStopAfterRound(roundMessages, options = {}) {
   if (state.autoStop.goalCheckEnabled && state.scenario.doneWhen?.trim()) {
     const verdict = await judgeGoal(roundMessages);
 
-    // Cache progress for actor prompts and intent routing
-    if (!state.discussion) state.discussion = {};
-    if (!state.discussion.goal) state.discussion.goal = {};
-    const wasBlocked = state.discussion.goal.verdict === 'blocked';
-    const nowBlocked = verdict.status === 'blocked';
-    state.discussion.goal.progressPct = verdict.progress ?? state.discussion.goal.progressPct;
-    state.discussion.goal.verdict = verdict.status;
-    state.discussion.goal.verdictReason = trimWords(verdict.reason, 40);
-    state.discussion.goal.verdictAt = new Date().toISOString();
-    state.discussion.goal.unmetCriteria = verdict.unmetCriteria || [];
-    if (nowBlocked && !wasBlocked) state.discussion.goal.blockedSince = new Date().toISOString();
-    if (!nowBlocked) state.discussion.goal.blockedSince = null;
-
-    // Blocked intervention: inject guidance to director/top-authority actor after 1+ blocked round
-    if (nowBlocked && wasBlocked && verdict.unmetCriteria?.length) {
-      const director = state.actors.find(a => a.canDirect && a.enabled);
-      const target = director || [...state.actors].filter(a => a.enabled)
-        .sort((a, b) => (b.authority || 50) - (a.authority || 50))[0];
-      if (target) {
-        if (!Array.isArray(state.pendingInjections)) state.pendingInjections = [];
-        state.pendingInjections.push({
-          id: crypto.randomUUID(), injectorId: 'system', targetId: target.id,
-          content: `[SYSTEM — the group has been blocked for multiple rounds. Unmet: ${verdict.unmetCriteria.join('; ')}. Name the blockage explicitly and propose a concrete path to resolve it.]`,
-          scope: 'next_turn_only', insertedAt: new Date().toISOString()
-        });
-      }
-    }
-
-    if (verdict.status === 'complete') {
-      state.autoRunning = false;
-      setAutoStopStatus(`Task complete: ${verdict.reason}`);
-      showToast(`Task complete: ${verdict.reason}`, 'ok');
-      await addMessage({ type: 'system', speaker: 'System', content: `✓ Task complete: ${verdict.reason}`, color: 'var(--accent)' });
-      saveState();
-      return true;
-    }
-    if (verdict.status === 'blocked') {
-      setAutoStopStatus(`Blocked: ${verdict.reason}`);
-      if (options.fromAuto) {
-        showToast(`Discussion blocked: ${verdict.reason}`, 'warn');
-        await addMessage({ type: 'system', speaker: 'System', content: `⚠ Blocked: ${verdict.reason}`, color: 'var(--warn)' });
-      }
+    if (verdict.failed) {
+      // Synthetic verdict (API error or missing prerequisites) — leave the
+      // progress cache untouched so a transient failure doesn't poison prompts.
+      setAutoStopStatus(`Goal check skipped: ${verdict.reason}`);
     } else {
-      setAutoStopStatus(`Still working: ${verdict.reason || "Needs more discussion."}`);
+      // Cache progress for actor prompts and intent routing
+      if (!state.discussion) state.discussion = {};
+      if (!state.discussion.goal) state.discussion.goal = {};
+      const goal = state.discussion.goal;
+      const wasBlocked = goal.verdict === 'blocked';
+      const nowBlocked = verdict.status === 'blocked';
+      goal.progressPct = verdict.progress ?? goal.progressPct;
+      goal.verdict = verdict.status;
+      goal.verdictReason = trimWords(verdict.reason, 40);
+      goal.verdictAt = new Date().toISOString();
+      goal.unmetCriteria = verdict.unmetCriteria || [];
+      if (nowBlocked) {
+        if (!wasBlocked) goal.blockedSince = new Date().toISOString();
+        goal.blockedRounds = (goal.blockedRounds || 0) + 1;
+      } else {
+        goal.blockedSince = null;
+        goal.blockedRounds = 0;
+      }
+
+      if (verdict.status === 'complete') {
+        state.autoRunning = false;
+        setAutoStopStatus(`Task complete: ${verdict.reason}`);
+        showToast(`Task complete: ${verdict.reason}`, 'ok');
+        await addMessage({ type: 'system', speaker: 'System', content: `✓ Task complete: ${verdict.reason}`, color: 'var(--accent)' });
+        saveState();
+        return true;
+      }
+      if (nowBlocked) {
+        setAutoStopStatus(`Blocked: ${verdict.reason}`);
+
+        // Escalation ladder: steer for two blocked rounds, then ask the user.
+        if (goal.blockedRounds >= 3) {
+          await addMessage({ type: 'system', speaker: 'System', content: `⚠ Blocked for ${goal.blockedRounds} rounds: ${verdict.reason}`, color: 'var(--warn)' });
+          return promptStopOrContinue(`The group has been blocked for ${goal.blockedRounds} rounds: ${verdict.reason}`, options);
+        }
+
+        // Steer: inject guidance into the director (or highest-authority actor)
+        // from the second consecutive blocked round.
+        if (goal.blockedRounds >= 2 && verdict.unmetCriteria?.length) {
+          const director = state.actors.find(a => a.canDirect && a.enabled);
+          const target = director || [...state.actors].filter(a => a.enabled)
+            .sort((a, b) => (b.authority || 50) - (a.authority || 50))[0];
+          if (target) {
+            if (!Array.isArray(state.pendingInjections)) state.pendingInjections = [];
+            state.pendingInjections.push({
+              id: crypto.randomUUID(), injectorId: 'system', targetId: target.id,
+              content: `[SYSTEM — the group has been blocked for multiple rounds. Unmet: ${verdict.unmetCriteria.join('; ')}. Name the blockage explicitly and propose a concrete path to resolve it.]`,
+              scope: 'next_turn_only', insertedAt: new Date().toISOString()
+            });
+          }
+        }
+
+        if (options.fromAuto) {
+          showToast(`Discussion blocked: ${verdict.reason}`, 'warn');
+          await addMessage({ type: 'system', speaker: 'System', content: `⚠ Blocked: ${verdict.reason}`, color: 'var(--warn)' });
+        }
+      } else {
+        setAutoStopStatus(`Still working (~${goal.progressPct}%): ${verdict.reason || "Needs more discussion."}`);
+      }
     }
     saveState();
   } else if (!atMaxRounds) {
@@ -650,11 +670,11 @@ export async function judgeGoal(roundMessages = [], options = {}) {
   const task = (state.scenario.task || '').trim();
   if (!doneWhen) {
     setAutoStopStatus("Set 'Done When' criteria to enable completion checking.");
-    return { status: 'continue', reason: 'No completion criteria set.' };
+    return { status: 'continue', reason: 'No completion criteria set.', progress: null, unmetCriteria: [], failed: true };
   }
   if (!state.settings.model) {
     setAutoStopStatus("Choose or type a model before checking.");
-    return { status: 'continue', reason: 'No model selected.' };
+    return { status: 'continue', reason: 'No model selected.', progress: null, unmetCriteria: [], failed: true };
   }
 
   const alreadyBusy = getIsGenerating();
@@ -707,7 +727,9 @@ export async function judgeGoal(roundMessages = [], options = {}) {
   } catch (error) {
     const message = error.message || "Completion check failed.";
     setAutoStopStatus(message);
-    return { status: 'continue', reason: message, progress: 0, unmetCriteria: [] };
+    // failed: true tells the caller this is a synthetic verdict — do not cache it
+    // or surface it to actors (the reason here is an error string, not a judgment).
+    return { status: 'continue', reason: message, progress: null, unmetCriteria: [], failed: true };
   } finally {
     if (!alreadyBusy) setBusy(false);
   }

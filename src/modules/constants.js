@@ -138,6 +138,7 @@ export const defaultState = {
       verdictAt: null,       // ISO timestamp of last judge call
       unmetCriteria: [],     // specific gaps extracted by judge
       blockedSince: null,    // ISO timestamp when verdict first became 'blocked'
+      blockedRounds: 0,      // consecutive rounds with a 'blocked' verdict
     }
   },
   documentWriting: {
