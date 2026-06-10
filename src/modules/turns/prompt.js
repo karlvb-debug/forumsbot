@@ -4,7 +4,7 @@ import { chatCompletion } from '../api.js';
 import { recallRelevantChunks } from '../memory.js';
 import { trimWords, isQueueActor, estimateTokens, formatTranscript } from '../utils.js';
 import { getActorMemory } from '../db.js';
-import { getKbEntriesForDirector, splitDocuments, buildDocumentManifestSection, buildReferenceSection, buildKbSection } from '../knowledge.js';
+import { getKbEntriesForDirector, splitDocuments, buildDocumentManifestSection, buildReferenceSectionSemantic, buildKbSection } from '../knowledge.js';
 import { resolveSystemSettings } from './config.js';
 
 let _lastPromptParts = null;
@@ -68,7 +68,7 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   if (kind === "actor") {
     const { editable, reference } = splitDocuments(actor.id);
     editableDocsSection = buildDocumentManifestSection(editable);
-    kbSection = buildReferenceSection(reference, { maxSection: kbMaxChars });
+    kbSection = await buildReferenceSectionSemantic(reference, { maxSection: kbMaxChars });
   } else {
     const directorEntries = await getKbEntriesForDirector();
     kbSection = buildKbSection(directorEntries, { maxSection: kbMaxChars });
@@ -142,15 +142,18 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
   })();
 
   const buildSections = (chunks, msgs, memOverride = null) => {
+    // Split facilitator messages by how addressed they are: zero actor replies
+    // gets the full-strength directive; exactly one reply gets a soft
+    // continuity note. Previously every actor within 3 turns of a user message
+    // received the shouted PRIORITY block even after it had been answered.
     const unansweredUserMsgs = [];
+    const partlyAnsweredUserMsgs = [];
     for (let i = 0; i < msgs.length; i++) {
       const m = msgs[i];
       if (m.type === "user" || (m.type === "system" && m.speaker === "Moderator")) {
-        const hasActorReply = msgs.slice(i + 1).some(r => r.type === "actor" || r.type === "dm");
         const actorTurnsAfter = msgs.slice(i + 1).filter(r => r.type === "actor" || r.type === "dm").length;
-        if (!hasActorReply || actorTurnsAfter <= 2) {
-          unansweredUserMsgs.push(m);
-        }
+        if (actorTurnsAfter === 0) unansweredUserMsgs.push(m);
+        else if (actorTurnsAfter === 1) partlyAnsweredUserMsgs.push(m);
       }
     }
 
@@ -165,6 +168,9 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
       facilitatorDirective = sysCfg.stageDirectionsEnabled
         ? `⚠ PRIORITY — FACILITATOR DIRECTIVE: The human facilitator has sent a message that has NOT been addressed yet: ${preview}. You MUST incorporate their instruction into your character's actions and speech on THIS turn. This overrides the skip rule — do NOT skip when the facilitator has spoken.${docReminder}`
         : `⚠ PRIORITY — FACILITATOR DIRECTIVE: The human facilitator has sent a message that has NOT been adequately addressed yet: ${preview}. You MUST respond to the facilitator's input directly and substantively in your public message on THIS turn. Acknowledge what they said and address it. This overrides the skip rule — do NOT skip when the facilitator has spoken.${docReminder}`;
+    } else if (partlyAnsweredUserMsgs.length > 0) {
+      const preview = partlyAnsweredUserMsgs.map(m => `"${(m.content || m.text || "").slice(0, 120)}"`).join("; ");
+      facilitatorDirective = `[The facilitator's recent message ${preview} has had one response so far — if anything in it remains unaddressed, cover it before moving on.]`;
     }
 
     const docActionNudge = "";
@@ -184,16 +190,21 @@ export async function buildPromptContext({ kind, actor, dm, privateThoughts = ""
       return `Other participants: ${lines}.`;
     })() : "";
 
+    // Section order is stability-sorted for KV-cache prefix reuse: static
+    // session framing and documents first, per-round memory next, per-turn
+    // content (actor memory, transcript, directives) last. Reordering here
+    // changes how much prompt the local server can skip re-ingesting.
     return [
       scenarioBlock(),
-      state.memory.enabled ? memoryBlock(chunks) : "",
       editableDocsSection,
       docActionNudge,
-      crossSessionBlock,
       kbSection,
+      crossSessionBlock,
+      state.memory.enabled ? memoryBlock(chunks) : "",
       memOverride || participantMemory,
       privateThoughts,
       `### Recent transcript\n${formatTranscript(msgs, WORD_LIMITS.recentTranscript, state.actors)}`,
+      goalDirectivesBlock(),
       periodicReminder,
 
       nudgeReminder,
@@ -360,6 +371,10 @@ export function memoryBlock(recallChunks) {
   ].filter(Boolean).join("\n");
 }
 
+// Static session framing only. Per-round volatile context (goal progress,
+// plan step) lives in goalDirectivesBlock(), placed AFTER the transcript —
+// local inference servers reuse the prompt KV cache only up to the first
+// changed byte, so anything that changes every round must not sit in the head.
 export function scenarioBlock() {
   const storyRole = state.userContext?.storyRole?.trim();
   const displayName = state.userContext?.displayName?.trim();
@@ -372,6 +387,18 @@ export function scenarioBlock() {
   const doneWhenLine = state.scenario.doneWhen?.trim()
     ? `Done when: ${state.scenario.doneWhen}`
     : '';
+  return [
+    `Title: ${state.scenario.title || "Untitled forum"}`,
+    state.scenario.premise ? `Context: ${state.scenario.premise}` : "",
+    taskLine,
+    doneWhenLine,
+    userLabel ? `The human participant in this session is: ${userLabel}. Messages labelled [USER] in the transcript are from them.` : ""
+  ].filter(Boolean).join("\n");
+}
+
+// Goal progress + plan step — changes every round, so it renders in the
+// volatile tail of the prompt rather than inside scenarioBlock().
+export function goalDirectivesBlock() {
   const progressHint = (() => {
     const g = state.discussion?.goal;
     if (!g?.verdict || !g.verdictReason || !state.scenario.doneWhen?.trim()) return '';
@@ -390,15 +417,7 @@ export function scenarioBlock() {
   const planBlock = plan?.steps?.length
     ? `Discussion plan:\n${plan.steps.map((s, i) => `${i === plan.currentStep ? '►' : ' '} ${i + 1}. ${s}`).join('\n')}`
     : '';
-  return [
-    `Title: ${state.scenario.title || "Untitled forum"}`,
-    state.scenario.premise ? `Context: ${state.scenario.premise}` : "",
-    taskLine,
-    doneWhenLine,
-    progressHint,
-    planBlock,
-    userLabel ? `The human participant in this session is: ${userLabel}. Messages labelled [USER] in the transcript are from them.` : ""
-  ].filter(Boolean).join("\n");
+  return [progressHint, planBlock].filter(Boolean).join("\n");
 }
 
 export function privateThoughtDigest() {

@@ -2,6 +2,7 @@ import { state, saveState, logTransition } from './state.js';
 import { chatStructured, setStatus } from './api.js';
 import { showToast } from './uiStore.js';
 import { trimWords } from './utils.js';
+import { frag } from '../prompts/index.js';
 import { buildDocumentWriterPromptLine, buildDocumentWriterSchema } from './schemas.js';
 import { actorCanReadDocument, countWords, ensureDefaultWriter, putKbEntry, resolveDesignatedWriter } from './knowledge.js';
 import { hideBackgroundActivity, showBackgroundActivity, updateBackgroundActivity } from './streamingStore.js';
@@ -85,8 +86,16 @@ export function ensureWriterForDocuments() {
 
 export function applyEditsToContent(content, edits, documentId) {
   let next = String(content || "");
-  for (const edit of Array.isArray(edits) ? edits : []) {
-    if (edit.documentId !== documentId) continue;
+  const relevant = (Array.isArray(edits) ? edits : []).filter(e => e.documentId === documentId);
+  // The writer's startLine/endLine refer to the line-numbered document it was
+  // shown — i.e. the ORIGINAL content. Apply replace edits bottom-up so an
+  // earlier edit changing the line count can't shift the targets of later
+  // ones. full/append edits are position-independent and keep their order.
+  const replaces = relevant
+    .filter(e => e.op === "replace")
+    .sort((a, b) => (Number(b.startLine) || 1) - (Number(a.startLine) || 1));
+  const others = relevant.filter(e => e.op !== "replace");
+  for (const edit of [...replaces, ...others]) {
     if (edit.op === "full") {
       next = String(edit.content || "");
     } else if (edit.op === "append") {
@@ -266,6 +275,37 @@ export function rejectDocumentProposal(proposalId) {
 // Across modes the Scribe is told it MAY return an empty edits array to mean
 // "nothing worth recording this turn" — that's the gating mechanism.
 
+// Stage 1 of the autonomous pass: a fast-tier yes/no on whether anything is
+// worth recording, so the expensive reason-tier draft call (full document +
+// transcript) only runs when there is something to draft. ~60 tokens vs a
+// full judge-and-draft on every armed pass.
+const SCRIBE_GATE_SCHEMA = {
+  type: 'object',
+  properties: {
+    record: { type: 'boolean' },
+    reason: { type: 'string' },
+  },
+  required: ['record'],
+  additionalProperties: false,
+};
+
+async function judgeWorthRecording(doc, signal) {
+  const recent = (state.messages || [])
+    .filter(m => ['user', 'actor', 'dm'].includes(m.type))
+    .slice(-6)
+    .map(m => `[${m.speaker || m.type}] ${trimWords(m.content || m.text || '', 80)}`)
+    .join("\n");
+  const user = [
+    `Document: ${doc.title || "Untitled"}${doc.purpose ? ` — ${doc.purpose}` : ""}`,
+    "",
+    `Recent turns:\n${recent || "(none)"}`,
+  ].join("\n");
+  const result = await chatStructured(frag('scribe_gate'), user, SCRIBE_GATE_SCHEMA, {
+    temperature: 0.1, maxTokens: 60, signal, tier: 'fast', purpose: 'scribeGate'
+  });
+  return result?.record === true;
+}
+
 function pickScribeTargetDoc(writer) {
   const docs = (state.documents || []).filter(d => d.enabled !== false && d.aiEditable);
   if (!docs.length) return null;
@@ -336,10 +376,45 @@ export async function runScribePass(signal = null, { instruction = null } = {}) 
   const mode = state.documentWriting?.scribeMode || "manual";
   if (mode === "manual" && !instruction) return null;
 
+  // Activity gate: each autonomous pass is a full reason-tier judge call
+  // carrying the whole document plus recent transcript, and it used to fire
+  // after every single turn. Skip unless at least two substantive messages
+  // have arrived since the last judgment. Explicit user instructions bypass
+  // the gate. The marker lives in state so it survives reloads.
+  const visible = (state.messages || []).filter(m => ['user', 'actor', 'dm'].includes(m.type));
+  if (!instruction) {
+    const lastId = state.documentWriting?.lastScribeMsgId;
+    const lastIdx = lastId ? visible.findIndex(m => m.id === lastId) : -1;
+    const freshCount = lastIdx >= 0 ? visible.length - 1 - lastIdx : visible.length;
+    if (freshCount < 2) return null;
+  }
+
   const writer = resolveDesignatedWriter();
   if (!writer) return null;
   const doc = pickScribeTargetDoc(writer);
   if (!doc) return null;
+
+  const markTranscriptConsumed = () => {
+    if (!visible.length) return;
+    if (!state.documentWriting) state.documentWriting = {};
+    state.documentWriting.lastScribeMsgId = visible[visible.length - 1].id;
+  };
+
+  // Stage 1 (autonomous passes only): cheap recordability gate before the
+  // full draft call. Fail-open — a broken fast tier must not mute the scribe.
+  if (!instruction) {
+    let worthRecording = true;
+    try {
+      worthRecording = await judgeWorthRecording(doc, signal);
+    } catch (err) {
+      if (err?.name === "AbortError") return null;
+      console.warn('[scribe] gate failed (continuing to full judge):', err?.message || err);
+    }
+    if (!worthRecording) {
+      markTranscriptConsumed();
+      return null;
+    }
+  }
 
   let draft;
   try {
@@ -349,6 +424,9 @@ export async function runScribePass(signal = null, { instruction = null } = {}) 
     console.warn('[scribe] judgeAndDraft failed:', err?.message || err);
     return null;
   }
+  // The judgment consumed the current transcript — advance the gate marker
+  // whether or not it produced edits (an error path leaves it for a retry).
+  if (!instruction) markTranscriptConsumed();
   if (!draft.edits.length) return null;
 
   const effectiveMode = instruction ? "auto_apply" : mode;

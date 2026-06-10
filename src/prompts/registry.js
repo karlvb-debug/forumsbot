@@ -29,7 +29,8 @@ const DEFAULTS = new Map([
     '- decide: a choice is ripe; push the group to commit',
     '- conclude: the goal is met or the discussion is spent → speaker "NONE"',
     'Roster entries show [spoke this round] and [N recent] turn counts. Use them to balance participation and choose by fit to the need.',
-    'When the context includes a Progress line, weigh it heavily: high progress means push toward resolution rather than opening new ground; a BLOCKED note means the deadlock itself is what needs addressing.'
+    'When the context includes a Progress line, weigh it heavily: high progress means push toward resolution rather than opening new ground; a BLOCKED note means the deadlock itself is what needs addressing.',
+    'If the next two or three turns have an obvious sequence (e.g. proposal → critique → decision), list up to two follow-up participants in nextSpeakers, in order. Omit nextSpeakers when the sequence is not clear — a wrong plan is worse than none.'
   ].join('\n')],
   // NOTE: The JSON return-shape line is code-owned and appended by turns.js.
 
@@ -232,6 +233,16 @@ const DEFAULTS = new Map([
 
   ['participant_intent_hint',
     'DISCUSSION FOCUS: The forum currently needs to {{need}}{{rationale}}. Let that shape your contribution.'],
+
+  ['participant_intent_no_skip',
+    'The director specifically selected you for this turn — this overrides the skip rule. Do not skip.'],
+
+  // ─────────────────────────────────────────────────
+  //  Scribe (autonomous document writer)
+  // ─────────────────────────────────────────────────
+
+  ['scribe_gate',
+    'You are the gatekeeper for a shared working document. Decide whether the latest discussion turns contain anything worth recording: a concrete decision, a new fact, a resolved question, or content the user clearly asked to capture. Restatements of earlier content, speculation, and commentary do NOT qualify. Most turns produce nothing recordable — when in doubt, say no. Return JSON only.'],
 
   // participant_goal_progress: rendered directly in scenarioBlock() with conditional logic;
   // not a registry-driven fragment.

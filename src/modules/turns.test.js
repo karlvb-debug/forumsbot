@@ -114,6 +114,7 @@ vi.mock('./knowledge.js', () => ({
   splitDocuments: vi.fn(() => ({ editable: [], reference: [] })),
   buildDocumentManifestSection: vi.fn(() => ''),
   buildReferenceSection: vi.fn(() => ''),
+  buildReferenceSectionSemantic: vi.fn(async () => ''),
   buildKbSection: vi.fn(() => ''),
 }));
 
@@ -775,6 +776,44 @@ describe('resolveNextSpeaker — director intent pass', () => {
     const result = await resolveNextSpeaker([alice, bob], { alreadySpokeThisRound: new Set() });
     expect(result?.reason).toBe('intent');
     expect(result?.actor?.id).toBe('a1');
+  });
+
+  it('queues nextSpeakers as a mini-plan so follow-up turns route via handoff without another model call', async () => {
+    const carol = { id: 'a3', name: 'Carol', role: 'Critic', goal: 'Find flaws', enabled: true, color: '#888' };
+    mockState.actors = [alice, bob, carol];
+    chatStructured.mockResolvedValue({
+      read: 'Sequence is clear.', need: 'decide', speaker: 'Bob',
+      nextSpeakers: ['Carol', 'Alice'], confidence: 0.85,
+    });
+
+    const first = await resolveNextSpeaker([alice, bob, carol], { alreadySpokeThisRound: new Set() });
+    expect(first?.reason).toBe('intent');
+    expect(first?.actor?.id).toBe('a2');
+    expect(mockState.lastIntent?.plannedNext).toEqual(['Carol', 'Alice']);
+    expect(mockState.turnQueue.slice(0, 2)).toEqual(['a3', 'a1']);
+
+    // Follow-up turns consume the queued plan — no further intent calls.
+    chatStructured.mockClear();
+    const second = await resolveNextSpeaker([alice, bob, carol], { alreadySpokeThisRound: new Set(['a2']) });
+    expect(second?.reason).toBe('handoff');
+    expect(second?.actor?.id).toBe('a3');
+    // Only Alice left — the free only-one fast path resolves her.
+    const third = await resolveNextSpeaker([alice, bob, carol], { alreadySpokeThisRound: new Set(['a2', 'a3']) });
+    expect(third?.reason).toBe('only-one');
+    expect(third?.actor?.id).toBe('a1');
+    expect(chatStructured).not.toHaveBeenCalled();
+  });
+
+  it('ignores invalid or duplicate nextSpeakers entries', async () => {
+    chatStructured.mockResolvedValue({
+      read: 'r', need: 'deepen', speaker: 'Bob',
+      nextSpeakers: ['Nobody', 'Bob', 'Alice', 'Alice'], confidence: 0.8,
+    });
+    const result = await resolveNextSpeaker([alice, bob], { alreadySpokeThisRound: new Set() });
+    expect(result?.actor?.id).toBe('a2');
+    // Unknown name dropped, the chosen speaker and the duplicate de-duped.
+    expect(mockState.lastIntent?.plannedNext).toEqual(['Alice']);
+    expect(mockState.turnQueue[0]).toBe('a1');
   });
 });
 

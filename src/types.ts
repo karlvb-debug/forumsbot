@@ -262,6 +262,15 @@ export interface ForumState {
     apiCallLogs: unknown[];
     parseFailures: unknown[];
     outcomeExtractionLog: unknown[];
+    /** Per-round LLM call/token aggregates (capped at 20 rounds). */
+    roundCallStats?: Array<{
+      round: number;
+      at: string;
+      calls: number;
+      promptTokens: number;
+      completionTokens: number;
+      errors: number;
+    }>;
   };
   outcomes: Outcomes;
   autoStop: AutoStop;
@@ -277,7 +286,10 @@ export interface ForumState {
   turnQueue: string[];
   contextInfo: ContextInfo;
   autoRunning: boolean;
-  _currentSessionId: string;
+  // Set lazily by session.js on first save — absent in the default state shape.
+  _currentSessionId?: string;
+  /** Stamped by modules/migrations.js — absent on pre-versioning saves. */
+  schemaVersion?: number;
 }
 
 // ── Connection status ────────────────────────────────────────────────────────

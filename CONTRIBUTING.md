@@ -22,7 +22,7 @@ Open http://localhost:5173. You'll need LM Studio running with a model loaded.
 npm test
 ```
 
-All 342 tests should pass before you open a PR. The test suite covers prompt schema logic, memory utilities, session helpers, and routing — it does not require a live LM Studio connection.
+All tests should pass before you open a PR. The test suite covers prompt schema logic, memory utilities, session helpers, and routing — it does not require a live LM Studio connection.
 
 ## Project structure
 

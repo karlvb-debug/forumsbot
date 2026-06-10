@@ -103,6 +103,7 @@ const SYSTEM_PURPOSES = new Set(['intentPass', 'goalCheck', 'planningPrePass', '
 
 export function TelemetryPanel() {
   const apiCallLogs    = useForumState(s => s.diagnostics?.apiCallLogs   || []);
+  const roundCallStats = useForumState(s => s.diagnostics?.roundCallStats || []);
   const parseFailures  = useForumState(s => s.diagnostics?.parseFailures  || []);
   const contextInfo    = useForumState(s => s.contextInfo  || {});
   const messages       = useForumState(s => s.messages     || []);
@@ -247,6 +248,46 @@ export function TelemetryPanel() {
             currentLabel={speedData.current !== null ? `${speedData.current.toFixed(1)} t/s` : null} />
         </div>
       )}
+
+      {/* ── Round Cost ── every LLM call behind the last round, including the
+            hidden ones (routing, scribe judge, memory summary, goal check). */}
+      {roundCallStats.length > 0 && (() => {
+        const last = roundCallStats[roundCallStats.length - 1];
+        const totalTok = (last.promptTokens || 0) + (last.completionTokens || 0);
+        const fmtTok = totalTok >= 1000 ? `${(totalTok / 1000).toFixed(1)}k` : `${totalTok}`;
+        return (
+          <div className="card">
+            <div className="card-title">
+              <h3>Round Cost</h3>
+              <span className="badge">round {last.round}</span>
+            </div>
+            <div className="metrics-grid">
+              <div className="metric-tile" title="Total LLM calls during the last round — actor turns plus routing, scribe, memory, and goal-check passes">
+                <span className="metric-val">{last.calls}</span>
+                <span className="metric-lbl">LLM Calls</span>
+              </div>
+              <div className="metric-tile" title={`${last.promptTokens} prompt + ${last.completionTokens} completion tokens`}>
+                <span className="metric-val">{fmtTok}</span>
+                <span className="metric-lbl">Tokens</span>
+              </div>
+              <div className="metric-tile" title="Calls that returned an error during the last round">
+                <span className="metric-val" style={{ color: last.errors > 0 ? 'var(--danger)' : 'var(--ok)' }}>
+                  {last.errors}
+                </span>
+                <span className="metric-lbl">Errors</span>
+              </div>
+            </div>
+            {roundCallStats.length > 1 && (
+              <Sparkline
+                data={roundCallStats.map(r => r.calls)}
+                width={280} height={28}
+                colorFn={() => 'var(--accent)'}
+                currentLabel={`${last.calls} calls`}
+              />
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Session Health ── */}
       <div className="card">

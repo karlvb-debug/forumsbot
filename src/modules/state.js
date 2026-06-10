@@ -1,5 +1,6 @@
 import { STORAGE_KEY, defaultState, colors } from './constants.js';
 import { DEFAULT_SYSTEMS, legacySystemsFromMode, normalizeQuickStartConfig, cleanStoredMessage, normalizeStringArray, normalizeCadence, normalizeSpeakingOrderStrategy } from './utils.js';
+import { runMigrations } from './migrations.js';
 
 function normalizeDocumentEntry(e) {
   return {
@@ -44,6 +45,9 @@ function migrateEveryTurnTrigger(actor) {
 }
 
 function normalizeState(value = {}) {
+  // Versioned migrations first (skipped when schemaVersion is current), then
+  // shape defaulting below. New migrations go in migrations.js, not here.
+  runMigrations(value);
   const scenarioInput = value.scenario && typeof value.scenario === "object" ? value.scenario : {};
   const { mode: legacyMode, systems: inputSystems = {}, ...scenarioFields } = scenarioInput;
   const rawScenarioSystems = inputSystems && typeof inputSystems === "object" ? inputSystems : {};
@@ -162,6 +166,7 @@ function normalizeState(value = {}) {
   if (!Array.isArray(merged.diagnostics.warnings)) merged.diagnostics.warnings = [];
   if (!Array.isArray(merged.diagnostics.sessionsIndex)) merged.diagnostics.sessionsIndex = [];
   if (!Array.isArray(merged.diagnostics.apiCallLogs)) merged.diagnostics.apiCallLogs = [];
+  if (!Array.isArray(merged.diagnostics.roundCallStats)) merged.diagnostics.roundCallStats = [];
   if (!Array.isArray(merged.diagnostics.parseFailures)) merged.diagnostics.parseFailures = [];
   if (!Array.isArray(merged.diagnostics.outcomeExtractionLog)) merged.diagnostics.outcomeExtractionLog = [];
   if (!Array.isArray(merged.anchors)) merged.anchors = [];
@@ -236,21 +241,8 @@ function normalizeState(value = {}) {
   merged.autoStop.maxRounds = Math.min(50, Math.max(1, Number(merged.autoStop.maxRounds || defaultState.autoStop.maxRounds)));
   merged.autoStop.roundsRun = Math.max(0, Number(merged.autoStop.roundsRun || 0));
   
-  // ── Migrate legacy objective → task ──
-  if (!merged.scenario.task && merged.scenario.objective) {
-    merged.scenario.task = String(merged.scenario.objective).trim();
-  }
-  delete merged.scenario.objective;
+  // objective→task and autoStop.goal→doneWhen now live in migrations.js (v1).
   if (!merged.scenario.doneWhen) merged.scenario.doneWhen = "";
-  // ── Migrate legacy autoStop.goal → doneWhen (only if meaningfully different) ──
-  if (merged.autoStop.goal) {
-    const legacyGoal = String(merged.autoStop.goal).trim();
-    const task = (merged.scenario.task || "").trim();
-    if (!merged.scenario.doneWhen.trim() && legacyGoal && legacyGoal !== task) {
-      merged.scenario.doneWhen = legacyGoal;
-    }
-    delete merged.autoStop.goal;
-  }
   // ── DM → Actor migration ──
   // If old state has a `dm` object, convert it into an actor with permissions
   if (merged.dm && typeof merged.dm === "object" && merged.dm.name) {

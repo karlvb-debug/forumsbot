@@ -71,6 +71,31 @@ describe('documentWriting', () => {
     expect(applyEditsToContent('one', [{ documentId: 'd1', op: 'full', content: 'all new' }], 'd1')).toBe('all new');
   });
 
+  it('keeps later replace targets correct when an earlier edit changes the line count', () => {
+    // Both edits use line numbers from the ORIGINAL document. The first edit
+    // collapses lines 1-2 into one line; naive sequential application would
+    // shift the second edit's target up by one line and replace "four".
+    const original = 'one\ntwo\nthree\nfour\nfive';
+    const edits = [
+      { documentId: 'd1', op: 'replace', startLine: 1, endLine: 2, content: 'ONE+TWO' },
+      { documentId: 'd1', op: 'replace', startLine: 5, endLine: 5, content: 'FIVE' },
+    ];
+    expect(applyEditsToContent(original, edits, 'd1')).toBe('ONE+TWO\nthree\nfour\nFIVE');
+  });
+
+  it('applies replace before append so original line numbers stay valid', () => {
+    const original = 'one\ntwo';
+    const edits = [
+      { documentId: 'd1', op: 'append', content: 'tail' },
+      { documentId: 'd1', op: 'replace', startLine: 2, endLine: 2, content: 'TWO' },
+    ];
+    expect(applyEditsToContent(original, edits, 'd1')).toBe('one\nTWO\n\ntail');
+  });
+
+  it('ignores edits addressed to other documents', () => {
+    expect(applyEditsToContent('one', [{ documentId: 'other', op: 'full', content: 'x' }], 'd1')).toBe('one');
+  });
+
   it('creates manual writer tasks for writable documents', () => {
     const task = createDocumentTask({ documentId: 'd1', instruction: 'Summarize decisions.' });
     expect(task.actorId).toBe('w1');
@@ -133,7 +158,60 @@ describe('scribe autonomy modes', () => {
     mockState.documentWriting = { designatedWriterId: 'w1', scribeMode: 'auto_apply' };
     mockState.pendingDocumentEdits = [];
     mockState.pendingScribeSuggestions = [];
+    // Two substantive messages so the autonomous activity gate is open.
+    mockState.messages = [
+      { id: 'm1', type: 'actor', speaker: 'A', content: 'We decided X.' },
+      { id: 'm2', type: 'actor', speaker: 'B', content: 'Agreed — X it is.' },
+    ];
     chatStructured.mockReset();
+  });
+
+  // Stage-1 gate approval — autonomous passes call this before drafting.
+  const gateYes = () => chatStructured.mockResolvedValueOnce({ record: true });
+  const gateNo = () => chatStructured.mockResolvedValueOnce({ record: false });
+
+  it('skips the judge until 2 new messages arrive since the last pass', async () => {
+    gateYes();
+    chatStructured.mockResolvedValueOnce({ thought: '', summary: '', documentEdits: [] });
+    await runScribePass(null); // judges m1+m2 (gate + draft), advances the marker
+    expect(chatStructured).toHaveBeenCalledTimes(2);
+
+    // Nothing new since the last judgment — no further model calls.
+    expect(await runScribePass(null)).toBeNull();
+    expect(chatStructured).toHaveBeenCalledTimes(2);
+
+    // One new message is still below the threshold.
+    mockState.messages.push({ id: 'm3', type: 'actor', speaker: 'A', content: 'New point.' });
+    expect(await runScribePass(null)).toBeNull();
+    expect(chatStructured).toHaveBeenCalledTimes(2);
+
+    // A second new message re-arms the gate.
+    mockState.messages.push({ id: 'm4', type: 'user', speaker: 'You', content: 'Capture that.' });
+    gateYes();
+    chatStructured.mockResolvedValueOnce({ thought: '', summary: '', documentEdits: [] });
+    await runScribePass(null);
+    expect(chatStructured).toHaveBeenCalledTimes(4);
+  });
+
+  it('a negative stage-1 gate skips the draft call entirely and consumes the transcript', async () => {
+    gateNo();
+    expect(await runScribePass(null)).toBeNull();
+    expect(chatStructured).toHaveBeenCalledTimes(1); // gate only, no draft
+    expect(mockState.documentWriting.lastScribeMsgId).toBe('m2');
+    // Marker advanced — the next pass without new messages makes no calls.
+    expect(await runScribePass(null)).toBeNull();
+    expect(chatStructured).toHaveBeenCalledTimes(1);
+  });
+
+  it('a gate failure fails open to the full judge', async () => {
+    chatStructured.mockRejectedValueOnce(new Error('fast tier down'));
+    chatStructured.mockResolvedValueOnce({
+      thought: '', summary: 'Recorded.',
+      documentEdits: [{ documentId: 'd1', op: 'append', content: 'three' }]
+    });
+    const result = await runScribePass(null);
+    expect(result?.applied).toBe(true);
+    expect(mockState.documents[0].content).toBe('one\ntwo\n\nthree');
   });
 
   it('manual mode skips the pass entirely (no model call)', async () => {
@@ -144,6 +222,7 @@ describe('scribe autonomy modes', () => {
   });
 
   it('returns null when the model judges nothing worth recording (empty edits)', async () => {
+    gateYes();
     chatStructured.mockResolvedValueOnce({ thought: '', summary: '', documentEdits: [] });
     const result = await runScribePass(null);
     expect(result).toBeNull();
@@ -153,6 +232,7 @@ describe('scribe autonomy modes', () => {
   });
 
   it('auto_apply commits the edit directly to the document', async () => {
+    gateYes();
     chatStructured.mockResolvedValueOnce({
       thought: '',
       summary: 'Recorded the decision.',
@@ -167,6 +247,7 @@ describe('scribe autonomy modes', () => {
 
   it('auto_review files a pending proposal without touching the document', async () => {
     mockState.documentWriting.scribeMode = 'auto_review';
+    gateYes();
     chatStructured.mockResolvedValueOnce({
       thought: '',
       summary: 'Drafted update.',
@@ -180,6 +261,7 @@ describe('scribe autonomy modes', () => {
 
   it('ask mode queues a suggestion; accepting it applies the edit', async () => {
     mockState.documentWriting.scribeMode = 'ask';
+    gateYes();
     chatStructured.mockResolvedValueOnce({
       thought: '',
       summary: 'Capture the decision.',
@@ -197,6 +279,7 @@ describe('scribe autonomy modes', () => {
 
   it('ask mode suggestions can be dismissed without applying', async () => {
     mockState.documentWriting.scribeMode = 'ask';
+    gateYes();
     chatStructured.mockResolvedValueOnce({
       thought: '',
       summary: 'Capture the decision.',
