@@ -38,9 +38,11 @@ export function RunControl() {
   if (autoRunning) {
     return (
       <div className="run-control" ref={ref}>
-        <button className="run-control-main danger" onClick={stopGeneration} title="Stop (Esc)" aria-label="Stop">
-          <Ic.Stop width={13} height={13} /><span>Stop</span>
-        </button>
+        <div className="run-control-buttons">
+          <button className="run-control-main danger" onClick={stopGeneration} title="Stop (Esc)" aria-label="Stop">
+            <Ic.Stop width={13} height={13} /><span>Stop</span>
+          </button>
+        </div>
       </div>
     );
   }
@@ -50,24 +52,26 @@ export function RunControl() {
 
   return (
     <div className="run-control" ref={ref}>
-      <button
-        className="run-control-main"
-        onClick={() => continueConversation()}
-        title={`Run ${current.label} — ${current.desc} (Enter)`}
-        aria-label={`Run ${current.label}`}
-      >
-        <CurrentIcon width={13} height={13} /><span>{current.label}</span>
-      </button>
-      <button
-        className={'run-control-caret' + (open ? ' active' : '')}
-        onClick={() => setOpen(v => !v)}
-        title="Change run mode"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label="Change run mode"
-      >
-        <Ic.ChevronDown width={13} height={13} />
-      </button>
+      <div className="run-control-buttons">
+        <button
+          className="run-control-main"
+          onClick={() => continueConversation()}
+          title={`Run ${current.label} — ${current.desc} (Enter)`}
+          aria-label={`Run ${current.label}`}
+        >
+          <CurrentIcon width={13} height={13} /><span>{current.label}</span>
+        </button>
+        <button
+          className={'run-control-caret' + (open ? ' active' : '')}
+          onClick={() => setOpen(v => !v)}
+          title="Change run mode"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-label="Change run mode"
+        >
+          <Ic.ChevronDown width={13} height={13} />
+        </button>
+      </div>
       {open && (
         <div className="run-control-menu" role="menu">
           {MODES.map(m => {
