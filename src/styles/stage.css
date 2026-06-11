@@ -7,7 +7,11 @@
   min-width: 0;
   overflow-x: hidden;
   position: relative;
-  background: var(--bg);
+  /* Faint accent wash at the top so the field isn't dead flat — tracks the
+     user's accent choice automatically. */
+  background:
+    radial-gradient(1100px 480px at 50% -12%, oklch(from var(--accent) l c h / 0.045), transparent 70%),
+    var(--bg);
 }
 .stage-inner {
   min-width: 0;

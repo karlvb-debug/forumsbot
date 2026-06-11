@@ -156,7 +156,20 @@ Seventh batch — UI overhaul, phases 0–1 (same day, suite unchanged at 430):
   (one grammar with .actor-section-label), hairline card rows, and a
   motion-token subnav. Enum-select → segmented-control conversion was
   deferred: component-wide churn for marginal gain.
-- Phases 3–4 (motion choreography, theme finish) remain open.
+- **Motion choreography** (phase 3): panel swaps, command palette, sheets,
+  toasts, and modals all run on the motion-token ramp; toast slides in
+  from the right with the spring curve; <details> disclosures animate
+  open via ::details-content + interpolate-size (progressive
+  enhancement); 3% press-down feedback on buttons; the duplicate
+  message-entry animation was removed.
+- **Theme finish** (phase 4): faint accent radial wash on the stage so
+  the field isn't dead flat (tracks the accent pref); fixed a real
+  light-theme bug — rail tooltips rendered near-black text on a
+  near-black surface; light-theme --fg-faint darkened 0.62→0.58 L for
+  small-text contrast. QA'd across dark/light × comfy/compact × mobile
+  (390px) via headless captures. The optional OLED theme was skipped —
+  it needs theme-toggle plumbing beyond a token block, low value today.
+The UI overhaul (phases 0–4) is complete.
 
 Two corrections to this report from implementation:
 

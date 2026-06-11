@@ -76,8 +76,10 @@ html, body { margin: 0; padding: 0; overflow-x: hidden; background: var(--bg); c
   position: absolute;
   left: calc(100% + 8px);
   top: 50%; transform: translateY(-50%) translateX(-4px);
-  background: oklch(0.10 0.008 250);
-  color: var(--fg);
+  /* Fixed dark surface in BOTH themes — var(--fg) is near-black in light
+     mode, which made the tip unreadable there. */
+  background: oklch(0.13 0.008 250);
+  color: oklch(0.96 0.004 255);
   padding: 6px 10px;
   border-radius: var(--r-sm);
   font-size: 12px;
