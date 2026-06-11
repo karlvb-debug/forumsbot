@@ -24,6 +24,7 @@
       "dist/**",
       "electron/**",
       "server.js",
+      "mcpHost.js",
       "node_modules/**",
       "!node_modules/.cache/**",
       "!node_modules/electron/**",
