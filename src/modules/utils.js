@@ -558,6 +558,10 @@ export function normalizeQuickStartActor(actor, index, assignFreshIds) {
     canSuggestSpeaker: typeof source.canSuggestSpeaker === "boolean" ? source.canSuggestSpeaker : (!!(source.canDirect || source.isDirector) || !(source.canManageCast || source.isManager || source.canResearch || source.isResearcher)),
     canUpdateStyle: typeof source.canUpdateStyle === "boolean" ? source.canUpdateStyle : (!!(source.canDirect || source.isDirector) || !(source.canManageCast || source.isManager || source.canResearch || source.isResearcher)),
     directorMode: ["narrator", "facilitator", "arbiter", "observer"].includes(source.directorMode) ? source.directorMode : undefined,
+    // The setup-assistant shapes advertise these; preserve them (clamped)
+    // instead of silently resetting to defaults.
+    ...(typeof source.temperature === "number" ? { temperature: Math.min(2, Math.max(0, source.temperature)) } : {}),
+    ...(typeof source.authority === "number" ? { authority: Math.min(100, Math.max(0, Math.round(source.authority))) } : {}),
     color: ["#18726d", "#b84738", "#a2611a", "#355f9f", "#6e4c99", "#4f7d2d", "#9a4668"][index % 7]
   };
 }

@@ -160,22 +160,9 @@ export function ActorsPanel() {
     setAiDescGenerating(true);
     setAiDescError(null);
     try {
-      const { chatCompletion } = await import('../../modules/api.js');
-      const text = String(await chatCompletion(
-        `You create forum actor definitions from one-line descriptions. Output ONLY valid JSON with keys: name, role, persona, goal, voice. No explanation.`,
-        `Description: "${desc}"\n\nOutput JSON:`,
-        { temperature: 0.7, maxTokens: 400 }
-      ) || '').trim();
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('No JSON in response.');
-      const actor = JSON.parse(jsonMatch[0]);
-      addActor({
-        name: actor.name || 'AI Actor',
-        role: actor.role || 'Participant',
-        persona: actor.persona || '',
-        goal: actor.goal || '',
-        voice: actor.voice || '',
-      });
+      const session = await import('../../modules/session.js');
+      const actor = await session.generateActorFromDescription(desc);
+      addActor(actor);
       setAiDesc('');
     } catch (err) {
       setAiDescError(err?.message || 'Generation failed.');

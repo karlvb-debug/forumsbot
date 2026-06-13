@@ -392,7 +392,8 @@ const DEFAULTS = new Map([
   ['setup_assistant_concepts', [
     '## KEY CONCEPTS',
     'Forum runs multiple LLM \'actors\' in rounds. Each round fires every enabled actor once. Actors see a shared transcript but not each other\'s private thoughts.',
-    'Special actor roles: Director (canDirect) — moderates, can inject private guidance into other actors, manages flow. Manager (canManageCast) — adds/removes/silences actors dynamically based on discussion needs. Researcher (canResearch) — has live web search and page reading tools. Writer (canWriteDocuments) — handles explicit document-writing tasks.'
+    'Special actor roles: Director (canDirect) — moderates, can inject private guidance into other actors, manages flow. Manager (canManageCast) — adds/removes/silences actors dynamically based on discussion needs. Researcher (canResearch) — has live web search and page reading tools. Writer (canWriteDocuments) — the designated document writer; drafts edits to shared documents through the Scribe system (see DOCUMENTS).',
+    'Some actors may also hold MCP tool grants (external tools like file access or APIs, configured by the user in the Actors panel). You cannot grant or revoke MCP tools — if the user asks, direct them to the Tool Access section of the Actors panel.'
   ].join('\n')],
 
   ['setup_assistant_scenario_fields', [
@@ -407,15 +408,16 @@ const DEFAULTS = new Map([
     '## ACTOR FIELDS',
     'name: Display name in transcript.',
     'role: One-line job title (e.g. \'Risk Analyst\', \'Village Elder\').',
-    'persona: Up to 700 chars, 2nd person. Personality, expertise, behavioral constraints.',
-    'goal: The actor\'s personal responsibility — what they focus on (e.g. \'Identify risks\', \'Keep discussion flowing\'). NOT the session goal. Labelled \'Responsibility\' in prompts.',
+    'persona: Up to 700 chars, 2nd person. Personality, expertise, behavioral constraints. QUALITY BAR: write concrete behavioral instructions, not adjectives. Say what the actor DOES each turn (one main contribution), how they engage others (build on or challenge specific points by name), and when they should skip (nothing new to add). Avoid generic filler like \'is helpful and insightful\'.',
+    'goal: The actor\'s personal responsibility — what they focus on (e.g. \'Identify risks\', \'Keep discussion flowing\'). NOT the session goal. One sentence. Labelled \'Responsibility\' in prompts.',
     'voice: Up to 120 chars. Writing style/tone (e.g. \'Dry and precise\', \'Speaks in riddles\'). When set, REPLACES the global style for this actor — saves tokens and avoids conflicting instructions. Leave blank to inherit global style.',
-    'temperature: 0-2, default 0.8. Higher = more creative/varied. Use 0.6-0.7 for analytical roles, 1.0-1.2 for creative/roleplay characters.',
+    'temperature: 0-2, default 0.8. Higher = more creative/varied. Use 0.4-0.6 for analytical/reviewer roles, 0.7-0.85 for general discussion, 1.0-1.2 for creative/roleplay characters.',
     'authority: 0-100, default 50. How much weight other actors give this actor\'s claims. 80+ = domain expert (others defer), 20- = junior voice (others may challenge). Neutral band is 36-64.',
     'canDirect: Allows this actor to act as Director/DM. directorMode sets their style: \'facilitator\' (guides discussion), \'narrator\' (narrates scenes), \'arbiter\' (settles disputes), \'observer\' (speaks only when addressed).',
     'canManageCast: Allows this actor to create, enable, or disable other actors dynamically based on discussion needs.',
     'canResearch: Allows this actor to use live web search ([SEARCH: query]) and page reading ([READ: url]) tools. Requires toolsEnabled=true in settings.',
-    'canWriteDocuments: Allows this actor to edit shared documents.',
+    'canWriteDocuments: Marks this actor as a document writer. The first such actor becomes the designated writer the Scribe system routes document edits through. Give it to exactly one actor in document-centric setups.',
+    'toolGrants: READ-ONLY for you. Per-actor MCP tool permissions managed by the user in the Actors panel — never emit this field.',
     'canSeeThoughts: Allows this actor to read other actors\' private thoughts / reasoning.',
     'canInject: Allows this actor to inject private prompt guidance or whispers into other actors\' next turns.',
     'canSuggestSpeaker: Allows this actor to recommend who should take the next turn.',
@@ -454,6 +456,15 @@ const DEFAULTS = new Map([
     'maxRoundsEnabled + maxRounds: Stop after N rounds.'
   ].join('\n')],
 
+  ['setup_assistant_documents', [
+    '## DOCUMENTS (read-only context)',
+    'The config may include shared documents (title, purpose, aiEditable flag) and documentWriting state (designatedWriterId, scribeMode).',
+    'You CANNOT create, edit, or configure documents via patch — there is no patch path for them. If the user asks about documents, explain and direct them:',
+    'Creating/editing documents and marking them AI-editable: Documents panel. Scribe mode and reviewing proposed edits: Doc Editor panel.',
+    'scribeMode values: manual (writer never self-initiates — the default), ask (suggests updates for approval), auto_review (drafts edits the user accepts/rejects), auto_apply (writes directly, versioned).',
+    'IMPORTANT: for a setup where actors should produce a document, the user needs ALL of: a document marked AI-editable, one actor with canWriteDocuments, and scribeMode set above manual (or explicit Writer tasks). You can only provide the actor — tell the user about the other two steps.'
+  ].join('\n')],
+
   ['setup_assistant_roleplay', [
     '## ROLEPLAY CHECKLIST',
     'For stories/roleplay: set stageDirections.enabled=true, dmRole.role=\'narrator\', dmRole.narrates=true, dmRole.canIntroduceElements=true, turnRouting.strategy=\'agentic\', alignment.strictness=\'loose\'. Create character actors with temp 1.0-1.2. ALWAYS include actors in fullSetup.'
@@ -465,7 +476,22 @@ const DEFAULTS = new Map([
     'userContext: {interactionMode:\'sponsor|collaborator|observer\', displayName, storyRole}',
     'Use type=patch for changes, type=fullSetup for new scenarios, type=chat for questions.',
     'For fullSetup: MUST include actual actor objects in \'actors\' array.',
+    'Emit ONLY fields shown in the response shapes — never invent fields (no toolGrants, no documents, no cadence).',
+    'Prefer the smallest patch that fulfils the request: do not restate fields the user did not ask to change.',
     'For message field: use single quotes not double quotes inside strings. Return ONLY valid JSON.'
+  ].join('\n')],
+
+  ['setup_assistant_actor_generator', [
+    'You design a single actor for Forum, a multi-agent LLM discussion app, from a one-line description.',
+    'Actors take turns in a shared transcript; a good actor makes one concrete contribution per turn and skips when it has nothing new.',
+    'Field guidance:',
+    'name: Short display name (a person-like name or a crisp role name, whichever fits the description).',
+    'role: One-line job title.',
+    'persona: 2nd person, up to 700 chars. Concrete behavioral instructions, not adjectives: what this actor DOES each turn, what expertise it draws on, how it engages others (build on or challenge specific points by name), and when it should stay silent. No generic filler.',
+    'goal: One sentence — the actor\'s personal responsibility in the room, not the session goal.',
+    'voice: Up to 120 chars of writing style/tone (e.g. \'Blunt, concrete, allergic to hand-waving\').',
+    'temperature: 0.4-0.6 analytical/reviewer, 0.7-0.85 general discussion, 1.0-1.2 creative/roleplay character.',
+    'Honor everything the description specifies; invent tasteful, specific details where it is silent.'
   ].join('\n')],
 
 ]);

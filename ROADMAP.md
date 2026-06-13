@@ -460,6 +460,22 @@ Horizon 2 items each open a new capability; Horizon 3 are directional bets.
   per-item export.
 
 ### Horizon 2 — New capabilities (quarter)
+- **Transformers.js built-in embedding fallback.** Both memory recall and KB
+  document retrieval silently degrade to keyword/even-split fallbacks when no
+  LM Studio embedding model is configured — and the codebase has significant
+  defensive machinery (probe-and-warn, model-mismatch detection, `scheduleEmbed`
+  serialization) to handle that state. Running a small quantized model
+  (e.g. `all-MiniLM-L6-v2`, ~25 MB) via transformers.js in a Web Worker would
+  make semantic retrieval zero-config, eliminate contention with chat generation
+  (embeddings run on a separate engine), and fix the vector-mismatch problem
+  permanently (model pinned by the app). Scope: add transformers.js as a lazy
+  fallback provider behind `getEmbedding`/`getEmbeddingsBatch` in `api.js` —
+  use LM Studio if configured, otherwise fall back to the local worker. Nothing
+  upstream changes; the existing mismatch/migration machinery handles the
+  transition. Priority: mid — do it when distributing to users who aren't
+  LM Studio power users, or when per-turn KB re-ranking (which needs cheap
+  local embeds) becomes attractive. Prerequisite for speculative pre-embedding
+  during generation.
 - **MCP client integration** (IDEAS has the architecture; endorse it).
   `src/modules/mcp.js`, per-session server configs, tool blocks injected into
   prompts as text-tags, generalized tag interception in the turn loop. This
