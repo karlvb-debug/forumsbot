@@ -3,7 +3,7 @@ import { state, setState, normalizeState, saveState } from './state.js';
 import { saveState as _saveState, mutateState } from './stateStore.js';
 import { setStatus } from './api.js';
 import { clearMessages, clearChunks, putMessages, putChunk, countChunks, getRecentMessages, getAllMessages, getAllChunks, putSession, getAllSessions, deleteSession, clearKbEntries, clearActorMemories } from './db.js';
-import { chatCompletionMessages } from './api.js';
+import { chatCompletionMessages, chatStructured } from './api.js';
 import { colors } from './constants.js';
 import {
   cleanStoredMessage,
@@ -410,6 +410,8 @@ export async function generateQuickStart(promptOverride = "") {
     '',
     frag('setup_assistant_autostop'),
     '',
+    frag('setup_assistant_documents'),
+    '',
     frag('setup_assistant_roleplay'),
     '',
     frag('setup_assistant_rules')
@@ -652,6 +654,48 @@ async function _applyDraft(draft) {
   }
 }
 
+// ── Actors-panel generator ───────────────────────────────────────────────────
+// Builds one actor definition from a one-line description. Grammar-constrained
+// via chatStructured so there is no JSON-extraction guesswork; field limits
+// mirror normalizeQuickStartActor.
+
+const ACTOR_GENERATOR_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    role: { type: 'string' },
+    persona: { type: 'string' },
+    goal: { type: 'string' },
+    voice: { type: 'string' },
+    temperature: { type: 'number' },
+  },
+  required: ['name', 'role', 'persona', 'goal'],
+  additionalProperties: false,
+};
+
+export async function generateActorFromDescription(description) {
+  const desc = String(description || '').trim();
+  if (!desc) throw new Error('Describe the actor first.');
+  const result = await chatStructured(
+    frag('setup_assistant_actor_generator'),
+    `Description: "${desc}"`,
+    ACTOR_GENERATOR_SCHEMA,
+    { temperature: 0.7, maxTokens: 600, purpose: 'actorGenerator' }
+  );
+  const temperature = typeof result.temperature === 'number'
+    ? Math.min(2, Math.max(0, result.temperature))
+    : null;
+  return {
+    name: cleanConfigText(result.name, 'New Actor', 50),
+    role: cleanConfigText(result.role, 'Participant', 70),
+    persona: cleanConfigText(result.persona, '', 700),
+    goal: cleanConfigText(result.goal, '', 500),
+    voice: cleanConfigText(result.voice, '', 120),
+    // Omit the key entirely when absent so callers' defaults survive a spread.
+    ...(temperature !== null ? { temperature } : {}),
+  };
+}
+
 export function discardQuickStartConfig() {
   state.ui.quickStartDraft = null;
   state.ui.quickStartHistory = [];
@@ -694,6 +738,10 @@ export function applyAssistantPatch(changes) {
   for (const rawActor of (c.addActors || [])) {
     const a = normalizeAssistantActorPermissions(rawActor);
     const canDirect = !!a.canDirect;
+    // Participant-style permissions default ON for plain participants and
+    // directors, OFF for manager/researcher utility actors — same rule as the
+    // Actors panel and normalizeQuickStartActor.
+    const participantDefault = canDirect || !(a.canManageCast || a.canResearch);
     const actor = {
       id: crypto.randomUUID(),
       name: a.name || "New Actor",
@@ -708,6 +756,12 @@ export function applyAssistantPatch(changes) {
       canResearch: !!a.canResearch,
       canWriteDocuments: !!a.canWriteDocuments,
       canSeeThoughts: !!a.canSeeThoughts,
+      canInject: !!a.canInject,
+      canPause: typeof a.canPause === "boolean" ? a.canPause : participantDefault,
+      canAnchor: typeof a.canAnchor === "boolean" ? a.canAnchor : participantDefault,
+      canPinFacts: typeof a.canPinFacts === "boolean" ? a.canPinFacts : participantDefault,
+      canSuggestSpeaker: typeof a.canSuggestSpeaker === "boolean" ? a.canSuggestSpeaker : participantDefault,
+      canUpdateStyle: typeof a.canUpdateStyle === "boolean" ? a.canUpdateStyle : participantDefault,
       directorMode: a.directorMode || (canDirect ? state.scenario?.systems?.dmRole?.role || 'facilitator' : undefined),
       enabled: true,
       thoughts: "",
