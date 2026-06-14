@@ -644,6 +644,16 @@ export async function evaluateAutoStopAfterRound(roundMessages, options = {}) {
         showToast(`Task complete: ${verdict.reason}`, 'ok');
         await addMessage({ type: 'system', speaker: 'System', content: `✓ Task complete: ${verdict.reason}`, color: 'var(--accent)' });
         saveState();
+        // A goal scenario should end with something written down. Force a final
+        // deliverable capture before mining outcomes; it self-heals a writer and
+        // document if needed and is a no-op for sessions without deliverable
+        // intent. Fail-soft so a writing error never blocks completion.
+        try {
+          const docMod = await import('../documentWriting.js');
+          await docMod.captureDeliverableOnComplete();
+        } catch (err) {
+          console.warn('[scribe] completion capture failed:', err?.message || err);
+        }
         // Completion is the payoff moment — mine the structured outcomes now
         // instead of waiting for a manual Extract click. Fire-and-forget; the
         // chat scheduler serializes it behind any in-flight calls.

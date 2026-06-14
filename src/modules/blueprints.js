@@ -289,7 +289,7 @@ export const BLUEPRINTS = [
   {
     id: 'research', icon: '🌐', label: 'Research',
     description: 'A researcher, an expert, and a skeptic investigate a question and synthesize sourced findings.',
-    cast: ['researcher', 'expert', 'skeptic', 'synthesizer'],
+    cast: ['researcher', 'expert', 'skeptic', 'synthesizer', 'scribe'],
     scenario: {
       title: 'Research Investigation',
       premise: 'The panel is investigating the user\'s question, gathering current evidence and weighing it critically.',
@@ -306,7 +306,7 @@ export const BLUEPRINTS = [
   {
     id: 'brainstorm', icon: '💡', label: 'Brainstorm',
     description: 'A divergent idea panel generates, clusters, and ranks options without premature judgment.',
-    cast: ['director', 'visionary', 'pragmatist', 'synthesizer'],
+    cast: ['director', 'visionary', 'pragmatist', 'synthesizer', 'scribe'],
     scenario: {
       title: 'Brainstorm Session',
       premise: 'A diverse panel generates creative ideas around the user\'s topic. Divergence first: build on ideas before judging them, and prefer a surprising idea over a safe duplicate.',
@@ -418,7 +418,7 @@ export const BLUEPRINTS = [
   {
     id: 'retrospective', icon: '🔁', label: 'Retrospective',
     description: 'The team reviews a finished project to extract concrete process improvements.',
-    cast: ['director', 'pragmatist', 'skeptic', 'synthesizer'],
+    cast: ['director', 'pragmatist', 'skeptic', 'synthesizer', 'scribe'],
     scenario: {
       title: 'Project Retrospective',
       premise: 'The panel reviews a recently completed project or sprint to extract lessons. Blameless: the question is what the process allowed, never who slipped.',
@@ -451,7 +451,7 @@ export const BLUEPRINTS = [
   {
     id: 'problem-solving', icon: '🧩', label: 'Problem Solving',
     description: 'A focused panel drives a well-defined problem to a concrete, actionable solution.',
-    cast: ['director', 'expert', 'pragmatist', 'skeptic'],
+    cast: ['director', 'expert', 'pragmatist', 'skeptic', 'scribe'],
     scenario: {
       title: 'Problem Solving',
       premise: 'The panel is focused on solving a well-defined problem with concrete constraints and a clear success criterion.',

@@ -126,6 +126,16 @@
   resize: vertical;
   min-height: 44px;
 }
+.doc-scribe-note {
+  margin: 4px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--fg-mute);
+  line-height: 1.4;
+}
+.doc-scribe-writer-hint {
+  font-size: var(--fs-xs);
+  color: var(--fg-mute);
+}
 .doc-row-actors {
   display: flex;
   gap: 6px;

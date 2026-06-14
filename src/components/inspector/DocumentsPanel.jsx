@@ -1,8 +1,16 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Toggle } from '../shared/FormControls';
 import { useForumState, mutateState } from '../../hooks/useForumState';
+import { showToast } from '../../modules/uiStore.js';
 import { renderMarkdown } from '../../modules/markdown.js';
 import * as Ic from '../Icons';
+
+const SCRIBE_MODE_LABELS = {
+  auto_apply: 'Auto · apply directly',
+  auto_review: 'Auto · review-first',
+  ask: 'Ask before drafting',
+  manual: 'Manual only',
+};
 
 const FILTERS = ['all', 'writable', 'reference', 'pending'];
 const FILTER_LABELS = { all: 'All', writable: 'Writable', reference: 'Reference', pending: 'Pending' };
@@ -352,8 +360,21 @@ export function DocumentsPanel() {
   const actors = useForumState(s => s.actors || []);
   const designatedWriterId = useForumState(s => s.documentWriting?.designatedWriterId || '');
   const scribeMode = useForumState(s => s.documentWriting?.scribeMode || 'manual');
+  const scribeModeUserSet = useForumState(s => s.documentWriting?.scribeModeUserSet || false);
+  const deliverableIntent = useForumState(s => !!(String(s.scenario?.task || '').trim() || String(s.scenario?.doneWhen || '').trim()));
   const pendingDocumentEdits = useForumState(s => s.pendingDocumentEdits || []);
   const writerActors = actors.filter(a => a.enabled && a.canWriteDocuments);
+  const [producing, setProducing] = useState(false);
+
+  // Mirror resolveEffectiveScribeMode(): an explicit user choice wins; otherwise
+  // a deliverable scenario auto-arms review-first, a blueprint-set non-manual
+  // mode is honored, and a bare default stays manual.
+  const effectiveScribeMode = scribeModeUserSet
+    ? scribeMode
+    : (scribeMode !== 'manual' ? scribeMode : (deliverableIntent ? 'auto_review' : 'manual'));
+  const scribeAutoArmed = effectiveScribeMode !== scribeMode;
+  const activeWriter = actors.find(a => a.id === designatedWriterId && a.enabled && a.canWriteDocuments)
+    || writerActors[0] || null;
 
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -431,6 +452,7 @@ export function DocumentsPanel() {
     mutateState(s => {
       if (!s.documentWriting) s.documentWriting = {};
       s.documentWriting.scribeMode = mode;
+      s.documentWriting.scribeModeUserSet = true;
     });
   }, []);
 
@@ -441,6 +463,27 @@ export function DocumentsPanel() {
       if (!s.documentWriting) s.documentWriting = {};
       s.documentWriting.designatedWriterId = writer.id;
     });
+  }, []);
+
+  // Force a deliverable on demand: self-heals a writer + document, drafts, and
+  // applies, then opens the result in the editor. Always available — this is the
+  // "write this up" escape hatch that must never fail for lack of a writer/doc.
+  const produceDeliverable = useCallback(async () => {
+    setProducing(true);
+    try {
+      const mod = await import('../../modules/documentWriting.js');
+      const result = await mod.produceDeliverable();
+      const docId = result?.documentId;
+      if (docId) {
+        mutateState(s => { if (!s.ui) s.ui = {}; s.ui.focusedDocId = docId; });
+      } else {
+        showToast('The writer had nothing to record yet — add some discussion first.', 'warn');
+      }
+    } catch (err) {
+      showToast(`Could not produce a deliverable: ${err?.message || err}`, 'error');
+    } finally {
+      setProducing(false);
+    }
   }, []);
 
   // ── Drag reorder ────────────────────────────────────────────────────────
@@ -579,6 +622,26 @@ export function DocumentsPanel() {
             <option value="ask">Ask before drafting</option>
             <option value="manual">Manual only</option>
           </select>
+        </div>
+        {scribeAutoArmed && (
+          <p className="doc-scribe-note" title="This goal session has a task or completion criteria, so the scribe is armed automatically until you pick a mode yourself.">
+            Auto-armed for this goal session: running as <strong>{SCRIBE_MODE_LABELS[effectiveScribeMode]}</strong>.
+          </p>
+        )}
+        <div className="doc-row-setting">
+          <button
+            className="btn sm"
+            onClick={produceDeliverable}
+            disabled={producing}
+            title="Have the writer synthesize the discussion into the deliverable document now, then open it. Creates a writer and document if none exist."
+          >
+            {producing
+              ? <><Ic.Round width={11} height={11} /> Writing…</>
+              : <><Ic.Doc width={11} height={11} /> Produce deliverable</>}
+          </button>
+          {activeWriter && (
+            <span className="doc-scribe-writer-hint">{activeWriter.name} will write it.</span>
+          )}
         </div>
       </div>
 

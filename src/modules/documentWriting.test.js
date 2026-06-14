@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockState } = vi.hoisted(() => ({
   mockState: {
@@ -28,6 +28,19 @@ vi.mock('./knowledge.js', () => ({
   actorCanReadDocument: vi.fn(() => true),
   countWords: vi.fn(text => String(text || '').trim().split(/\s+/).filter(Boolean).length),
   ensureDefaultWriter: vi.fn(() => mockState.actors[0]),
+  ensureSessionDocument: vi.fn(async ({ force = false } = {}) => {
+    const existing = (mockState.documents || []).find(d => d.enabled !== false && d.aiEditable);
+    if (existing) return existing;
+    const sc = mockState.scenario || {};
+    const hasIntent = !!(String(sc.task || '').trim() || String(sc.doneWhen || '').trim());
+    if (!force && !hasIntent) return null;
+    const doc = {
+      id: 'session-doc', title: 'Session Deliverable', content: '',
+      enabled: true, aiEditable: true, versions: [], writerId: mockState.actors[0]?.id || '',
+    };
+    mockState.documents.push(doc);
+    return doc;
+  }),
   putKbEntry: vi.fn(async () => {}),
   resolveDesignatedWriter: vi.fn(() => mockState.actors.find(a => a.id === mockState.documentWriting.designatedWriterId) || null),
 }));
@@ -44,10 +57,13 @@ import {
   acceptDocumentProposal,
   acceptScribeSuggestion,
   applyEditsToContent,
+  captureDeliverableOnComplete,
   createDocumentTask,
   detectInlineScribeRequest,
   dismissScribeSuggestion,
   hashDocumentContent,
+  produceDeliverable,
+  resolveEffectiveScribeMode,
   runScribePass,
 } from './documentWriting.js';
 import { chatStructured } from './api.js';
@@ -94,6 +110,16 @@ describe('documentWriting', () => {
 
   it('ignores edits addressed to other documents', () => {
     expect(applyEditsToContent('one', [{ documentId: 'other', op: 'full', content: 'x' }], 'd1')).toBe('one');
+  });
+
+  it('treats append/replace on an empty document as a full write', () => {
+    // First capture into an empty document: no leading blank line, no off-by-one.
+    expect(applyEditsToContent('', [{ documentId: 'd1', op: 'append', content: 'hello' }], 'd1')).toBe('hello');
+    expect(applyEditsToContent('   \n  ', [{ documentId: 'd1', op: 'replace', startLine: 1, endLine: 1, content: 'hello' }], 'd1')).toBe('hello');
+  });
+
+  it('falls back to append when a replace targets past the end of the document', () => {
+    expect(applyEditsToContent('one\ntwo', [{ documentId: 'd1', op: 'replace', startLine: 9, endLine: 9, content: 'tail' }], 'd1')).toBe('one\ntwo\n\ntail');
   });
 
   it('creates manual writer tasks for writable documents', () => {
@@ -245,6 +271,20 @@ describe('scribe autonomy modes', () => {
     expect(mockState.pendingScribeSuggestions).toHaveLength(0);
   });
 
+  it('coerces an edit with the wrong documentId onto the target document', async () => {
+    // Small models routinely echo back a wrong id; the edit must still apply
+    // rather than being silently dropped (which used to mean "nothing changed").
+    gateYes();
+    chatStructured.mockResolvedValueOnce({
+      thought: '',
+      summary: 'Recorded.',
+      documentEdits: [{ documentId: 'totally-wrong-id', op: 'append', content: 'three' }]
+    });
+    const result = await runScribePass(null);
+    expect(result?.applied).toBe(true);
+    expect(mockState.documents[0].content).toBe('one\ntwo\n\nthree');
+  });
+
   it('auto_review files a pending proposal without touching the document', async () => {
     mockState.documentWriting.scribeMode = 'auto_review';
     gateYes();
@@ -322,5 +362,92 @@ describe('detectInlineScribeRequest', () => {
     '   ',
   ])('ignores: %s', (text) => {
     expect(detectInlineScribeRequest(text)).toBeNull();
+  });
+});
+
+describe('effective scribe mode', () => {
+  const restore = () => { mockState.scenario = { title: 'Test', objective: 'Write a brief' }; };
+  afterEach(restore);
+
+  it('honors an explicit user choice verbatim, even manual on a goal session', () => {
+    mockState.documentWriting = { scribeMode: 'manual', scribeModeUserSet: true };
+    mockState.scenario = { title: 'T', task: 'Produce a plan' };
+    expect(resolveEffectiveScribeMode()).toBe('manual');
+  });
+
+  it('auto-arms review-first for a deliverable scenario the user has not configured', () => {
+    mockState.documentWriting = { scribeMode: 'manual', scribeModeUserSet: false };
+    mockState.scenario = { title: 'T', task: 'Produce a plan' };
+    expect(resolveEffectiveScribeMode()).toBe('auto_review');
+  });
+
+  it('stays manual for a roleplay session with no task or doneWhen', () => {
+    mockState.documentWriting = { scribeMode: 'manual', scribeModeUserSet: false };
+    mockState.scenario = { title: 'T' };
+    expect(resolveEffectiveScribeMode()).toBe('manual');
+  });
+
+  it('honors a blueprint-set non-manual mode without an explicit user choice', () => {
+    mockState.documentWriting = { scribeMode: 'ask', scribeModeUserSet: false };
+    mockState.scenario = { title: 'T' };
+    expect(resolveEffectiveScribeMode()).toBe('ask');
+  });
+});
+
+describe('deliverable production', () => {
+  beforeEach(() => {
+    mockState.actors = [
+      { id: 'w1', name: 'Writer', enabled: true, canWriteDocuments: true, color: '#abc' }
+    ];
+    mockState.documents = [
+      { id: 'd1', title: 'Doc', content: '', enabled: true, aiEditable: true, versions: [] }
+    ];
+    mockState.documentWriting = { designatedWriterId: 'w1', scribeMode: 'manual' };
+    mockState.messages = [
+      { id: 'm1', type: 'actor', speaker: 'A', content: 'We decided X.' },
+      { id: 'm2', type: 'actor', speaker: 'B', content: 'Agreed — X it is.' },
+    ];
+    mockState.scenario = { title: 'Test', task: 'Write a brief', doneWhen: 'Brief exists' };
+    chatStructured.mockReset();
+  });
+  afterEach(() => { mockState.scenario = { title: 'Test', objective: 'Write a brief' }; });
+
+  it('produceDeliverable forces a write even from manual mode', async () => {
+    chatStructured.mockResolvedValueOnce({
+      thought: '', summary: 'Deliverable.',
+      documentEdits: [{ documentId: 'd1', op: 'full', content: '# Brief\nDone.' }]
+    });
+    const result = await produceDeliverable();
+    expect(result?.applied).toBe(true);
+    expect(result?.documentId).toBe('d1');
+    expect(mockState.documents[0].content).toBe('# Brief\nDone.');
+  });
+
+  it('self-heals a writable document when none exists in a deliverable session', async () => {
+    mockState.documents = []; // no writable document at all
+    chatStructured.mockResolvedValueOnce({
+      thought: '', summary: 'Deliverable.',
+      documentEdits: [{ documentId: 'session-doc', op: 'full', content: '# Brief' }]
+    });
+    const result = await produceDeliverable();
+    expect(result?.applied).toBe(true);
+    expect(mockState.documents.find(d => d.aiEditable)?.content).toBe('# Brief');
+  });
+
+  it('captureDeliverableOnComplete writes the deliverable when intent exists', async () => {
+    chatStructured.mockResolvedValueOnce({
+      thought: '', summary: 'Final.',
+      documentEdits: [{ documentId: 'd1', op: 'full', content: '# Final' }]
+    });
+    const result = await captureDeliverableOnComplete();
+    expect(result?.applied).toBe(true);
+    expect(mockState.documents[0].content).toBe('# Final');
+  });
+
+  it('captureDeliverableOnComplete is a no-op without deliverable intent', async () => {
+    mockState.scenario = { title: 'Test' }; // no task / doneWhen
+    const result = await captureDeliverableOnComplete();
+    expect(result).toBeNull();
+    expect(chatStructured).not.toHaveBeenCalled();
   });
 });
