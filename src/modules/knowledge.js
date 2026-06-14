@@ -140,6 +140,30 @@ export function ensureDefaultWriter() {
   return writer;
 }
 
+// Guarantee a writable document exists for the session's deliverable. Reuses any
+// existing aiEditable document; otherwise creates one seeded from the scenario,
+// but only when forced or when the scenario actually has deliverable intent
+// (task/doneWhen) — pure-roleplay sessions stay document-free. Returns the
+// stored document, or null when nothing should be created.
+export async function ensureSessionDocument({ force = false } = {}) {
+  const existing = (state.documents || []).find(d => d.enabled !== false && d.aiEditable);
+  if (existing) return existing;
+  const sc = state.scenario || {};
+  const hasIntent = !!(String(sc.task || "").trim() || String(sc.doneWhen || "").trim());
+  if (!force && !hasIntent) return null;
+  const writer = ensureDefaultWriter();
+  const title = String(sc.title || "").trim() ? `${String(sc.title).trim()} — Deliverable` : "Session Deliverable";
+  const purpose = String(sc.task || sc.objective || sc.doneWhen || "Capture the forum's working deliverable.").trim().slice(0, 280);
+  const doc = newDocument({
+    title,
+    aiEditable: true,
+    writerId: writer?.id || "",
+    purpose,
+  });
+  await putKbEntry(doc);
+  return (state.documents || []).find(d => d.id === doc.id) || doc;
+}
+
 
 // ── Prompt injection ─────────────────────────────────────────────────────────
 

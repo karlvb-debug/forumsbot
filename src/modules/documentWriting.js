@@ -4,7 +4,7 @@ import { showToast } from './uiStore.js';
 import { trimWords } from './utils.js';
 import { frag } from '../prompts/index.js';
 import { buildDocumentWriterPromptLine, buildDocumentWriterSchema } from './schemas.js';
-import { actorCanReadDocument, countWords, ensureDefaultWriter, putKbEntry, resolveDesignatedWriter } from './knowledge.js';
+import { actorCanReadDocument, countWords, ensureDefaultWriter, ensureSessionDocument, putKbEntry, resolveDesignatedWriter } from './knowledge.js';
 import { hideBackgroundActivity, showBackgroundActivity, updateBackgroundActivity } from './streamingStore.js';
 
 function nowIso() {
@@ -96,15 +96,26 @@ export function applyEditsToContent(content, edits, documentId) {
     .sort((a, b) => (Number(b.startLine) || 1) - (Number(a.startLine) || 1));
   const others = relevant.filter(e => e.op !== "replace");
   for (const edit of [...replaces, ...others]) {
-    if (edit.op === "full") {
+    // Small-model hardening: on an empty document any append/replace becomes a
+    // full write, so the very first capture always produces content instead of
+    // an off-by-one no-op.
+    const docEmpty = next.trim().length === 0;
+    if (edit.op === "full" || (docEmpty && (edit.op === "append" || edit.op === "replace"))) {
       next = String(edit.content || "");
     } else if (edit.op === "append") {
       next = next + (next ? "\n\n" : "") + String(edit.content || "");
     } else if (edit.op === "replace") {
       const lines = next.split("\n");
-      const s = Math.max(0, (Number(edit.startLine) || 1) - 1);
-      const e = Math.min(lines.length - 1, (Number(edit.endLine) || s + 1) - 1);
-      next = [...lines.slice(0, s), String(edit.content || ""), ...lines.slice(e + 1)].join("\n");
+      const startLine = Number(edit.startLine) || 1;
+      if (startLine > lines.length) {
+        // Target line is past the end of the document — the writer misjudged
+        // the line count. Append rather than silently dropping the content.
+        next = next + (next ? "\n\n" : "") + String(edit.content || "");
+      } else {
+        const s = Math.max(0, startLine - 1);
+        const e = Math.min(lines.length - 1, (Number(edit.endLine) || s + 1) - 1);
+        next = [...lines.slice(0, s), String(edit.content || ""), ...lines.slice(e + 1)].join("\n");
+      }
     }
   }
   return next;
@@ -112,8 +123,11 @@ export function applyEditsToContent(content, edits, documentId) {
 
 function sanitizeDocumentEdits(edits, documentId) {
   return (Array.isArray(edits) ? edits : [])
-    .filter(edit => edit && edit.documentId === documentId && ['append', 'replace', 'full'].includes(edit.op))
+    .filter(edit => edit && ['append', 'replace', 'full'].includes(edit.op))
     .map(edit => ({
+      // Coerce every valid edit onto the target document. Small models routinely
+      // echo back a wrong or missing id; dropping those edits is the single
+      // biggest cause of a "writer ran but nothing changed" failure.
       documentId,
       op: edit.op,
       content: String(edit.content || ""),
@@ -372,8 +386,29 @@ async function postTranscriptNote(payload) {
   }
 }
 
+// A session has "deliverable intent" when the scenario sets a task or a
+// completion criterion — i.e. the user is steering toward a concrete output,
+// not open-ended roleplay. Every auto-create/auto-arm behavior gates on this so
+// casual chat sessions are never silently handed a writer or a document.
+export function hasDeliverableIntent() {
+  const sc = state.scenario || {};
+  return !!(String(sc.task || "").trim() || String(sc.doneWhen || "").trim());
+}
+
+// The scribe mode actually used this pass. An explicit user choice (recorded
+// via scribeModeUserSet) always wins. Otherwise a deliverable scenario arms the
+// scribe to review-first so something gets drafted; a blueprint-set non-manual
+// mode is honored as-is, and a bare default stays manual.
+export function resolveEffectiveScribeMode() {
+  const dw = state.documentWriting || {};
+  const stored = dw.scribeMode || "manual";
+  if (dw.scribeModeUserSet) return stored;
+  if (stored !== "manual") return stored;
+  return hasDeliverableIntent() ? "auto_review" : "manual";
+}
+
 export async function runScribePass(signal = null, { instruction = null } = {}) {
-  const mode = state.documentWriting?.scribeMode || "manual";
+  const mode = resolveEffectiveScribeMode();
   if (mode === "manual" && !instruction) return null;
 
   // Activity gate: each autonomous pass is a full reason-tier judge call
@@ -389,10 +424,22 @@ export async function runScribePass(signal = null, { instruction = null } = {}) 
     if (freshCount < 2) return null;
   }
 
-  const writer = resolveDesignatedWriter();
-  if (!writer) return null;
-  const doc = pickScribeTargetDoc(writer);
-  if (!doc) return null;
+  // A write must never fail for lack of a writer or a document — but only the
+  // EXPLICIT paths (the "write this up" button, an inline command, completion
+  // capture) self-heal. The autonomous between-turn pass stays quiet when the
+  // session has no writer/doc, so casual goal sessions are never handed a
+  // surprise document mid-round.
+  let writer = resolveDesignatedWriter();
+  if (!writer) {
+    if (!instruction) return null;
+    writer = ensureDefaultWriter();
+  }
+  let doc = pickScribeTargetDoc(writer);
+  if (!doc) {
+    if (!instruction) return null;
+    doc = await ensureSessionDocument({ force: true });
+    if (!doc) return null;
+  }
 
   const markTranscriptConsumed = () => {
     if (!visible.length) return;
@@ -488,6 +535,33 @@ export async function runScribePass(signal = null, { instruction = null } = {}) 
     content: `Updated "${doc.title || "Untitled"}": ${draft.summary || "applied document edits"}.`
   });
   return { applied: true, documentId: doc.id, summary: draft.summary };
+}
+
+// Explicit "write this up now" path — used by the Documents panel button, the
+// inline scribe command, and goal-completion capture. Guarantees a writer and a
+// writable document exist, then runs a forced, auto-applying pass. Returns the
+// scribe result (with documentId) or null.
+export async function produceDeliverable(instruction = null, signal = null) {
+  const writer = ensureDefaultWriter();
+  let doc = pickScribeTargetDoc(writer);
+  if (!doc) doc = await ensureSessionDocument({ force: true });
+  if (!doc) return null;
+  const text = String(instruction || "").trim() ||
+    "Write up the deliverable now. Synthesize the discussion — decisions, findings, and conclusions — into a complete, coherent document. Output the full document content, not a summary of the chat.";
+  return runScribePass(signal, { instruction: text });
+}
+
+// On goal completion, make sure the session ends with a written deliverable.
+// No-op for pure-roleplay sessions (no task/doneWhen). Fail-soft: a writing
+// error must never block the completion flow.
+export async function captureDeliverableOnComplete(signal = null) {
+  if (!hasDeliverableIntent()) return null;
+  try {
+    return await produceDeliverable(null, signal);
+  } catch (err) {
+    console.warn('[scribe] completion capture failed:', err?.message || err);
+    return null;
+  }
 }
 
 export async function acceptScribeSuggestion(suggestionId) {

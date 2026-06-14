@@ -143,7 +143,11 @@ export const defaultState = {
   },
   documentWriting: {
     designatedWriterId: "",
-    scribeMode: "manual"
+    scribeMode: "manual",
+    // Tracks whether the user has explicitly chosen a scribe mode. Until they
+    // do, deliverable scenarios auto-arm the scribe (resolveEffectiveScribeMode);
+    // once set, their choice is honored verbatim.
+    scribeModeUserSet: false
   },
   documents: [],
   documentTasks: [],

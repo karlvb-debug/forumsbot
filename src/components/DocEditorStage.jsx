@@ -189,6 +189,7 @@ export function DocEditorStage({ transcript, composer }) {
     mutateState(s => {
       if (!s.documentWriting) s.documentWriting = {};
       s.documentWriting.scribeMode = mode;
+      s.documentWriting.scribeModeUserSet = true;
     });
   }, []);
 
